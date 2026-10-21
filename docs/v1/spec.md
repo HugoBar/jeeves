@@ -60,7 +60,7 @@ I want one place that knows what food is in my Pantry, what I can cook from it, 
 - A Confirmed or Skipped Meal can be Reopened: opposite Stock Movements, linked to the Meal, add back exactly what its Confirmation removed.
 
 ### Unconfirmed Meals
-See `issues/01-resolving-unconfirmed-meal-slots.md`. Daily 07:00 in-app badge + "Needs confirmation" list; Saturday "Close this week" banner; Monday non-dismissable resolution screen for the previous week. Unconfirmed Meals count as eaten for projections and as history for variety.
+See [#1](https://github.com/HugoBar/jeeves/issues/1). Daily 07:00 in-app badge + "Needs confirmation" list; Saturday "Close this week" banner; Monday non-dismissable resolution screen for the previous week. Unconfirmed Meals count as eaten for projections and as history for variety.
 
 ### Suggestions
 - One Suggestion plus 2 alternatives per empty Meal Slot. Candidates: non-Archived Recipes and Products carrying the Slot Category.

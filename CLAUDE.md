@@ -2,7 +2,7 @@
 
 ### Issue tracker
 
-Issues are local markdown files under `.scratch/<feature>/`. See `docs/agents/issue-tracker.md`.
+Issues are GitHub Issues on `HugoBar/jeeves` (via `gh`); specs live in `docs/<feature>/`. See `docs/agents/issue-tracker.md`.
 
 ### Triage labels
 

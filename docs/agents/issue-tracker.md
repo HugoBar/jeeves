@@ -1,30 +1,30 @@
-# Issue tracker: Local Markdown
+# Issue tracker: GitHub Issues
 
-Issues and specs for this repo live as markdown files in `.scratch/`.
+Issues for this repo live in GitHub Issues on `HugoBar/jeeves`, managed with the `gh` CLI. Specs and design notes live in `docs/<feature-slug>/` (e.g. `docs/v1/spec.md`).
 
 ## Conventions
 
-- One feature per directory: `.scratch/<feature-slug>/`
-- The spec is `.scratch/<feature-slug>/spec.md`
-- Implementation issues are one file per ticket at `.scratch/<feature-slug>/issues/<NN>-<slug>.md`, numbered from `01`, never a single combined tickets file
-- Triage state is recorded as a `Status:` line near the top of each issue file (see `triage-labels.md` for the role strings)
-- Comments and conversation history append to the bottom of the file under a `## Comments` heading
+- One issue per ticket. Larger tickets are split into GitHub sub-issues of a parent issue.
+- Triage state is a label (see `triage-labels.md` for the role strings).
+- A ticket type other than implementation (`research`, `prototype`, `grilling`) is a label of the same name.
+- Blocking is a GitHub issue dependency ("blocked by"), also written as a `Blocked by #N` line at the top of the body.
+- Conversation happens in issue comments.
 
 ## When a skill says "publish to the issue tracker"
 
-Create a new file under `.scratch/<feature-slug>/` (creating the directory if needed).
+`gh issue create --repo HugoBar/jeeves --title ... --body-file ... --label ...`. Add blocking with `gh api -X POST repos/HugoBar/jeeves/issues/<N>/dependencies/blocked_by -F issue_id=<blocking issue's id>` (the numeric `id` from `gh api repos/HugoBar/jeeves/issues/<M>`, not its number).
 
 ## When a skill says "fetch the relevant ticket"
 
-Read the file at the referenced path. The user will normally pass the path or the issue number directly.
+`gh issue view <N> --repo HugoBar/jeeves --comments`. The user will normally pass the issue number or URL.
 
 ## Wayfinding operations
 
-Used by `/wayfinder`. The **map** is a file with one **child** file per ticket.
+Used by `/wayfinder`. The **map** is a parent issue with one **child** sub-issue per ticket.
 
-- **Map**: `.scratch/<effort>/map.md` (the Notes / Decisions-so-far / Fog body).
-- **Child ticket**: `.scratch/<effort>/issues/NN-<slug>.md`, numbered from `01`, with the question in the body. A `Type:` line records the ticket type (`research`/`prototype`/`grilling`/`task`); a `Status:` line records `claimed`/`resolved`.
-- **Blocking**: a `Blocked by: NN, NN` line near the top. A ticket is unblocked when every file it lists is `resolved`.
-- **Frontier**: scan `.scratch/<effort>/issues/` for files that are open, unblocked, and unclaimed; first by number wins.
-- **Claim**: set `Status: claimed` and save before any work.
-- **Resolve**: append the answer under an `## Answer` heading, set `Status: resolved`, then append a context pointer (gist + link) to the map's Decisions-so-far in `map.md`.
+- **Map**: a parent issue whose body holds the Notes / Decisions-so-far / Fog sections.
+- **Child ticket**: a sub-issue of the map with the question in the body and a type label (`research`/`prototype`/`grilling`/`task`).
+- **Blocking**: issue dependencies. A ticket is unblocked when every issue blocking it is closed.
+- **Frontier**: open, unblocked, unassigned sub-issues of the map; lowest number wins.
+- **Claim**: assign the issue to yourself (`gh issue edit <N> --add-assignee @me`) before any work.
+- **Resolve**: post the answer as a comment headed `## Answer`, close the issue as completed, then add a gist + link to the map's Decisions-so-far.

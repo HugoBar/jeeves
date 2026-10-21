@@ -13,20 +13,20 @@ Started 2026-10-20 with `/grill-with-docs`. Resume by re-running it and pointing
 - **Q7 Seeded labels**: `seed_key` (seeded rows) + `name` (user-created or renamed), CHECK at least one; display `name ?? t(seed_key)`. Rename keeps the key.
 - **Q8 IDs**: UUIDs via `gen_random_uuid()`.
 - **Q9 Dates**: Meal `date` + `time` without time zone; `timestamptz` for movements and `created_at`. (Which time zone decides "today": see round 2.)
-- **Q10**: no "Breakfast" Role (it is a Meal Type); removed from issue 04.
+- **Q10**: no "Breakfast" Role (it is a Meal Type); removed from #4.
 - **Q11 Shopping List**: Products only, no free-text items. (Ticking vs Restock: see round 2.)
 
-- **Q9b Time zone**: resolved in `issues/15-app-time-zone.md`. One Household Time Zone (HTZ), stored in `settings`; default from the first browser, editable.
-- **Q11b Ticking**: ticking only marks an item as in the cart (untickable, no Stock change); a "Restock ticked items" action asks for quantities (pre-filled with the pack-rounded amount), performs one Restock each and removes those items. Spec, glossary and issue 14 updated.
+- **Q9b Time zone**: resolved in [#15](https://github.com/HugoBar/jeeves/issues/15). One Household Time Zone (HTZ), stored in `settings`; default from the first browser, editable.
+- **Q11b Ticking**: ticking only marks an item as in the cart (untickable, no Stock change); a "Restock ticked items" action asks for quantities (pre-filled with the pack-rounded amount), performs one Restock each and removes those items. Spec, glossary and #14 updated.
 - **Q11c Regenerating**: keeps manual items and items already on the list with their tick (only matters for ticked-but-not-yet-restocked items).
-- **Q12 Reopen**: reopening writes opposite Stock Movements that add back exactly what the Confirmation removed (respecting clamping); Meal-caused movements link to their Meal. Glossary entry **Reopen** added; Stock Movement causes now include Reopen. Spec and issue 10 updated.
+- **Q12 Reopen**: reopening writes opposite Stock Movements that add back exactly what the Confirmation removed (respecting clamping); Meal-caused movements link to their Meal. Glossary entry **Reopen** added; Stock Movement causes now include Reopen. Spec and #10 updated.
 
 - **Q5 Meals, Meal Templates, Meal Series** (re-evaluated in a dedicated session, 2026-10-21):
   - A Meal Template is only a prefill shortcut. A Meal can be created from scratch (Meal Type + hour, no slots). Creating from a template copies name, Meal Type, hour and empty slots; `meals` has **no** template link.
   - A Meal owns its hour and optional `name` (card shows name ?? Meal Type); its Meal Type is fixed.
   - The one-Meal-per-Meal-Type-per-day rule is **dropped** (no unique `(date, meal_type_id)`). Projected Stock tie-break: date, priority, hour, then `created_at`.
   - Seeded Meal Types: Breakfast P2, Lunch P1 (Leftovers), Snack P3, Dinner P1 (Leftovers). "Morning Snack" etc. are names. No seeded templates.
-  - New in V1: **Meal Series** (repeats on chosen weekdays, no food). Behaviour in spec "Meal Series" and issue 16. Repeating food and starting a series from a past Meal are out of scope.
+  - New in V1: **Meal Series** (repeats on chosen weekdays, no food). Behaviour in spec "Meal Series" and [#16](https://github.com/HugoBar/jeeves/issues/16). Repeating food and starting a series from a past Meal are out of scope.
   - Tables:
     - `meal_templates(name, meal_type_id, hour)`
     - `meal_series(name?, meal_type_id, hour, weekdays smallint[] 1–7 Mon=1, generated_through date)`
@@ -73,4 +73,4 @@ Every table: `id uuid`, `created_at timestamptz`. `?` = nullable.
 ## After Q5
 
 - ADRs: done. `docs/adr/0003` (Stock stored alongside movement history) and `0004` (Meal Series repeats are real Meals).
-- Time zone: resolved (`issues/15-app-time-zone.md`).
+- Time zone: resolved ([#15](https://github.com/HugoBar/jeeves/issues/15)).
