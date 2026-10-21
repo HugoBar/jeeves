@@ -1,0 +1,3 @@
+# Stock stored alongside its movement history
+
+Every change to a Product's Stock is recorded as a Stock Movement, and that history is the true record. Each Product still keeps its current Stock (and the "stock was probably wrong" flag) in a column, updated in the same transaction as every movement, and each movement stores its resulting quantity. We accept the duplication because almost every screen (Stock list, Projected Stock, Suggestions, Shopping List) reads current Stock, and summing the whole history on every read is slower and easier to get wrong with clamping at 0. Never update the column without writing a movement.
