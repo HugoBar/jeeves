@@ -11,13 +11,14 @@ Jeeves manages a household pantry: what food is in stock, which recipes can be m
 ### Requirements
 
 - Node.js 22.12 or later, with [pnpm](https://pnpm.io) (`corepack enable` picks the version pinned in `package.json`)
-- A Postgres instance you can connect to
+- A Postgres instance you can connect to, or Docker to run a development one
 
 ### Run locally
 
 ```sh
 pnpm install
 cp .env.example .env   # then set DATABASE_URL
+pnpm db:up
 pnpm db:migrate
 pnpm dev               # http://localhost:3000
 ```
