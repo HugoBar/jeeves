@@ -13,7 +13,7 @@ A kind of food that can be in stock, such as Apple, Rice or Olive Oil, measured 
 _Avoid_: Item, ingredient (when talking about stock), food
 
 **Default Unit**:
-The single unit a Product's stock is counted in: grams, millilitres or count.
+The single unit a Product's stock is counted in: grams (g), millilitres (ml) or pieces (pc).
 _Avoid_: Base unit, stock unit
 
 **Stock**:
