@@ -6,6 +6,7 @@
   --color-muted: #5c6862;
   --color-accent: #2f5d50;
   --color-on-accent: #f4efe6;
+  --color-error: #b3261e;
   --space: 16px;
   --header-height: 56px;
   color-scheme: light dark;
@@ -19,6 +20,7 @@
     --color-muted: #9aa69f;
     --color-accent: #6fa58f;
     --color-on-accent: #151a18;
+    --color-error: #f2b8b5;
   }
 }
 
@@ -55,6 +57,49 @@ body {
 .app-title {
   font-weight: 600;
   font-size: 1.125rem;
+}
+
+.app-header a {
+  color: inherit;
+  text-decoration: none;
+}
+
+.app-nav {
+  margin-left: auto;
+}
+
+.category-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.category-list li + li {
+  border-top: 1px solid color-mix(in srgb, var(--color-muted) 30%, transparent);
+}
+
+.category-row,
+.category-form {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: calc(var(--space) / 2);
+  padding: calc(var(--space) / 2) 0;
+}
+
+.category-row > span {
+  flex: 1;
+}
+
+.category-form input {
+  flex: 1;
+  min-width: 0;
+}
+
+.form-error {
+  flex-basis: 100%;
+  margin: 0;
+  color: var(--color-error);
 }
 
 .app-main {

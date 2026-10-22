@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from "next";
+import Link from "next/link";
 import { t } from "@/strings";
 import { ServiceWorkerRegistration } from "./service-worker-registration";
 import { theme } from "./theme";
@@ -23,7 +24,12 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
     <html lang="en">
       <body>
         <header className="app-header">
-          <span className="app-title">{t("app.name")}</span>
+          <Link href="/" className="app-title">
+            {t("app.name")}
+          </Link>
+          <nav className="app-nav">
+            <Link href="/categories">{t("nav.categories")}</Link>
+          </nav>
         </header>
         <main className="app-main">{children}</main>
         <ServiceWorkerRegistration />

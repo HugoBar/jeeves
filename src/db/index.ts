@@ -3,7 +3,9 @@ import { drizzle } from "drizzle-orm/postgres-js";
 import postgres from "postgres";
 import * as schema from "./schema";
 
-let db: ReturnType<typeof createDb> | undefined;
+export type Db = ReturnType<typeof createDb>;
+
+let db: Db | undefined;
 
 function createDb(url: string) {
   return drizzle(postgres(url), { schema });
