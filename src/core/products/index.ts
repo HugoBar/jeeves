@@ -72,6 +72,16 @@ export function parseProductFields(input: ProductFieldsInput): ProductFieldsResu
   };
 }
 
+// The form's text for a Product's current fields: the inverse of parseProductFields.
+export function toProductFieldsInput({ name, density, packSize }: ProductFields): ProductFieldsInput {
+  return {
+    name,
+    density: density?.toString() ?? "",
+    packSizeName: packSize?.name ?? "",
+    packSizeAmount: packSize?.amount.toString() ?? "",
+  };
+}
+
 // The Stock list's order: alphabetical, ignoring case.
 export function sortProducts<T extends { name: string }>(products: readonly T[]): T[] {
   return [...products].sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: "base" }));

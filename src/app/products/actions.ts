@@ -4,7 +4,7 @@ import { redirect } from "next/navigation";
 import { parseProductFields, type ProductFieldError, type ProductFieldsInput } from "@/core/products";
 import { parseDefaultUnit } from "@/core/units";
 import { getDb } from "@/db";
-import { createProduct } from "@/db/products";
+import { createProduct, updateProduct } from "@/db/products";
 
 export type ProductFormValues = ProductFieldsInput & { defaultUnit?: string };
 
@@ -22,6 +22,18 @@ export async function createProductAction(
   const defaultUnit = parseDefaultUnit(values.defaultUnit);
   if (!defaultUnit) throw new Error("Invalid Default Unit");
   await createProduct(getDb(), { ...parsed.fields, defaultUnit });
+  redirect("/products");
+}
+
+export async function editProductAction(
+  id: string,
+  _state: ProductFormState,
+  formData: FormData,
+): Promise<ProductFormState> {
+  const values = valuesFrom(formData);
+  const parsed = parseProductFields(values);
+  if (!parsed.ok) return { errors: parsed.errors, values };
+  await updateProduct(getDb(), id, parsed.fields);
   redirect("/products");
 }
 

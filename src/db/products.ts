@@ -1,5 +1,5 @@
 import "server-only";
-import { isNull } from "drizzle-orm";
+import { eq, isNull } from "drizzle-orm";
 import type { ProductFields } from "@/core/products";
 import type { DefaultUnit } from "@/core/units";
 import type { Db } from "./index";
@@ -56,4 +56,14 @@ export async function createProduct(
     .values({ ...toColumns(input), defaultUnit: input.defaultUnit })
     .returning();
   return toProduct(row!);
+}
+
+export async function getProduct(db: Db, id: string): Promise<Product | undefined> {
+  const [row] = await db.select().from(products).where(eq(products.id, id));
+  return row && toProduct(row);
+}
+
+// The Default Unit is fixed at creation, so it is not among the changes.
+export async function updateProduct(db: Db, id: string, changes: ProductFields): Promise<void> {
+  await db.update(products).set(toColumns(changes)).where(eq(products.id, id));
 }

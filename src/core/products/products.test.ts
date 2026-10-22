@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseProductFields, sortProducts } from "./index";
+import { parseProductFields, sortProducts, toProductFieldsInput } from "./index";
 
 const filled = { name: " Rice ", density: "0.85", packSizeName: " bag ", packSizeAmount: "1000" };
 
@@ -60,6 +60,23 @@ describe("parseProductFields", () => {
     expect(
       parseProductFields({ name: "", density: "-1", packSizeName: "", packSizeAmount: "500" }),
     ).toEqual({ ok: false, errors: ["blankName", "invalidDensity", "incompletePackSize"] });
+  });
+});
+
+describe("toProductFieldsInput", () => {
+  it("fills the form with a Product's current fields", () => {
+    expect(
+      toProductFieldsInput({ name: "Milk", density: 1.03, packSize: { name: "carton", amount: 1000 } }),
+    ).toEqual({ name: "Milk", density: "1.03", packSizeName: "carton", packSizeAmount: "1000" });
+  });
+
+  it("leaves unset fields empty", () => {
+    expect(toProductFieldsInput({ name: "Apple", density: null, packSize: null })).toEqual({
+      name: "Apple",
+      density: "",
+      packSizeName: "",
+      packSizeAmount: "",
+    });
   });
 });
 
