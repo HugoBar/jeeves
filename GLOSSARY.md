@@ -70,7 +70,7 @@ A named dish, such as Steak or Lasagne, written for a stated number of Portions,
 _Avoid_: Dish, meal (when talking about the definition)
 
 **Archived**:
-A Recipe or Product hidden from pickers and Suggestions but kept so past Meals still refer to it.
+A Recipe, Product or Food Category hidden from pickers and Suggestions but kept so past Meals still refer to it.
 _Avoid_: Deleted
 
 **Ingredient**:

@@ -38,7 +38,7 @@ Started 2026-10-20 with `/grill-with-docs`. Resume by re-running it and pointing
 - **Table review (T1–T8)**, 2026-10-21:
   - **T1 Pack Size**: `pack_size_name?` + `pack_size_amount?` on `products`, CHECK both or neither.
   - **T2 Density**: grams per millilitre.
-  - **T3 Archived**: `archived_at timestamptz?` on `products` and `recipes`.
+  - **T3 Archived**: `archived_at timestamptz?` on `products`, `recipes` and `food_categories`.
   - **T4 Portions**: whole numbers everywhere (`integer` on `recipes` and `meal_slots`); an exception to Q2. Eating half a Portion still uses one.
   - **T5 Ordering**: integer `position`, renumbered on reorder (ingredients, layout slots, meal slots).
   - **T6 Confirmation movements**: one Stock Movement per Product per Confirmation, summed over slots, with `meal_id`.
@@ -50,7 +50,7 @@ Started 2026-10-20 with `/grill-with-docs`. Resume by re-running it and pointing
 
 Every table: `id uuid`, `created_at timestamptz`. `?` = nullable.
 
-- `food_categories(seed_key?, name?, kind)`
+- `food_categories(seed_key?, name?, kind, archived_at?)`
 - `products(name, default_unit, density?, pack_size_name?, pack_size_amount?, stock, stock_suspect, archived_at?)`
 - `product_food_categories(product_id, category_id)`
 - `stock_movements(product_id, type, delta, resulting_quantity, meal_id?)`
