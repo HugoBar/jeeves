@@ -38,6 +38,7 @@ export const en = {
   "products.save": "Save",
   "products.cancel": "Cancel",
   "products.error.blankName": "Enter a name.",
+  "products.error.duplicateName": "Another Product already has this name.",
   "products.error.invalidDensity": "Density must be a number above 0.",
   "products.error.incompletePackSize": "A Pack Size needs both a name and an amount.",
   "products.error.invalidPackSizeAmount": "Pack Size amount must be a number above 0.",

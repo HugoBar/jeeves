@@ -8,8 +8,10 @@ import { createProduct, updateProduct } from "@/db/products";
 
 export type ProductFormValues = ProductFieldsInput & { defaultUnit?: string };
 
+export type ProductFormError = ProductFieldError | "duplicateName";
+
 // `values` refills the form after a rejected submit, which React resets.
-export type ProductFormState = { errors: ProductFieldError[]; values: ProductFormValues };
+export type ProductFormState = { errors: ProductFormError[]; values: ProductFormValues };
 
 export async function createProductAction(
   _state: ProductFormState,
@@ -21,7 +23,8 @@ export async function createProductAction(
   // The form only offers the Default Units, so anything else is a crafted request.
   const defaultUnit = parseDefaultUnit(values.defaultUnit);
   if (!defaultUnit) throw new Error("Invalid Default Unit");
-  await createProduct(getDb(), { ...parsed.fields, defaultUnit });
+  const result = await createProduct(getDb(), { ...parsed.fields, defaultUnit });
+  if (!result.ok) return { errors: [result.error], values };
   redirect("/products");
 }
 
@@ -33,7 +36,8 @@ export async function editProductAction(
   const values = valuesFrom(formData);
   const parsed = parseProductFields(values);
   if (!parsed.ok) return { errors: parsed.errors, values };
-  await updateProduct(getDb(), id, parsed.fields);
+  const result = await updateProduct(getDb(), id, parsed.fields);
+  if (!result.ok) return { errors: [result.error], values };
   redirect("/products");
 }
 

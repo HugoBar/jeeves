@@ -3,6 +3,7 @@ import { eq, isNull } from "drizzle-orm";
 import type { ProductFields } from "@/core/products";
 import type { DefaultUnit } from "@/core/units";
 import type { Db } from "./index";
+import { isUniqueViolation } from "./postgres-errors";
 import { products } from "./schema";
 
 export interface Product extends ProductFields {
@@ -46,16 +47,24 @@ export async function listActiveProducts(db: Db): Promise<Product[]> {
   return rows.map(toProduct);
 }
 
+// Another non-Archived Product already has the name, ignoring case.
+type DuplicateName = { ok: false; error: "duplicateName" };
+
 // A new Product starts with no Stock; Stock only changes through Stock Movements.
 export async function createProduct(
   db: Db,
   input: ProductFields & { defaultUnit: DefaultUnit },
-): Promise<Product> {
-  const [row] = await db
-    .insert(products)
-    .values({ ...toColumns(input), defaultUnit: input.defaultUnit })
-    .returning();
-  return toProduct(row!);
+): Promise<{ ok: true; product: Product } | DuplicateName> {
+  try {
+    const [row] = await db
+      .insert(products)
+      .values({ ...toColumns(input), defaultUnit: input.defaultUnit })
+      .returning();
+    return { ok: true, product: toProduct(row!) };
+  } catch (error) {
+    if (isUniqueViolation(error)) return { ok: false, error: "duplicateName" };
+    throw error;
+  }
 }
 
 export async function getProduct(db: Db, id: string): Promise<Product | undefined> {
@@ -64,6 +73,16 @@ export async function getProduct(db: Db, id: string): Promise<Product | undefine
 }
 
 // The Default Unit is fixed at creation, so it is not among the changes.
-export async function updateProduct(db: Db, id: string, changes: ProductFields): Promise<void> {
-  await db.update(products).set(toColumns(changes)).where(eq(products.id, id));
+export async function updateProduct(
+  db: Db,
+  id: string,
+  changes: ProductFields,
+): Promise<{ ok: true } | DuplicateName> {
+  try {
+    await db.update(products).set(toColumns(changes)).where(eq(products.id, id));
+    return { ok: true };
+  } catch (error) {
+    if (isUniqueViolation(error)) return { ok: false, error: "duplicateName" };
+    throw error;
+  }
 }

@@ -12,3 +12,7 @@ export function isBlockedByReference(error: unknown): boolean {
   const code = postgresErrorCode(error);
   return code === "23001" || code === "23503";
 }
+
+export function isUniqueViolation(error: unknown): boolean {
+  return postgresErrorCode(error) === "23505";
+}
