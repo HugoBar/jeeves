@@ -1,11 +1,13 @@
 import "server-only";
+import type { PgDatabase, PgQueryResultHKT } from "drizzle-orm/pg-core";
 import { drizzle } from "drizzle-orm/postgres-js";
 import postgres from "postgres";
 import * as schema from "./schema";
 
-export type Db = ReturnType<typeof createDb>;
+// Any Postgres driver: the app uses postgres-js, database tests use PGlite.
+export type Db = PgDatabase<PgQueryResultHKT, typeof schema>;
 
-let db: Db | undefined;
+let db: ReturnType<typeof createDb> | undefined;
 
 function createDb(url: string) {
   return drizzle(postgres(url), { schema });

@@ -26,7 +26,7 @@ pnpm dev               # http://localhost:3000
 ### Run tests and checks
 
 ```sh
-pnpm test        # Vitest, once (needs Postgres: tests in *.db.test.ts use a fresh <db>_test database)
+pnpm test        # Vitest, once
 pnpm test:watch  # Vitest, watch mode
 pnpm typecheck
 pnpm lint
