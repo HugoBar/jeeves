@@ -2,9 +2,53 @@
 // the full V1 list is in docs/v1/data-model.md.
 import { sql } from "drizzle-orm";
 import type { CategorySeedKey } from "@/core/food-categories";
-import { check, pgEnum, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
+import { AMOUNT_COLUMN, DENSITY_COLUMN } from "@/core/amounts";
+import { DEFAULT_UNITS } from "@/core/units";
+import {
+  boolean,
+  check,
+  numeric,
+  pgEnum,
+  pgTable,
+  text,
+  timestamp,
+  uniqueIndex,
+  uuid,
+} from "drizzle-orm/pg-core";
 
 export const foodCategoryKind = pgEnum("food_category_kind", ["role", "kind"]);
+
+export const defaultUnit = pgEnum("default_unit", DEFAULT_UNITS);
+
+const amount = (name: string) => numeric(name, { ...AMOUNT_COLUMN, mode: "number" });
+
+// `stock` and `stock_suspect` change only together with a Stock Movement
+// (ADR 0003). Names are unique, ignoring case, among non-Archived Products, so
+// a removed Product's name can be reused.
+export const products = pgTable(
+  "products",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    name: text("name").notNull(),
+    defaultUnit: defaultUnit("default_unit").notNull(),
+    density: numeric("density", { ...DENSITY_COLUMN, mode: "number" }),
+    packSizeName: text("pack_size_name"),
+    packSizeAmount: amount("pack_size_amount"),
+    stock: amount("stock").notNull().default(0),
+    stockSuspect: boolean("stock_suspect").notNull().default(false),
+    archivedAt: timestamp("archived_at", { withTimezone: true }),
+  },
+  (table) => [
+    check(
+      "products_pack_size_both_or_neither",
+      sql`(${table.packSizeName} is null) = (${table.packSizeAmount} is null)`,
+    ),
+    uniqueIndex("products_name_unique")
+      .on(sql`lower(${table.name})`)
+      .where(sql`${table.archivedAt} is null`),
+  ],
+);
 
 // Tables that reference a category must use ON DELETE RESTRICT (data-model
 // "Deletes"), never CASCADE: removing a referenced category relies on that
