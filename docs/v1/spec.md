@@ -4,7 +4,7 @@ Domain language: `GLOSSARY.md`. Architecture decisions: `docs/adr/`. Every capit
 
 ## Problem
 
-I want one place that knows what food is in my Pantry, what I can cook from it, and what I plan to eat — so that eating a meal keeps Stock accurate, I get varied meal Suggestions, and I can build a Shopping List from what my plan is short of.
+I want one place that knows what food is in my Pantry, what I can cook from it, and what I plan to eat - so that eating a meal keeps Stock accurate, I get varied meal Suggestions, and I can build a Shopping List from what my plan is short of.
 
 ## Scope
 
@@ -27,6 +27,9 @@ I want one place that knows what food is in my Pantry, what I can cook from it, 
 - Each is a **Role** (Main Dish, Side Dish…) or a **Kind** (Fish, Fruit…). User-editable.
 - Seed Kinds: Red Meat, White Meat, Fish, Seafood, Eggs, Dairy, Legumes, Grains, Pasta, Vegetables, Fruit, Dried Fruit & Nuts. Seed Roles: Starter, Soup, Salad, Main Dish, Side Dish, Dessert, Snack, Drink.
 - Seeds are stored by stable key and displayed via the UI strings file (see Platform).
+- "Remove" Archives a category in use; hard delete only when unreferenced. Either way the category is gone from every picker.
+- An Archived category stays on past Meals and on the Products and Recipe overrides that carry it, but is hidden and ignored: Recipes don't derive it and Suggestions don't match on it.
+- A Planned Meal Slot, Template slot or Series slot whose Slot Category is Archived shows "Category archived - pick another" and gets no Suggestions until it is changed.
 
 ### Meal Types and Meal Templates
 - Meal Types (editable) carry Meal Priority and "allows Leftovers". Seeds: Breakfast (P2), Lunch (P1, Leftovers), Snack (P3), Dinner (P1, Leftovers). Names such as "Morning Snack" are Meal or Meal Template names, not Meal Types.
