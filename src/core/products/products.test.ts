@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseProductFields } from "./index";
+import { parseProductFields, sortProducts } from "./index";
 
 const filled = { name: " Rice ", density: "0.85", packSizeName: " bag ", packSizeAmount: "1000" };
 
@@ -60,5 +60,12 @@ describe("parseProductFields", () => {
     expect(
       parseProductFields({ name: "", density: "-1", packSizeName: "", packSizeAmount: "500" }),
     ).toEqual({ ok: false, errors: ["blankName", "invalidDensity", "incompletePackSize"] });
+  });
+});
+
+describe("sortProducts", () => {
+  it("sorts alphabetically, ignoring case", () => {
+    const products = [{ name: "rice" }, { name: "Apple" }, { name: "Olive Oil" }];
+    expect(sortProducts(products).map((p) => p.name)).toEqual(["Apple", "Olive Oil", "rice"]);
   });
 });

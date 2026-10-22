@@ -1,0 +1,37 @@
+"use server";
+
+import { redirect } from "next/navigation";
+import { parseProductFields, type ProductFieldError, type ProductFieldsInput } from "@/core/products";
+import { parseDefaultUnit } from "@/core/units";
+import { getDb } from "@/db";
+import { createProduct } from "@/db/products";
+
+export type ProductFormValues = ProductFieldsInput & { defaultUnit?: string };
+
+// `values` refills the form after a rejected submit, which React resets.
+export type ProductFormState = { errors: ProductFieldError[]; values: ProductFormValues };
+
+export async function createProductAction(
+  _state: ProductFormState,
+  formData: FormData,
+): Promise<ProductFormState> {
+  const values = valuesFrom(formData);
+  const parsed = parseProductFields(values);
+  if (!parsed.ok) return { errors: parsed.errors, values };
+  // The form only offers the Default Units, so anything else is a crafted request.
+  const defaultUnit = parseDefaultUnit(values.defaultUnit);
+  if (!defaultUnit) throw new Error("Invalid Default Unit");
+  await createProduct(getDb(), { ...parsed.fields, defaultUnit });
+  redirect("/products");
+}
+
+function valuesFrom(formData: FormData): ProductFormValues {
+  const text = (key: string) => String(formData.get(key) ?? "");
+  return {
+    name: text("name"),
+    density: text("density"),
+    packSizeName: text("packSizeName"),
+    packSizeAmount: text("packSizeAmount"),
+    defaultUnit: text("defaultUnit"),
+  };
+}
