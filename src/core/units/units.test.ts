@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { convertToDefaultUnit, roundToPacks } from "./index";
+import { convertToDefaultUnit, parseDefaultUnit, roundToPacks } from "./index";
 
 const grams = { defaultUnit: "g", density: null } as const;
 const millilitres = { defaultUnit: "ml", density: null } as const;
@@ -94,5 +94,15 @@ describe("roundToPacks", () => {
 
   it.each([-1300, NaN])("rejects an amount of %s", (amount) => {
     expect(() => roundToPacks(amount, 1000)).toThrow(RangeError);
+  });
+});
+
+describe("parseDefaultUnit", () => {
+  it.each([["g"], ["ml"], ["pc"]])("accepts %s", (input) => {
+    expect(parseDefaultUnit(input)).toBe(input);
+  });
+
+  it.each([["kg"], ["G"], [""], [null]])("rejects anything else (%j)", (input) => {
+    expect(parseDefaultUnit(input)).toBeNull();
   });
 });
