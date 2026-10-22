@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { t } from "./index";
+import { foodCategoryLabel, t } from "./index";
 
 describe("t", () => {
   it("returns the UI string for a key", () => {
@@ -8,5 +8,19 @@ describe("t", () => {
 
   it("fills placeholders from params", () => {
     expect(t("planner.editingNext", { day: "Tuesday" })).toBe("Editing: next Tuesday");
+  });
+});
+
+describe("foodCategoryLabel", () => {
+  it("shows a seeded category by its key's string", () => {
+    expect(foodCategoryLabel({ seedKey: "dried_fruit_nuts", name: null })).toBe("Dried Fruit & Nuts");
+  });
+
+  it("shows the typed name of a renamed seeded category", () => {
+    expect(foodCategoryLabel({ seedKey: "white_meat", name: "Poultry" })).toBe("Poultry");
+  });
+
+  it("shows a user-created category by its name", () => {
+    expect(foodCategoryLabel({ seedKey: null, name: "Sauces" })).toBe("Sauces");
   });
 });
