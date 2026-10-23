@@ -43,6 +43,8 @@ export const en = {
   "products.error.invalidDensity": "Density must be a number above 0.",
   "products.error.incompletePackSize": "A Pack Size needs both a name and an amount.",
   "products.error.invalidPackSizeAmount": "Pack Size amount must be a number above 0.",
+  "products.edit": "Edit",
+  "products.stock": "Stock: {quantity}",
   "unit.g": "g",
   "unit.ml": "ml",
   "unit.pc": "pc",

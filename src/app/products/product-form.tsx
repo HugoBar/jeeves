@@ -23,12 +23,14 @@ export function ProductForm({
   categories,
   submitLabel,
   fixedUnit,
+  cancelHref = "/products",
 }: {
   action: (state: ProductFormState, formData: FormData) => Promise<ProductFormState>;
   initialValues: ProductFormValues;
   categories: CategoryOption[];
   submitLabel: string;
   fixedUnit?: DefaultUnit;
+  cancelHref?: string;
 }) {
   const [state, formAction, pending] = useActionState(action, {
     errors: [],
@@ -98,7 +100,7 @@ export function ProductForm({
         <button type="submit" disabled={pending}>
           {submitLabel}
         </button>
-        <Link href="/products">{t("products.cancel")}</Link>
+        <Link href={cancelHref}>{t("products.cancel")}</Link>
       </div>
     </form>
   );
