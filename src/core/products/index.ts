@@ -1,10 +1,4 @@
-import {
-  AMOUNT_COLUMN,
-  DENSITY_COLUMN,
-  maxForColumn,
-  roundForColumn,
-  type DecimalColumn,
-} from "@/core/amounts";
+import { AMOUNT_COLUMN, DENSITY_COLUMN, parsePositive } from "@/core/amounts";
 
 export interface PackSize {
   name: string;
@@ -38,13 +32,6 @@ export type ProductFieldError =
   | "invalidDensity"
   | "incompletePackSize"
   | "invalidPackSizeAmount";
-
-// A positive number rounded as the column stores it; null if the text is not
-// one, rounds to 0 or does not fit.
-function parsePositive(text: string, column: DecimalColumn): number | null {
-  const value = roundForColumn(Number(text), column);
-  return value > 0 && value <= maxForColumn(column) ? value : null;
-}
 
 export type ProductFieldsResult =
   | { ok: true; fields: ProductFields }
