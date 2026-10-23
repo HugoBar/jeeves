@@ -3,16 +3,14 @@ import { toProductFieldsInput } from "@/core/products";
 import { getDb } from "@/db";
 import { getProduct } from "@/db/products";
 import { t } from "@/strings";
+import { isUuid } from "../../uuid";
 import { editProductAction } from "../actions";
 import { loadCategoryOptions } from "../category-options";
 import { ProductForm } from "../product-form";
 
-const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
 export default async function EditProductPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  // Postgres rejects a malformed uuid outright; that is a missing page, not an error.
-  if (!UUID.test(id)) notFound();
+  if (!isUuid(id)) notFound();
   const db = getDb();
   const product = await getProduct(db, id);
   if (!product) notFound();
