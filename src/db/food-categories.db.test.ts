@@ -2,6 +2,7 @@ import { sql } from "drizzle-orm";
 import { beforeAll, describe, expect, it } from "vitest";
 import { SEED_CATEGORIES } from "@/core/food-categories";
 import { createCategory, listActiveCategories, removeCategory } from "./food-categories";
+import { createProduct } from "./products";
 import { createTestDb } from "./test-database";
 
 let db: Awaited<ReturnType<typeof createTestDb>>;
@@ -18,18 +19,18 @@ describe("removeCategory", () => {
     expect((await listActiveCategories(db)).map((c) => c.id)).not.toContain(category.id);
   });
 
-  it("archives a category still referenced, so it leaves pickers but the reference survives", async () => {
+  it("archives a category a Product carries, so it leaves pickers", async () => {
     const category = await createCategory(db, { name: "Brunch", kind: "role" });
-    // Stands in for product_food_categories and the slot tables.
-    await db.execute(
-      sql`CREATE TABLE category_refs (category_id uuid NOT NULL REFERENCES food_categories (id) ON DELETE RESTRICT)`,
-    );
-    await db.execute(sql`INSERT INTO category_refs VALUES (${category.id})`);
+    await createProduct(db, {
+      name: "Pancake Mix",
+      defaultUnit: "g",
+      density: null,
+      packSize: null,
+      categoryIds: [category.id],
+    });
 
     expect(await removeCategory(db, category.id)).toBe("archived");
     expect((await listActiveCategories(db)).map((c) => c.id)).not.toContain(category.id);
-    const refs = await db.execute(sql`SELECT 1 FROM category_refs WHERE category_id = ${category.id}`);
-    expect(refs.rows).toHaveLength(1);
   });
 });
 

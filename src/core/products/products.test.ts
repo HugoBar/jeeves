@@ -1,20 +1,33 @@
 import { describe, expect, it } from "vitest";
 import { parseProductFields, sortProducts, toProductFieldsInput } from "./index";
 
-const filled = { name: " Rice ", density: "0.85", packSizeName: " bag ", packSizeAmount: "1000" };
+const filled = {
+  name: " Rice ",
+  density: "0.85",
+  packSizeName: " bag ",
+  packSizeAmount: "1000",
+  categoryIds: ["grains"],
+};
 
 describe("parseProductFields", () => {
   it("reads a fully filled-in form, trimming text", () => {
     expect(parseProductFields(filled)).toEqual({
       ok: true,
-      fields: { name: "Rice", density: 0.85, packSize: { name: "bag", amount: 1000 } },
+      fields: { name: "Rice", density: 0.85, packSize: { name: "bag", amount: 1000 }, categoryIds: ["grains"] },
+    });
+  });
+
+  it("keeps each picked Food Category once", () => {
+    expect(parseProductFields({ ...filled, categoryIds: ["fruit", "snack", "fruit"] })).toMatchObject({
+      ok: true,
+      fields: { categoryIds: ["fruit", "snack"] },
     });
   });
 
   it("leaves Density and Pack Size unset when their fields are empty", () => {
     expect(
-      parseProductFields({ name: "Apple", density: " ", packSizeName: "", packSizeAmount: "" }),
-    ).toEqual({ ok: true, fields: { name: "Apple", density: null, packSize: null } });
+      parseProductFields({ name: "Apple", density: " ", packSizeName: "", packSizeAmount: "", categoryIds: [] }),
+    ).toEqual({ ok: true, fields: { name: "Apple", density: null, packSize: null, categoryIds: [] } });
   });
 
   it.each([[""], ["   "]])("rejects a blank name (%j)", (name) => {
@@ -58,7 +71,7 @@ describe("parseProductFields", () => {
 
   it("reports every problem at once", () => {
     expect(
-      parseProductFields({ name: "", density: "-1", packSizeName: "", packSizeAmount: "500" }),
+      parseProductFields({ name: "", density: "-1", packSizeName: "", packSizeAmount: "500", categoryIds: [] }),
     ).toEqual({ ok: false, errors: ["blankName", "invalidDensity", "incompletePackSize"] });
   });
 });
@@ -66,16 +79,22 @@ describe("parseProductFields", () => {
 describe("toProductFieldsInput", () => {
   it("fills the form with a Product's current fields", () => {
     expect(
-      toProductFieldsInput({ name: "Milk", density: 1.03, packSize: { name: "carton", amount: 1000 } }),
-    ).toEqual({ name: "Milk", density: "1.03", packSizeName: "carton", packSizeAmount: "1000" });
+      toProductFieldsInput({
+        name: "Milk",
+        density: 1.03,
+        packSize: { name: "carton", amount: 1000 },
+        categoryIds: ["dairy"],
+      }),
+    ).toEqual({ name: "Milk", density: "1.03", packSizeName: "carton", packSizeAmount: "1000", categoryIds: ["dairy"] });
   });
 
   it("leaves unset fields empty", () => {
-    expect(toProductFieldsInput({ name: "Apple", density: null, packSize: null })).toEqual({
+    expect(toProductFieldsInput({ name: "Apple", density: null, packSize: null, categoryIds: [] })).toEqual({
       name: "Apple",
       density: "",
       packSizeName: "",
       packSizeAmount: "",
+      categoryIds: [],
     });
   });
 });

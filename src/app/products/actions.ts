@@ -49,5 +49,6 @@ function valuesFrom(formData: FormData): ProductFormValues {
     packSizeName: text("packSizeName"),
     packSizeAmount: text("packSizeAmount"),
     defaultUnit: text("defaultUnit"),
+    categoryIds: formData.getAll("categoryIds").map(String),
   };
 }

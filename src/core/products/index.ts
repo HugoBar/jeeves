@@ -19,6 +19,8 @@ export interface ProductFields {
   // Grams per millilitre.
   density: number | null;
   packSize: PackSize | null;
+  // Food Category ids.
+  categoryIds: string[];
 }
 
 // Raw text from the Product form.
@@ -27,6 +29,8 @@ export interface ProductFieldsInput {
   density: string;
   packSizeName: string;
   packSizeAmount: string;
+  // The ticked Food Category checkboxes.
+  categoryIds: string[];
 }
 
 export type ProductFieldError =
@@ -68,17 +72,19 @@ export function parseProductFields(input: ProductFieldsInput): ProductFieldsResu
       name,
       density,
       packSize: packSizeAmount === null ? null : { name: packSizeName, amount: packSizeAmount },
+      categoryIds: [...new Set(input.categoryIds)],
     },
   };
 }
 
 // The form's text for a Product's current fields: the inverse of parseProductFields.
-export function toProductFieldsInput({ name, density, packSize }: ProductFields): ProductFieldsInput {
+export function toProductFieldsInput({ name, density, packSize, categoryIds }: ProductFields): ProductFieldsInput {
   return {
     name,
     density: density?.toString() ?? "",
     packSizeName: packSize?.name ?? "",
     packSizeAmount: packSize?.amount.toString() ?? "",
+    categoryIds,
   };
 }
 

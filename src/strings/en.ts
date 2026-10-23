@@ -34,6 +34,7 @@ export const en = {
   "products.packSizeName": "Pack Size name (optional, e.g. bag)",
   "products.packSizeAmount": "Pack Size amount (in {unit})",
   "products.packSizeAmountInDefaultUnit": "Pack Size amount (in the Default Unit)",
+  "products.foodCategories": "Food Categories",
   "products.create": "Add Product",
   "products.save": "Save",
   "products.cancel": "Cancel",
