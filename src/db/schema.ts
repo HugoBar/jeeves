@@ -10,6 +10,7 @@ import {
   numeric,
   pgEnum,
   pgTable,
+  primaryKey,
   text,
   timestamp,
   uniqueIndex,
@@ -66,4 +67,19 @@ export const foodCategories = pgTable(
   (table) => [
     check("food_categories_seed_key_or_name", sql`${table.seedKey} is not null or ${table.name} is not null`),
   ],
+);
+
+// A Product's links go with it when it is hard deleted; a category in use
+// cannot be deleted, so removing it Archives it and the link is kept.
+export const productFoodCategories = pgTable(
+  "product_food_categories",
+  {
+    productId: uuid("product_id")
+      .notNull()
+      .references(() => products.id, { onDelete: "cascade" }),
+    categoryId: uuid("category_id")
+      .notNull()
+      .references(() => foodCategories.id, { onDelete: "restrict" }),
+  },
+  (table) => [primaryKey({ columns: [table.productId, table.categoryId] })],
 );
