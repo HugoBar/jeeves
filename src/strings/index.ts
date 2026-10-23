@@ -27,3 +27,14 @@ const quantityFormat = new Intl.NumberFormat("en", { maximumFractionDigits: 2 })
 export function formatQuantity(amount: number, unit: DefaultUnit): string {
   return `${quantityFormat.format(amount)} ${t(`unit.${unit}`)}`;
 }
+
+// A moment as shown to the user: "Oct 23, 2026, 2:05 PM", in the time zone of
+// whoever runs it.
+export function formatDateTime(value: Date): string {
+  return value.toLocaleString("en", { dateStyle: "medium", timeStyle: "short" });
+}
+
+// A Stock Movement's delta with its sign: "+500 g", "-1.5 pc".
+export function formatDelta(delta: number, unit: DefaultUnit): string {
+  return `${delta > 0 ? "+" : ""}${formatQuantity(delta, unit)}`;
+}
