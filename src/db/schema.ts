@@ -3,10 +3,12 @@
 import { sql } from "drizzle-orm";
 import type { CategorySeedKey } from "@/core/food-categories";
 import { AMOUNT_COLUMN, DENSITY_COLUMN } from "@/core/amounts";
+import { STOCK_MOVEMENT_TYPES } from "@/core/stock";
 import { DEFAULT_UNITS } from "@/core/units";
 import {
   boolean,
   check,
+  index,
   numeric,
   pgEnum,
   pgTable,
@@ -82,4 +84,23 @@ export const productFoodCategories = pgTable(
       .references(() => foodCategories.id, { onDelete: "restrict" }),
   },
   (table) => [primaryKey({ columns: [table.productId, table.categoryId] })],
+);
+
+export const stockMovementType = pgEnum("stock_movement_type", STOCK_MOVEMENT_TYPES);
+
+// Every change to a Product's Stock, the true record of it (ADR 0003). A
+// Product with movements can never be hard deleted, only Archived.
+export const stockMovements = pgTable(
+  "stock_movements",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    productId: uuid("product_id")
+      .notNull()
+      .references(() => products.id, { onDelete: "restrict" }),
+    type: stockMovementType("type").notNull(),
+    delta: amount("delta").notNull(),
+    resultingQuantity: amount("resulting_quantity").notNull(),
+  },
+  (table) => [index("stock_movements_product_id_created_at").on(table.productId, table.createdAt)],
 );

@@ -29,6 +29,13 @@
       "when": 1792759922820,
       "tag": "0003_product_food_categories",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1792765885675,
+      "tag": "0004_stock_movements",
+      "breakpoints": true
     }
   ]
 }
