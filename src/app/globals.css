@@ -65,6 +65,8 @@ body {
 }
 
 .app-nav {
+  display: flex;
+  gap: var(--space);
   margin-left: auto;
 }
 
@@ -100,6 +102,42 @@ body {
   flex-basis: 100%;
   margin: 0;
   color: var(--color-error);
+}
+
+.stock-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.stock-list li + li {
+  border-top: 1px solid color-mix(in srgb, var(--color-muted) 30%, transparent);
+}
+
+.stock-list a {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space);
+  padding: calc(var(--space) / 2) 0;
+  color: inherit;
+  text-decoration: none;
+}
+
+.product-form {
+  display: flex;
+  flex-direction: column;
+  gap: calc(var(--space) / 2);
+}
+
+.product-form label {
+  display: flex;
+  flex-direction: column;
+  gap: calc(var(--space) / 4);
+}
+
+.product-form-actions {
+  display: flex;
+  gap: calc(var(--space) / 2);
 }
 
 .app-main {

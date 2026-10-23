@@ -2,6 +2,7 @@ import "server-only";
 import { eq, isNull, sql } from "drizzle-orm";
 import type { CategoryKind } from "@/core/food-categories";
 import type { Db } from "./index";
+import { isBlockedByReference } from "./postgres-errors";
 import { foodCategories } from "./schema";
 
 export type FoodCategory = typeof foodCategories.$inferSelect;
@@ -45,16 +46,4 @@ export async function removeCategory(db: Db, id: string): Promise<"deleted" | "a
     await db.update(foodCategories).set({ archivedAt: sql`now()` }).where(eq(foodCategories.id, id));
     return "archived";
   }
-}
-
-// Postgres raises 23001 for ON DELETE RESTRICT and 23503 for NO ACTION.
-// Drizzle wraps the driver's error in `cause`.
-function isBlockedByReference(error: unknown): boolean {
-  const cause = error instanceof Error ? error.cause : undefined;
-  return (
-    typeof cause === "object" &&
-    cause !== null &&
-    "code" in cause &&
-    (cause.code === "23001" || cause.code === "23503")
-  );
 }

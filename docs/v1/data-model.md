@@ -37,7 +37,7 @@ Started 2026-10-20 with `/grill-with-docs`. Resume by re-running it and pointing
 
 - **Table review (T1–T8)**, 2026-10-21:
   - **T1 Pack Size**: `pack_size_name?` + `pack_size_amount?` on `products`, CHECK both or neither.
-  - **T2 Density**: grams per millilitre.
+  - **T2 Density**: grams per millilitre, `numeric(10,4)`; an exception to Q2, since 2 decimals could put a 1 l conversion off by 5 g.
   - **T3 Archived**: `archived_at timestamptz?` on `products`, `recipes` and `food_categories`.
   - **T4 Portions**: whole numbers everywhere (`integer` on `recipes` and `meal_slots`); an exception to Q2. Eating half a Portion still uses one.
   - **T5 Ordering**: integer `position`, renumbered on reorder (ingredients, layout slots, meal slots).

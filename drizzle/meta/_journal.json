@@ -15,6 +15,13 @@
       "when": 1792667065010,
       "tag": "0001_seed_food_categories",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1792681581101,
+      "tag": "0002_products",
+      "breakpoints": true
     }
   ]
 }

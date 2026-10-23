@@ -1,6 +1,13 @@
 export type Unit = "g" | "kg" | "ml" | "l" | "tsp" | "tbsp" | "cup" | "pc";
 
-export type DefaultUnit = "g" | "ml" | "pc";
+// The units a Product's Stock can be counted in.
+export const DEFAULT_UNITS = ["g", "ml", "pc"] as const;
+
+export type DefaultUnit = (typeof DEFAULT_UNITS)[number];
+
+export function parseDefaultUnit(input: unknown): DefaultUnit | null {
+  return DEFAULT_UNITS.find((unit) => unit === input) ?? null;
+}
 
 export type Dimension = "mass" | "volume" | "count";
 

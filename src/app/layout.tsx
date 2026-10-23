@@ -28,6 +28,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
             {t("app.name")}
           </Link>
           <nav className="app-nav">
+            <Link href="/products">{t("nav.stock")}</Link>
             <Link href="/categories">{t("nav.categories")}</Link>
           </nav>
         </header>

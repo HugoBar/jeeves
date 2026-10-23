@@ -9,7 +9,7 @@ I want one place that knows what food is in my Pantry, what I can cook from it, 
 ## Scope
 
 ### Pantry
-- Products have a Default Unit (g, ml, count), optional Density, optional Pack Size, and Food Categories. "Remove" Archives; hard delete only when unreferenced.
+- Products have a Default Unit (g, ml, pc), optional Density, optional Pack Size, and Food Categories. "Remove" Archives; hard delete only when unreferenced.
 - Stock changes only through Stock Movements: Restock, Discard, Correction, Confirmation. Every movement is recorded with its reason.
 - Stock is a decimal and never goes below 0. A deduction that would go negative clamps to 0 and flags the Product as "stock was probably wrong".
 
