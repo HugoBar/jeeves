@@ -38,7 +38,7 @@ export async function editProductAction(
   if (!parsed.ok) return { errors: parsed.errors, values };
   const result = await updateProduct(getDb(), id, parsed.fields);
   if (!result.ok) return { errors: [result.error], values };
-  redirect("/products");
+  redirect(`/products/${id}`);
 }
 
 function valuesFrom(formData: FormData): ProductFormValues {

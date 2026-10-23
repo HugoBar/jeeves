@@ -1,32 +1,51 @@
+import Link from "next/link";
 import { notFound } from "next/navigation";
-import { toProductFieldsInput } from "@/core/products";
 import { getDb } from "@/db";
 import { getProduct } from "@/db/products";
-import { t } from "@/strings";
-import { editProductAction } from "../actions";
-import { loadCategoryOptions } from "../category-options";
-import { ProductForm } from "../product-form";
+import { listStockMovements } from "@/db/stock-movements";
+import { formatDelta, formatQuantity, t } from "@/strings";
+import { LocalDateTime } from "../../local-date-time";
+import { restockAction } from "../restock-actions";
+import { RestockForm } from "../restock-form";
+import { isUuid } from "../../uuid";
 
-const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
-export default async function EditProductPage({ params }: { params: Promise<{ id: string }> }) {
+// A Product: its Stock, Restock, and its Stock Movement history.
+export default async function ProductPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  // Postgres rejects a malformed uuid outright; that is a missing page, not an error.
-  if (!UUID.test(id)) notFound();
+  if (!isUuid(id)) notFound();
   const db = getDb();
   const product = await getProduct(db, id);
   if (!product) notFound();
+  const movements = await listStockMovements(db, id);
 
   return (
     <section>
-      <h1>{t("products.editTitle", { name: product.name })}</h1>
-      <ProductForm
-        action={editProductAction.bind(null, product.id)}
-        initialValues={toProductFieldsInput(product)}
-        categories={await loadCategoryOptions(db)}
-        submitLabel={t("products.save")}
-        fixedUnit={product.defaultUnit}
-      />
+      <h1>{product.name}</h1>
+      <p>
+        <Link href={`/products/${product.id}/edit`}>{t("products.edit")}</Link>
+      </p>
+      <p>{t("products.stock", { quantity: formatQuantity(product.stock, product.defaultUnit) })}</p>
+      <RestockForm action={restockAction.bind(null, product.id)} unit={product.defaultUnit} />
+      <h2>{t("products.history")}</h2>
+      {movements.length === 0 ? (
+        <p>{t("products.historyEmpty")}</p>
+      ) : (
+        <ul className="movement-list">
+          {movements.map((movement) => (
+            <li key={movement.id} className="stock-movement">
+              <span>
+                {t(`stockMovement.${movement.type}`)} <LocalDateTime value={movement.createdAt} />
+              </span>
+              <span>
+                {t("stockMovement.change", {
+                  delta: formatDelta(movement.delta, product.defaultUnit),
+                  quantity: formatQuantity(movement.resultingQuantity, product.defaultUnit),
+                })}
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
     </section>
   );
 }
