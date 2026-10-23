@@ -1,14 +1,10 @@
 import { connection } from "next/server";
-import { sortCategories, type CategoryKind } from "@/core/food-categories";
+import { sortCategories } from "@/core/food-categories";
 import { getDb } from "@/db";
 import { listActiveCategories } from "@/db/food-categories";
-import { foodCategoryLabel, t, type StringKey } from "@/strings";
+import { foodCategoryLabel, t } from "@/strings";
 import { CategoryRow, CreateCategoryForm } from "./category-forms";
-
-const GROUPS: { kind: CategoryKind; heading: StringKey }[] = [
-  { kind: "role", heading: "categories.roles" },
-  { kind: "kind", heading: "categories.kinds" },
-];
+import { groupCategoriesByKind } from "./category-groups";
 
 export default async function CategoriesPage() {
   // Read from the database on every request, never at build time.
@@ -19,21 +15,15 @@ export default async function CategoriesPage() {
     <section>
       <h1>{t("categories.title")}</h1>
       <CreateCategoryForm />
-      {GROUPS.map(({ kind, heading }) => (
-        <section key={kind}>
-          <h2>{t(heading)}</h2>
+      {groupCategoriesByKind(categories).map((group) => (
+        <section key={group.kind}>
+          <h2>{group.heading}</h2>
           <ul className="category-list">
-            {categories
-              .filter((category) => category.kind === kind)
-              .map((category) => (
-                <li key={category.id}>
-                  <CategoryRow
-                    id={category.id}
-                    label={foodCategoryLabel(category)}
-                    kind={category.kind}
-                  />
-                </li>
-              ))}
+            {group.categories.map((category) => (
+              <li key={category.id}>
+                <CategoryRow id={category.id} label={foodCategoryLabel(category)} kind={category.kind} />
+              </li>
+            ))}
           </ul>
         </section>
       ))}
