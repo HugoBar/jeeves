@@ -2,20 +2,31 @@
 
 import Link from "next/link";
 import { useActionState } from "react";
+import type { CategoryKind } from "@/core/food-categories";
 import { DEFAULT_UNITS, type DefaultUnit } from "@/core/units";
 import { t } from "@/strings";
+import { groupCategoriesByKind } from "../categories/category-groups";
 import type { ProductFormState, ProductFormValues } from "./actions";
+
+// A Food Category the picker offers, already labelled and sorted.
+export interface CategoryOption {
+  id: string;
+  label: string;
+  kind: CategoryKind;
+}
 
 // A Product's Default Unit is picked when creating it; once `fixedUnit` is
 // set, it is only shown.
 export function ProductForm({
   action,
   initialValues,
+  categories,
   submitLabel,
   fixedUnit,
 }: {
   action: (state: ProductFormState, formData: FormData) => Promise<ProductFormState>;
   initialValues: ProductFormValues;
+  categories: CategoryOption[];
   submitLabel: string;
   fixedUnit?: DefaultUnit;
 }) {
@@ -59,6 +70,25 @@ export function ProductForm({
           : t("products.packSizeAmountInDefaultUnit")}
         <input name="packSizeAmount" inputMode="decimal" defaultValue={values.packSizeAmount} />
       </label>
+      <fieldset className="category-picker">
+        <legend>{t("products.foodCategories")}</legend>
+        {groupCategoriesByKind(categories).map((group) => (
+          <div key={group.kind}>
+            <h2>{group.heading}</h2>
+            {group.categories.map((category) => (
+              <label key={category.id}>
+                <input
+                  type="checkbox"
+                  name="categoryIds"
+                  value={category.id}
+                  defaultChecked={values.categoryIds.includes(category.id)}
+                />
+                {category.label}
+              </label>
+            ))}
+          </div>
+        ))}
+      </fieldset>
       {state.errors.map((error) => (
         <p key={error} className="form-error">
           {t(`products.error.${error}`)}

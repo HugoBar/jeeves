@@ -44,7 +44,7 @@ Started 2026-10-20 with `/grill-with-docs`. Resume by re-running it and pointing
   - **T6 Confirmation movements**: one Stock Movement per Product per Confirmation, summed over slots, with `meal_id`.
   - **T7 Shopping List quantity**: stored at generation time; `quantity?` (manual items may have none), `source` shortfall|manual, `ticked`, one row per Product.
   - **T8 Enums**: Postgres enums for units, movement type, Meal status, slot content, Role/Kind.
-  - Deletes: RESTRICT by default (blocked while referenced); CASCADE from a Recipe/Meal/Template/Series to its own ingredients or slots; `meals.series_id` SET NULL.
+  - Deletes: RESTRICT by default (blocked while referenced); CASCADE from a Recipe/Meal/Template/Series to its own ingredients or slots, and from a Product to its own `product_food_categories` links; `meals.series_id` SET NULL.
 
 ## Tables (V1)
 

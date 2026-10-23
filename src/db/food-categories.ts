@@ -1,5 +1,5 @@
 import "server-only";
-import { eq, isNull, sql } from "drizzle-orm";
+import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 import type { CategoryKind } from "@/core/food-categories";
 import type { Db } from "./index";
 import { isBlockedByReference } from "./postgres-errors";
@@ -10,6 +10,22 @@ export type FoodCategory = typeof foodCategories.$inferSelect;
 // What pickers offer: every category that is not Archived.
 export function listActiveCategories(db: Db): Promise<FoodCategory[]> {
   return db.select().from(foodCategories).where(isNull(foodCategories.archivedAt));
+}
+
+// The ids of every category that is not Archived, as a subquery for other
+// tables' queries (`inArray(column, activeCategoryIds(db))`).
+export function activeCategoryIds(db: Db) {
+  return db.select({ id: foodCategories.id }).from(foodCategories).where(isNull(foodCategories.archivedAt));
+}
+
+// Of the given ids, those of categories that exist and are not Archived.
+export async function keepActiveCategoryIds(db: Db, ids: string[]): Promise<string[]> {
+  if (ids.length === 0) return [];
+  const rows = await db
+    .select({ id: foodCategories.id })
+    .from(foodCategories)
+    .where(and(inArray(foodCategories.id, ids), isNull(foodCategories.archivedAt)));
+  return rows.map((row) => row.id);
 }
 
 export async function createCategory(

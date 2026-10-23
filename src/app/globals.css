@@ -135,6 +135,25 @@ body {
   gap: calc(var(--space) / 4);
 }
 
+.category-picker {
+  display: flex;
+  flex-direction: column;
+  gap: calc(var(--space) / 2);
+  margin: 0;
+  padding: calc(var(--space) / 2);
+}
+
+.category-picker h2 {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.product-form .category-picker label {
+  flex-direction: row;
+  align-items: center;
+  gap: calc(var(--space) / 2);
+}
+
 .product-form-actions {
   display: flex;
   gap: calc(var(--space) / 2);
