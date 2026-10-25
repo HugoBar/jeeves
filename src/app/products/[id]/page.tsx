@@ -5,11 +5,12 @@ import { getProduct } from "@/db/products";
 import { listStockMovements } from "@/db/stock-movements";
 import { formatDelta, formatQuantity, t } from "@/strings";
 import { LocalDateTime } from "../../local-date-time";
-import { restockAction } from "../restock-actions";
-import { RestockForm } from "../restock-form";
+import { correctAction, discardAction, restockAction } from "../stock-actions";
+import { StockForm } from "../stock-form";
 import { isUuid } from "../../uuid";
 
-// A Product: its Stock, Restock, and its Stock Movement history.
+// A Product: its Stock, the Restock, Discard and Correction forms, and its
+// Stock Movement history.
 export default async function ProductPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   if (!isUuid(id)) notFound();
@@ -25,7 +26,10 @@ export default async function ProductPage({ params }: { params: Promise<{ id: st
         <Link href={`/products/${product.id}/edit`}>{t("products.edit")}</Link>
       </p>
       <p>{t("products.stock", { quantity: formatQuantity(product.stock, product.defaultUnit) })}</p>
-      <RestockForm action={restockAction.bind(null, product.id)} unit={product.defaultUnit} />
+      {product.stockSuspect && <p className="stock-suspect">{t("products.stockSuspect")}</p>}
+      <StockForm kind="restock" action={restockAction.bind(null, product.id)} unit={product.defaultUnit} />
+      <StockForm kind="discard" action={discardAction.bind(null, product.id)} unit={product.defaultUnit} />
+      <StockForm kind="correction" action={correctAction.bind(null, product.id)} unit={product.defaultUnit} />
       <h2>{t("products.history")}</h2>
       {movements.length === 0 ? (
         <p>{t("products.historyEmpty")}</p>

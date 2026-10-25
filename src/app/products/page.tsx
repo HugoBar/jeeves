@@ -25,7 +25,10 @@ export default async function StockPage() {
             <li key={product.id}>
               <Link href={`/products/${product.id}`}>
                 <span>{product.name}</span>
-                <span>{formatQuantity(product.stock, product.defaultUnit)}</span>
+                <span>
+                  {product.stockSuspect && <span className="stock-suspect">{t("stock.suspect")} </span>}
+                  {formatQuantity(product.stock, product.defaultUnit)}
+                </span>
               </Link>
             </li>
           ))}

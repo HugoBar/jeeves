@@ -1,6 +1,6 @@
 import { beforeAll, describe, expect, it } from "vitest";
 import { createProduct, getProduct } from "./products";
-import { listStockMovements, restockProduct } from "./stock-movements";
+import { correctProductStock, discardProductStock, listStockMovements, restockProduct } from "./stock-movements";
 import { createTestDb } from "./test-database";
 
 let db: Awaited<ReturnType<typeof createTestDb>>;
@@ -34,6 +34,57 @@ describe("restockProduct", () => {
     await restockProduct(db, product.id, 250.5);
 
     expect((await getProduct(db, product.id))?.stock).toBe(750.5);
+  });
+
+  it('keeps the "stock was probably wrong" flag', async () => {
+    const product = await aProduct("Eggs");
+    await discardProductStock(db, product.id, 6);
+
+    await restockProduct(db, product.id, 12);
+
+    expect(await getProduct(db, product.id)).toMatchObject({ stock: 12, stockSuspect: true });
+  });
+});
+
+describe("discardProductStock", () => {
+  it("subtracts from the Product's Stock and records a Discard movement", async () => {
+    const product = await aProduct("Milk powder");
+    await restockProduct(db, product.id, 500);
+
+    await discardProductStock(db, product.id, 200);
+
+    expect(await getProduct(db, product.id)).toMatchObject({ stock: 300, stockSuspect: false });
+    expect((await listStockMovements(db, product.id))[0]).toMatchObject({
+      type: "discard",
+      delta: -200,
+      resultingQuantity: 300,
+    });
+  });
+
+  it('clamps at 0 and flags the Product as "stock was probably wrong"', async () => {
+    const product = await aProduct("Butter");
+    await restockProduct(db, product.id, 100);
+
+    await discardProductStock(db, product.id, 250);
+
+    expect(await getProduct(db, product.id)).toMatchObject({ stock: 0, stockSuspect: true });
+    expect((await listStockMovements(db, product.id))[0]).toMatchObject({ delta: -100, resultingQuantity: 0 });
+  });
+});
+
+describe("correctProductStock", () => {
+  it("sets the Product's Stock to the quantity on hand, records a Correction and clears the flag", async () => {
+    const product = await aProduct("Cocoa");
+    await discardProductStock(db, product.id, 50);
+
+    await correctProductStock(db, product.id, 120);
+
+    expect(await getProduct(db, product.id)).toMatchObject({ stock: 120, stockSuspect: false });
+    expect((await listStockMovements(db, product.id))[0]).toMatchObject({
+      type: "correction",
+      delta: 120,
+      resultingQuantity: 120,
+    });
   });
 });
 

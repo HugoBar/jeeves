@@ -1,4 +1,4 @@
-import { AMOUNT_COLUMN, parsePositive, roundForColumn } from "@/core/amounts";
+import { AMOUNT_COLUMN, parseNonNegative, parsePositive, roundForColumn } from "@/core/amounts";
 
 // What caused a Stock Movement (glossary: Stock Movement).
 export const STOCK_MOVEMENT_TYPES = ["restock", "discard", "correction", "confirmation", "reopen"] as const;
@@ -20,21 +20,52 @@ export interface StockChange {
   stockSuspect: boolean;
 }
 
-// Food was bought.
+// Food was bought. The flag stays: adding to a wrong Stock leaves it wrong.
 export function restock(current: StockState, quantity: number): StockChange {
+  return towards(current, roundForColumn(current.stock + quantity, AMOUNT_COLUMN), current.stockSuspect);
+}
+
+// Food left Stock: a Discard, and later a Confirmation. Stock never goes
+// below 0; a deduction past 0 clamps there and flags the Stock as probably
+// wrong. The delta is what was actually removed.
+export function deduct(current: StockState, quantity: number): StockChange {
+  const unclamped = roundForColumn(current.stock - quantity, AMOUNT_COLUMN);
+  const clamped = unclamped < 0;
+  return towards(current, clamped ? 0 : unclamped, clamped || current.stockSuspect);
+}
+
+// Stock was counted: it becomes the quantity actually on hand. The only
+// movement that clears the flag.
+export function correct(current: StockState, quantity: number): StockChange {
+  return towards(current, quantity, false);
+}
+
+// The change that takes Stock to `resultingQuantity`. Subtracting (rather
+// than negating) keeps a zero delta from being -0.
+function towards(current: StockState, resultingQuantity: number, stockSuspect: boolean): StockChange {
   return {
-    delta: quantity,
-    resultingQuantity: roundForColumn(current.stock + quantity, AMOUNT_COLUMN),
-    stockSuspect: false,
+    delta: roundForColumn(resultingQuantity - current.stock, AMOUNT_COLUMN),
+    resultingQuantity,
+    stockSuspect,
   };
 }
 
-// The quantity typed into the Restock form, in the Product's Default Unit.
-export type RestockQuantityError = "invalidQuantity";
+// A quantity typed into a Stock form, in the Product's Default Unit. Each
+// error names the rule the text broke.
+export type QuantityError = "notAboveZero" | "notZeroOrMore";
 
-export function parseRestockQuantity(
-  text: string,
-): { ok: true; quantity: number } | { ok: false; error: RestockQuantityError } {
-  const quantity = parsePositive(text.trim(), AMOUNT_COLUMN);
-  return quantity === null ? { ok: false, error: "invalidQuantity" } : { ok: true, quantity };
+export type ParsedQuantity = { ok: true; quantity: number } | { ok: false; error: QuantityError };
+
+function toParsed(quantity: number | null, error: QuantityError): ParsedQuantity {
+  return quantity === null ? { ok: false, error } : { ok: true, quantity };
+}
+
+// The quantity bought or discarded: above 0.
+export function parsePositiveQuantity(text: string): ParsedQuantity {
+  return toParsed(parsePositive(text.trim(), AMOUNT_COLUMN), "notAboveZero");
+}
+
+// The quantity counted for a Correction: 0 or more.
+export function parseQuantityOnHand(text: string): ParsedQuantity {
+  return toParsed(parseNonNegative(text.trim(), AMOUNT_COLUMN), "notZeroOrMore");
 }
