@@ -32,8 +32,8 @@ Adding to a Product's Stock because food was bought.
 _Avoid_: Add
 
 **Discard**:
-Removing from a Product's Stock outside of a Confirmation, such as when food is thrown away.
-_Avoid_: Remove, waste
+Taking food out of a Product's Stock outside of a Confirmation, such as when food is thrown away.
+_Avoid_: Remove (when talking about Stock), waste
 
 **Correction**:
 Setting a Product's Stock to the quantity actually on hand, fixing drift.
@@ -72,6 +72,10 @@ _Avoid_: Dish, meal (when talking about the definition)
 **Archived**:
 A Recipe, Product or Food Category hidden from pickers and Suggestions but kept so past Meals still refer to it.
 _Avoid_: Deleted
+
+**Remove**:
+Getting rid of a Recipe, Product or Food Category: it is hard deleted if nothing refers to it, and Archived otherwise.
+_Avoid_: Delete, Discard
 
 **Ingredient**:
 A Product plus an amount, in any supported unit, needed to make a Recipe's stated Portions.

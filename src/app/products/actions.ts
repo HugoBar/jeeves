@@ -4,7 +4,7 @@ import { redirect } from "next/navigation";
 import { parseProductFields, type ProductFieldError, type ProductFieldsInput } from "@/core/products";
 import { parseDefaultUnit } from "@/core/units";
 import { getDb } from "@/db";
-import { createProduct, updateProduct } from "@/db/products";
+import { createProduct, removeProduct, updateProduct } from "@/db/products";
 
 export type ProductFormValues = ProductFieldsInput & { defaultUnit?: string };
 
@@ -39,6 +39,11 @@ export async function editProductAction(
   const result = await updateProduct(getDb(), id, parsed.fields);
   if (!result.ok) return { errors: [result.error], values };
   redirect(`/products/${id}`);
+}
+
+export async function removeProductAction(id: string): Promise<void> {
+  await removeProduct(getDb(), id);
+  redirect("/products");
 }
 
 function valuesFrom(formData: FormData): ProductFormValues {

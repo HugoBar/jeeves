@@ -2,6 +2,7 @@ import "server-only";
 import { and, eq, inArray, isNull } from "drizzle-orm";
 import type { ProductFields } from "@/core/products";
 import type { DefaultUnit } from "@/core/units";
+import { deleteOrArchive, type RemoveOutcome } from "./archive";
 import { activeCategoryIds, keepActiveCategoryIds } from "./food-categories";
 import type { Db } from "./index";
 import { isUniqueViolation } from "./postgres-errors";
@@ -135,4 +136,10 @@ async function linkCategories(db: Db, productId: string, categoryIds: string[]):
     await db.insert(productFoodCategories).values(active.map((categoryId) => ({ productId, categoryId })));
   }
   return active;
+}
+
+// A Stock Movement refers to its Product, so one ever Restocked is only
+// Archived. Its own Food Category links cascade and never block deletion.
+export function removeProduct(db: Db, id: string): Promise<RemoveOutcome> {
+  return deleteOrArchive(db, products, id);
 }

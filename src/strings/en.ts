@@ -45,6 +45,8 @@ export const en = {
   "products.error.incompletePackSize": "A Pack Size needs both a name and an amount.",
   "products.error.invalidPackSizeAmount": "Pack Size amount must be a number above 0.",
   "products.edit": "Edit",
+  "products.remove": "Remove",
+  "products.removeConfirm": "Remove {name}? If it is in use, such as having Stock Movements, it is Archived instead.",
   "products.stock": "Stock: {quantity}",
   "products.history": "Stock Movements",
   "products.historyEmpty": "No Stock Movements yet.",
