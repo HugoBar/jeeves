@@ -1,6 +1,13 @@
 import "server-only";
 import { desc, eq } from "drizzle-orm";
-import { restock, type StockMovementType } from "@/core/stock";
+import {
+  correct,
+  deduct,
+  restock,
+  type StockChange,
+  type StockMovementType,
+  type StockState,
+} from "@/core/stock";
 import type { Db } from "./index";
 import { products, stockMovements } from "./schema";
 
@@ -12,9 +19,14 @@ export interface StockMovement {
   resultingQuantity: number;
 }
 
-// Adds food bought to the Product's Stock. The movement and the Stock column
-// are written in one transaction, never one without the other (ADR 0003).
-export async function restockProduct(db: Db, productId: string, quantity: number): Promise<void> {
+// Writes a Stock Movement and the Stock column it leaves in one transaction,
+// never one without the other (ADR 0003).
+async function applyMovement(
+  db: Db,
+  productId: string,
+  type: StockMovementType,
+  change: (current: StockState) => StockChange,
+): Promise<void> {
   await db.transaction(async (tx) => {
     // Locked so a concurrent movement cannot apply to the same starting Stock.
     const [current] = await tx
@@ -23,18 +35,33 @@ export async function restockProduct(db: Db, productId: string, quantity: number
       .where(eq(products.id, productId))
       .for("update");
     if (!current) throw new Error("Product not found");
-    const change = restock(current, quantity);
+    const applied = change(current);
     await tx.insert(stockMovements).values({
       productId,
-      type: "restock",
-      delta: change.delta,
-      resultingQuantity: change.resultingQuantity,
+      type,
+      delta: applied.delta,
+      resultingQuantity: applied.resultingQuantity,
     });
     await tx
       .update(products)
-      .set({ stock: change.resultingQuantity, stockSuspect: change.stockSuspect })
+      .set({ stock: applied.resultingQuantity, stockSuspect: applied.stockSuspect })
       .where(eq(products.id, productId));
   });
+}
+
+// Adds food bought to the Product's Stock.
+export async function restockProduct(db: Db, productId: string, quantity: number): Promise<void> {
+  await applyMovement(db, productId, "restock", (current) => restock(current, quantity));
+}
+
+// Removes food thrown away from the Product's Stock, clamping at 0.
+export async function discardProductStock(db: Db, productId: string, quantity: number): Promise<void> {
+  await applyMovement(db, productId, "discard", (current) => deduct(current, quantity));
+}
+
+// Sets the Product's Stock to the quantity actually on hand.
+export async function correctProductStock(db: Db, productId: string, quantity: number): Promise<void> {
+  await applyMovement(db, productId, "correction", (current) => correct(current, quantity));
 }
 
 // The Product's Stock Movement history, newest first.

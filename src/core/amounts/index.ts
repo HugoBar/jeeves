@@ -29,3 +29,12 @@ export function parsePositive(text: string, column: DecimalColumn): number | nul
   const value = roundForColumn(Number(text), column);
   return value > 0 && value <= maxForColumn(column) ? value : null;
 }
+
+// Zero or a positive number rounded as the column stores it; null if the text
+// is blank, negative or does not fit. Blank is checked because Number("") is 0.
+export function parseNonNegative(text: string, column: DecimalColumn): number | null {
+  const raw = Number(text);
+  if (text === "" || !(raw >= 0)) return null;
+  const value = roundForColumn(raw, column);
+  return value <= maxForColumn(column) ? value : null;
+}

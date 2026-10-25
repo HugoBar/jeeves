@@ -82,7 +82,7 @@ body {
 
 .category-row,
 .category-form,
-.restock-form {
+.stock-form {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
@@ -95,9 +95,13 @@ body {
 }
 
 .category-form input,
-.restock-form input {
+.stock-form input {
   flex: 1;
   min-width: 0;
+}
+
+.stock-suspect {
+  color: var(--color-error);
 }
 
 .form-error {
