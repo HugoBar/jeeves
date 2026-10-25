@@ -1,9 +1,10 @@
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { beforeAll, describe, expect, it } from "vitest";
 import type { DefaultUnit } from "@/core/units";
 import { createCategory, removeCategory } from "./food-categories";
-import { createProduct, getProduct, listActiveProducts, updateProduct } from "./products";
+import { createProduct, getProduct, listActiveProducts, removeProduct, updateProduct } from "./products";
 import { products } from "./schema";
+import { listStockMovements, restockProduct } from "./stock-movements";
 import { createTestDb } from "./test-database";
 
 let db: Awaited<ReturnType<typeof createTestDb>>;
@@ -177,7 +178,46 @@ describe("Food Categories on Products", () => {
   });
 });
 
+describe("removeProduct", () => {
+  it("deletes a Product nothing refers to", async () => {
+    const product = await aProduct("Paprika");
+
+    expect(await removeProduct(db, product.id)).toBe("deleted");
+    expect(await getProduct(db, product.id)).toBeUndefined();
+  });
+
+  it("archives a Product with a Stock Movement, keeping its history but leaving the Stock list", async () => {
+    const product = await aProduct("Cumin");
+    await restockProduct(db, product.id, 50);
+
+    expect(await removeProduct(db, product.id)).toBe("archived");
+    expect((await listActiveProducts(db)).map((p) => p.id)).not.toContain(product.id);
+    expect((await getProduct(db, product.id))?.stock).toBe(50);
+    expect(await listStockMovements(db, product.id)).toHaveLength(1);
+  });
+
+  it("deletes a Product carrying Food Categories, and its links with it", async () => {
+    const spices = await createCategory(db, { name: "Spices", kind: "kind" });
+    const product = await aProduct("Turmeric");
+    await updateProduct(db, product.id, { name: "Turmeric", density: null, packSize: null, categoryIds: [spices.id] });
+
+    expect(await removeProduct(db, product.id)).toBe("deleted");
+    // Nothing links to the category any more, so it is not Archived either.
+    expect(await removeCategory(db, spices.id)).toBe("deleted");
+  });
+});
+
 describe("products table", () => {
+  // A cascading reference would silently drop history instead of Archiving.
+  // A Product's own Food Category links are the one exception: they go with it.
+  it("is only referenced by foreign keys that block deletion, besides its own links", async () => {
+    const cascading = await db.execute(sql`
+      SELECT conrelid::regclass::text AS referencing_table FROM pg_constraint
+      WHERE contype = 'f' AND confrelid = 'products'::regclass AND confdeltype NOT IN ('a', 'r')`);
+
+    expect(cascading.rows).toEqual([{ referencing_table: "product_food_categories" }]);
+  });
+
   it.each([
     ["a name without an amount", { packSizeName: "bag", packSizeAmount: null }],
     ["an amount without a name", { packSizeName: null, packSizeAmount: 500 }],

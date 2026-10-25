@@ -1,8 +1,8 @@
 import "server-only";
-import { and, eq, inArray, isNull, sql } from "drizzle-orm";
+import { and, eq, inArray, isNull } from "drizzle-orm";
 import type { CategoryKind } from "@/core/food-categories";
+import { deleteOrArchive, type RemoveOutcome } from "./archive";
 import type { Db } from "./index";
-import { isBlockedByReference } from "./postgres-errors";
 import { foodCategories } from "./schema";
 
 export type FoodCategory = typeof foodCategories.$inferSelect;
@@ -50,16 +50,7 @@ export async function updateCategory(
   await db.update(foodCategories).set(changes).where(eq(foodCategories.id, id));
 }
 
-// "Remove" Archives a category in use; hard delete only when unreferenced.
-// "In use" is whatever a foreign key says, so new referencing tables need no
-// change here as long as they use ON DELETE RESTRICT.
-export async function removeCategory(db: Db, id: string): Promise<"deleted" | "archived"> {
-  try {
-    await db.delete(foodCategories).where(eq(foodCategories.id, id));
-    return "deleted";
-  } catch (error) {
-    if (!isBlockedByReference(error)) throw error;
-    await db.update(foodCategories).set({ archivedAt: sql`now()` }).where(eq(foodCategories.id, id));
-    return "archived";
-  }
+// A category a Product carries is only Archived; its links are kept.
+export function removeCategory(db: Db, id: string): Promise<RemoveOutcome> {
+  return deleteOrArchive(db, foodCategories, id);
 }
