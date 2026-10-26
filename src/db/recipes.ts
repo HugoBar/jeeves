@@ -1,6 +1,7 @@
 import "server-only";
 import { eq, isNull } from "drizzle-orm";
 import type { RecipeFields } from "@/core/recipes";
+import { deleteOrArchive, type RemoveOutcome } from "./archive";
 import type { Db } from "./index";
 import { recipes } from "./schema";
 
@@ -32,4 +33,10 @@ export async function getRecipe(db: Db, id: string): Promise<Recipe | undefined>
 
 export async function updateRecipe(db: Db, id: string, changes: RecipeFields): Promise<void> {
   await db.update(recipes).set(changes).where(eq(recipes.id, id));
+}
+
+// A Recipe something refers to is only Archived. Its own Ingredients and Food
+// Category overrides must cascade so they never block deletion.
+export function removeRecipe(db: Db, id: string): Promise<RemoveOutcome> {
+  return deleteOrArchive(db, recipes, id);
 }

@@ -1,7 +1,7 @@
 import { eq, sql } from "drizzle-orm";
 import { beforeAll, describe, expect, it } from "vitest";
 import type { RecipeFields } from "@/core/recipes";
-import { createRecipe, getRecipe, listActiveRecipes, updateRecipe } from "./recipes";
+import { createRecipe, getRecipe, listActiveRecipes, removeRecipe, updateRecipe } from "./recipes";
 import { recipes } from "./schema";
 import { createTestDb } from "./test-database";
 
@@ -49,7 +49,39 @@ describe("listActiveRecipes", () => {
   });
 });
 
+describe("removeRecipe", () => {
+  it("deletes a Recipe nothing refers to", async () => {
+    const recipe = await createRecipe(db, { ...lasagne, name: "Gazpacho" });
+
+    expect(await removeRecipe(db, recipe.id)).toBe("deleted");
+    expect(await getRecipe(db, recipe.id)).toBeUndefined();
+  });
+
+  // Nothing refers to a Recipe until Meal Slots, so a stand-in table does.
+  it("archives a Recipe something refers to, keeping it but leaving the Recipes list", async () => {
+    const recipe = await createRecipe(db, { ...lasagne, name: "Chili" });
+    await db.execute(sql`CREATE TABLE recipe_references (recipe_id uuid NOT NULL REFERENCES recipes (id))`);
+    await db.execute(sql`INSERT INTO recipe_references VALUES (${recipe.id})`);
+
+    expect(await removeRecipe(db, recipe.id)).toBe("archived");
+    expect((await listActiveRecipes(db)).map((r) => r.id)).not.toContain(recipe.id);
+    expect(await getRecipe(db, recipe.id)).toEqual(recipe);
+    await db.execute(sql`DROP TABLE recipe_references`);
+  });
+});
+
 describe("recipes table", () => {
+  // A cascading reference would silently drop what refers to a Recipe instead
+  // of Archiving it. Its own Ingredients and Food Category overrides are the
+  // exception: they go with it, and join this list when they land.
+  it("is only referenced by foreign keys that block deletion, besides its own Ingredients and overrides", async () => {
+    const cascading = await db.execute(sql`
+      SELECT conrelid::regclass::text AS referencing_table FROM pg_constraint
+      WHERE contype = 'f' AND confrelid = 'recipes'::regclass AND confdeltype NOT IN ('a', 'r')`);
+
+    expect(cascading.rows).toEqual([]);
+  });
+
   it.each([
     ["0 Portions", { portions: 0 }],
     ["a prep time of 0", { prepTimeMinutes: 0 }],

@@ -5,7 +5,8 @@ import { getProduct } from "@/db/products";
 import { listStockMovements } from "@/db/stock-movements";
 import { formatDelta, formatQuantity, t } from "@/strings";
 import { LocalDateTime } from "../../local-date-time";
-import { RemoveProductButton } from "../remove-product-button";
+import { RemoveButton } from "../../remove-button";
+import { removeProductAction } from "../actions";
 import { correctAction, discardAction, restockAction } from "../stock-actions";
 import { StockForm } from "../stock-form";
 import { isUuid } from "../../uuid";
@@ -26,7 +27,11 @@ export default async function ProductPage({ params }: { params: Promise<{ id: st
       <p>
         <Link href={`/products/${product.id}/edit`}>{t("products.edit")}</Link>
       </p>
-      <RemoveProductButton id={product.id} name={product.name} />
+      <RemoveButton
+        action={removeProductAction.bind(null, product.id)}
+        label={t("products.remove")}
+        confirmMessage={t("products.removeConfirm", { name: product.name })}
+      />
       <p>{t("products.stock", { quantity: formatQuantity(product.stock, product.defaultUnit) })}</p>
       {product.stockSuspect && <p className="stock-suspect">{t("products.stockSuspect")}</p>}
       <StockForm kind="restock" action={restockAction.bind(null, product.id)} unit={product.defaultUnit} />
