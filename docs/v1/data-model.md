@@ -55,7 +55,7 @@ Every table: `id uuid`, `created_at timestamptz`. `?` = nullable.
 - `product_food_categories(product_id, category_id)`
 - `stock_movements(product_id, type, delta, resulting_quantity, meal_id?)`
 - `shopping_list_items(product_id unique, quantity?, source, ticked)`
-- `recipes(name, portions, steps, prep_time_minutes?, source_url?, archived_at?)`
+- `recipes(name, portions, steps, prep_time_minutes, source_url?, archived_at?)`
 - `ingredients(recipe_id, product_id, amount, unit, minor, position)`
 - `recipe_category_overrides(recipe_id, category_id, mode)`
 - `meal_types(seed_key?, name?, priority, allows_leftovers)`
