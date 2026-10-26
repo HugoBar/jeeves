@@ -9,6 +9,7 @@ import {
   boolean,
   check,
   index,
+  integer,
   numeric,
   pgEnum,
   pgTable,
@@ -103,4 +104,26 @@ export const stockMovements = pgTable(
     resultingQuantity: amount("resulting_quantity").notNull(),
   },
   (table) => [index("stock_movements_product_id_created_at").on(table.productId, table.createdAt)],
+);
+
+// Portions are whole numbers (data-model T4), and so is prep time, in
+// minutes. Ingredients and Food Category overrides are added by their own
+// tickets.
+export const recipes = pgTable(
+  "recipes",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    name: text("name").notNull(),
+    portions: integer("portions").notNull(),
+    // Markdown.
+    steps: text("steps").notNull(),
+    prepTimeMinutes: integer("prep_time_minutes").notNull(),
+    sourceUrl: text("source_url"),
+    archivedAt: timestamp("archived_at", { withTimezone: true }),
+  },
+  (table) => [
+    check("recipes_portions_above_zero", sql`${table.portions} > 0`),
+    check("recipes_prep_time_above_zero", sql`${table.prepTimeMinutes} > 0`),
+  ],
 );

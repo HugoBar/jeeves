@@ -36,6 +36,13 @@
       "when": 1792765885675,
       "tag": "0004_stock_movements",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1793033906738,
+      "tag": "0005_recipes",
+      "breakpoints": true
     }
   ]
 }

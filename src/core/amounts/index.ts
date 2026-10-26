@@ -38,3 +38,15 @@ export function parseNonNegative(text: string, column: DecimalColumn): number | 
   const value = roundForColumn(raw, column);
   return value <= maxForColumn(column) ? value : null;
 }
+
+// Largest value of a Postgres `integer`, the column whole numbers such as
+// Portions (data-model T4) are stored in.
+const INTEGER_MAX = 2_147_483_647;
+
+// A whole number above 0 that fits an `integer` column; null otherwise. Only
+// plain digits count, since Number() also reads "2.0", "1e3" and "0x10".
+export function parseWholeAboveZero(text: string): number | null {
+  if (!/^\d+$/.test(text)) return null;
+  const value = Number(text);
+  return value > 0 && value <= INTEGER_MAX ? value : null;
+}

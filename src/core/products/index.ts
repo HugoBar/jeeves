@@ -74,8 +74,3 @@ export function toProductFieldsInput({ name, density, packSize, categoryIds }: P
     categoryIds,
   };
 }
-
-// The Stock list's order: alphabetical, ignoring case.
-export function sortProducts<T extends { name: string }>(products: readonly T[]): T[] {
-  return [...products].sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: "base" }));
-}

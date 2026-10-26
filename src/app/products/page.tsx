@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { connection } from "next/server";
-import { sortProducts } from "@/core/products";
+import { sortByName } from "@/core/names";
 import { getDb } from "@/db";
 import { listActiveProducts } from "@/db/products";
 import { formatQuantity, t } from "@/strings";
@@ -9,7 +9,7 @@ import { formatQuantity, t } from "@/strings";
 export default async function StockPage() {
   // Read from the database on every request, never at build time.
   await connection();
-  const products = sortProducts(await listActiveProducts(getDb()));
+  const products = sortByName(await listActiveProducts(getDb()));
 
   return (
     <section>

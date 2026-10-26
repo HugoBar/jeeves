@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseProductFields, sortProducts, toProductFieldsInput } from "./index";
+import { parseProductFields, toProductFieldsInput } from "./index";
 
 const filled = {
   name: " Rice ",
@@ -96,12 +96,5 @@ describe("toProductFieldsInput", () => {
       packSizeAmount: "",
       categoryIds: [],
     });
-  });
-});
-
-describe("sortProducts", () => {
-  it("sorts alphabetically, ignoring case", () => {
-    const products = [{ name: "rice" }, { name: "Apple" }, { name: "Olive Oil" }];
-    expect(sortProducts(products).map((p) => p.name)).toEqual(["Apple", "Olive Oil", "rice"]);
   });
 });
