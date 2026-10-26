@@ -3,7 +3,7 @@
 import { redirect } from "next/navigation";
 import { parseRecipeFields, type RecipeFieldError, type RecipeFieldsInput } from "@/core/recipes";
 import { getDb } from "@/db";
-import { createRecipe, updateRecipe } from "@/db/recipes";
+import { createRecipe, removeRecipe, updateRecipe } from "@/db/recipes";
 
 // `values` refills the form after a rejected submit, which React resets.
 export type RecipeFormState = { errors: RecipeFieldError[]; values: RecipeFieldsInput };
@@ -26,6 +26,11 @@ export async function editRecipeAction(
   if (!parsed.ok) return { errors: parsed.errors, values };
   await updateRecipe(getDb(), id, parsed.fields);
   redirect(`/recipes/${id}`);
+}
+
+export async function removeRecipeAction(id: string): Promise<void> {
+  await removeRecipe(getDb(), id);
+  redirect("/recipes");
 }
 
 function valuesFrom(formData: FormData): RecipeFieldsInput {

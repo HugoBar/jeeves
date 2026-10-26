@@ -3,6 +3,7 @@
 import { useActionState, useState } from "react";
 import type { CategoryKind } from "@/core/food-categories";
 import { t } from "@/strings";
+import { RemoveButton } from "../remove-button";
 import {
   createCategoryAction,
   editCategoryAction,
@@ -59,14 +60,11 @@ export function CategoryRow({ id, label, kind }: { id: string; label: string; ki
       <button type="button" onClick={() => setEditing(true)}>
         {t("categories.edit")}
       </button>
-      <form
+      <RemoveButton
         action={removeCategoryAction.bind(null, id)}
-        onSubmit={(event) => {
-          if (!confirm(t("categories.removeConfirm", { name: label }))) event.preventDefault();
-        }}
-      >
-        <button type="submit">{t("categories.remove")}</button>
-      </form>
+        label={t("categories.remove")}
+        confirmMessage={t("categories.removeConfirm", { name: label })}
+      />
     </div>
   );
 }

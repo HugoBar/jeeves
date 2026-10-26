@@ -4,6 +4,8 @@ import Markdown from "react-markdown";
 import { getDb } from "@/db";
 import { getRecipe } from "@/db/recipes";
 import { t } from "@/strings";
+import { RemoveButton } from "../../remove-button";
+import { removeRecipeAction } from "../actions";
 import { isUuid } from "../../uuid";
 
 // A Recipe: its Portions, prep time, source and steps.
@@ -19,6 +21,11 @@ export default async function RecipePage({ params }: { params: Promise<{ id: str
       <p>
         <Link href={`/recipes/${recipe.id}/edit`}>{t("recipes.edit")}</Link>
       </p>
+      <RemoveButton
+        action={removeRecipeAction.bind(null, recipe.id)}
+        label={t("recipes.remove")}
+        confirmMessage={t("recipes.removeConfirm", { name: recipe.name })}
+      />
       <p>{t("recipes.portionsCount", { portions: recipe.portions })}</p>
       <p>{t("recipes.prepTimeMinutes", { minutes: recipe.prepTimeMinutes })}</p>
       {recipe.sourceUrl !== null && (

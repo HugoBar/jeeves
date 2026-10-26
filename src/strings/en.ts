@@ -67,6 +67,8 @@ export const en = {
   "recipes.save": "Save",
   "recipes.cancel": "Cancel",
   "recipes.edit": "Edit",
+  "recipes.remove": "Remove",
+  "recipes.removeConfirm": "Remove {name}? If it is in use, such as being planned in a Meal Slot, it is Archived instead.",
   "recipes.portionsCount": "{portions} Portions",
   "recipes.prepTimeMinutes": "Prep time: {minutes} min",
   "recipes.source": "Source",
