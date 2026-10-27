@@ -2,9 +2,29 @@
 
 import { useActionState, useState } from "react";
 import { t } from "@/strings";
-import { editMealTypeAction, type MealTypeFormState } from "./actions";
+import { RemoveButton } from "../remove-button";
+import {
+  createMealTypeAction,
+  editMealTypeAction,
+  removeMealTypeAction,
+  type MealTypeFormState,
+} from "./actions";
 
 const initialState: MealTypeFormState = { errors: [] };
+
+export function CreateMealTypeForm() {
+  const [state, action, pending] = useActionState(createMealTypeAction, initialState);
+  return (
+    <form action={action} className="item-form">
+      <input name="name" aria-label={t("mealTypes.name")} placeholder={t("mealTypes.name")} />
+      <MealTypeFields priority="" allowsLeftovers={false} />
+      <button type="submit" disabled={pending}>
+        {t("mealTypes.add")}
+      </button>
+      <FormErrors state={state} />
+    </form>
+  );
+}
 
 // A Meal Type as listed, edited in place.
 export function MealTypeRow({
@@ -32,25 +52,14 @@ export function MealTypeRow({
     return (
       <form action={action} className="item-form">
         <input name="name" aria-label={t("mealTypes.name")} defaultValue={label} autoFocus />
-        <label>
-          {t("mealTypes.priority")}
-          <input name="priority" inputMode="numeric" defaultValue={priority} />
-        </label>
-        <label>
-          <input type="checkbox" name="allowsLeftovers" defaultChecked={allowsLeftovers} />
-          {t("mealTypes.allowsLeftovers")}
-        </label>
+        <MealTypeFields priority={String(priority)} allowsLeftovers={allowsLeftovers} />
         <button type="submit" disabled={pending}>
           {t("mealTypes.save")}
         </button>
         <button type="button" onClick={() => setEditing(false)}>
           {t("mealTypes.cancel")}
         </button>
-        {state.errors.map((error) => (
-          <p key={error} className="form-error">
-            {t(`mealTypes.error.${error}`)}
-          </p>
-        ))}
+        <FormErrors state={state} />
       </form>
     );
   }
@@ -63,6 +72,35 @@ export function MealTypeRow({
       <button type="button" onClick={() => setEditing(true)}>
         {t("mealTypes.edit")}
       </button>
+      <RemoveButton
+        action={removeMealTypeAction.bind(null, id)}
+        label={t("mealTypes.remove")}
+        confirmMessage={t("mealTypes.removeConfirm", { name: label })}
+      />
     </div>
   );
+}
+
+// Meal Priority and "allows Leftovers", shared by both forms.
+function MealTypeFields({ priority, allowsLeftovers }: { priority: string; allowsLeftovers: boolean }) {
+  return (
+    <>
+      <label>
+        {t("mealTypes.priority")}
+        <input name="priority" inputMode="numeric" defaultValue={priority} />
+      </label>
+      <label>
+        <input type="checkbox" name="allowsLeftovers" defaultChecked={allowsLeftovers} />
+        {t("mealTypes.allowsLeftovers")}
+      </label>
+    </>
+  );
+}
+
+function FormErrors({ state }: { state: MealTypeFormState }) {
+  return state.errors.map((error) => (
+    <p key={error} className="form-error">
+      {t(`mealTypes.error.${error}`)}
+    </p>
+  ));
 }

@@ -14,10 +14,12 @@ import {
 } from "./actions";
 
 
-// A Meal Type as the picker offers it, by the label the user sees.
+// A Meal Type as the picker offers it, by the label the user sees. An
+// Archived one is offered only to the template that already has it.
 export interface MealTypeOption {
   id: string;
   label: string;
+  archived: boolean;
 }
 
 // A Food Category a slot can have. An Archived one is offered only in the
@@ -124,11 +126,13 @@ function MealTypeSelect({ mealTypes, defaultValue }: { mealTypes: MealTypeOption
   return (
     <select name="mealTypeId" aria-label={t("mealTemplates.mealType")} defaultValue={defaultValue}>
       <option value="">{t("mealTemplates.pickMealType")}</option>
-      {mealTypes.map((mealType) => (
-        <option key={mealType.id} value={mealType.id}>
-          {mealType.label}
-        </option>
-      ))}
+      {mealTypes
+        .filter((mealType) => !mealType.archived || mealType.id === defaultValue)
+        .map((mealType) => (
+          <option key={mealType.id} value={mealType.id}>
+            {mealType.label}
+          </option>
+        ))}
     </select>
   );
 }
