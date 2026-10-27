@@ -17,6 +17,7 @@ import {
   pgTable,
   primaryKey,
   text,
+  time,
   timestamp,
   uniqueIndex,
   uuid,
@@ -192,4 +193,21 @@ export const mealTypes = pgTable(
     check("meal_types_seed_key_or_name", sql`${table.seedKey} is not null or ${table.name} is not null`),
     check("meal_types_priority_above_zero", sql`${table.priority} > 0`),
   ],
+);
+
+// Only a shortcut for creating a Meal: Meals copy from it and keep no link
+// (data-model Q5), so deleting one is a plain hard delete. A Meal Type a
+// template uses cannot be deleted.
+export const mealTemplates = pgTable(
+  "meal_templates",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    name: text("name").notNull(),
+    hour: time("hour", { precision: 0 }).notNull(),
+    mealTypeId: uuid("meal_type_id")
+      .notNull()
+      .references(() => mealTypes.id, { onDelete: "restrict" }),
+  },
+  (table) => [index("meal_templates_meal_type_id").on(table.mealTypeId)],
 );

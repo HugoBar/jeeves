@@ -71,6 +71,13 @@
       "when": 1793119154847,
       "tag": "0009_seed_meal_types",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1793122574389,
+      "tag": "0010_meal_templates",
+      "breakpoints": true
     }
   ]
 }
