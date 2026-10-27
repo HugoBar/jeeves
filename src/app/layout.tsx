@@ -31,6 +31,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
             <Link href="/products">{t("nav.stock")}</Link>
             <Link href="/recipes">{t("nav.recipes")}</Link>
             <Link href="/categories">{t("nav.categories")}</Link>
+            <Link href="/meal-types">{t("nav.mealTypes")}</Link>
           </nav>
         </header>
         <main className="app-main">{children}</main>
