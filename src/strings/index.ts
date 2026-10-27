@@ -1,5 +1,5 @@
 import type { CategorySeedKey } from "@/core/food-categories";
-import type { DefaultUnit } from "@/core/units";
+import type { DefaultUnit, Unit } from "@/core/units";
 import { en } from "./en";
 
 export type StringKey = keyof typeof en;
@@ -23,8 +23,8 @@ export function foodCategoryLabel(category: {
 
 const quantityFormat = new Intl.NumberFormat("en", { maximumFractionDigits: 2 });
 
-// An amount in a Default Unit, as shown to the user: "1,250 g".
-export function formatQuantity(amount: number, unit: DefaultUnit): string {
+// An amount in a unit, as shown to the user: "1,250 g".
+export function formatQuantity(amount: number, unit: Unit): string {
   return `${quantityFormat.format(amount)} ${t(`unit.${unit}`)}`;
 }
 

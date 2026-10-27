@@ -162,6 +162,31 @@ body {
   gap: calc(var(--space) / 2);
 }
 
+.ingredient-rows {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: calc(var(--space) / 2);
+  margin: 0;
+  padding: calc(var(--space) / 2);
+}
+
+.ingredient-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: calc(var(--space) / 2);
+}
+
+.ingredient-row input[inputmode="decimal"] {
+  width: 6em;
+}
+
+.product-form .ingredient-row label {
+  flex-direction: row;
+  align-items: center;
+}
+
 .product-form-actions {
   display: flex;
   gap: calc(var(--space) / 2);
