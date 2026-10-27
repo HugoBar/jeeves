@@ -7,10 +7,11 @@ import {
   deleteMealTemplate,
   getMealTemplate,
   listMealTemplates,
+  listPickableMealTypes,
   listPickableSlotCategories,
   updateMealTemplate,
 } from "./meal-templates";
-import { listMealTypes } from "./meal-types";
+import { createMealType, listActiveMealTypes, removeMealType } from "./meal-types";
 import { layoutSlots, mealTypes } from "./schema";
 import { createTestDb } from "./test-database";
 
@@ -21,7 +22,7 @@ beforeAll(async () => {
 });
 
 async function seededMealTypeId(seedKey: MealTypeSeedKey): Promise<string> {
-  const mealType = (await listMealTypes(db)).find((m) => m.seedKey === seedKey);
+  const mealType = (await listActiveMealTypes(db)).find((m) => m.seedKey === seedKey);
   if (!mealType) throw new Error(`No seeded ${seedKey}`);
   return mealType.id;
 }
@@ -304,5 +305,52 @@ describe("listPickableSlotCategories", () => {
 
     expect(pickable.every((category) => !category.archived)).toBe(true);
     expect(pickable.map((category) => category.id)).not.toContain(archived);
+  });
+});
+
+describe("listPickableMealTypes", () => {
+  async function mealTypeId(name: string): Promise<string> {
+    return (await createMealType(db, { name, priority: 2, allowsLeftovers: false })).id;
+  }
+
+  it("offers the non-Archived Meal Types, plus the Archived ones the given templates use", async () => {
+    const [kept, archivedInUse, archivedElsewhere] = [
+      await mealTypeId("Tea"),
+      await mealTypeId("Supper"),
+      await mealTypeId("Midnight Feast"),
+    ];
+    const mine = await createMealTemplate(db, {
+      name: "Light Supper",
+      hour: "21:00",
+      mealTypeId: archivedInUse,
+      slotCategoryIds: [],
+    });
+    await createMealTemplate(db, {
+      name: "Sleepover",
+      hour: "23:30",
+      mealTypeId: archivedElsewhere,
+      slotCategoryIds: [],
+    });
+    await removeMealType(db, archivedInUse);
+    await removeMealType(db, archivedElsewhere);
+
+    const pickable = await listPickableMealTypes(db, [mine.id]);
+
+    const ids = pickable.map((mealType) => mealType.id);
+    expect(ids).toEqual(expect.arrayContaining([kept, archivedInUse]));
+    expect(ids).not.toContain(archivedElsewhere);
+    expect(pickable.find((mealType) => mealType.id === archivedInUse)?.archived).toBe(true);
+    expect(pickable.find((mealType) => mealType.id === kept)?.archived).toBe(false);
+  });
+
+  it("offers only the non-Archived Meal Types for a new template", async () => {
+    const archived = await mealTypeId("Second Breakfast");
+    await createMealTemplate(db, { name: "Hobbit Morning", hour: "09:30", mealTypeId: archived, slotCategoryIds: [] });
+    await removeMealType(db, archived);
+
+    const pickable = await listPickableMealTypes(db, []);
+
+    expect(pickable.every((mealType) => !mealType.archived)).toBe(true);
+    expect(pickable.map((mealType) => mealType.id)).not.toContain(archived);
   });
 });
