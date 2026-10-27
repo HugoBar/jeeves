@@ -3,6 +3,7 @@
 import { sql } from "drizzle-orm";
 import type { CategorySeedKey } from "@/core/food-categories";
 import { AMOUNT_COLUMN, DENSITY_COLUMN } from "@/core/amounts";
+import type { MealTypeSeedKey } from "@/core/meal-types";
 import { CATEGORY_OVERRIDE_MODES } from "@/core/recipes";
 import { STOCK_MOVEMENT_TYPES } from "@/core/stock";
 import { DEFAULT_UNITS, RECIPE_UNITS } from "@/core/units";
@@ -173,4 +174,22 @@ export const recipeCategoryOverrides = pgTable(
     mode: categoryOverrideMode("mode").notNull(),
   },
   (table) => [primaryKey({ columns: [table.recipeId, table.categoryId] })],
+);
+
+// Seeded ones are stored by key and renamed like Food Categories (data-model
+// Q7). Several Meal Types can share a Meal Priority.
+export const mealTypes = pgTable(
+  "meal_types",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    seedKey: text("seed_key").$type<MealTypeSeedKey>().unique(),
+    name: text("name"),
+    priority: integer("priority").notNull(),
+    allowsLeftovers: boolean("allows_leftovers").notNull().default(false),
+  },
+  (table) => [
+    check("meal_types_seed_key_or_name", sql`${table.seedKey} is not null or ${table.name} is not null`),
+    check("meal_types_priority_above_zero", sql`${table.priority} > 0`),
+  ],
 );
