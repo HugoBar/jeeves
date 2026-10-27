@@ -16,7 +16,7 @@ const initialState: CategoryFormState = { error: null };
 export function CreateCategoryForm() {
   const [state, action, pending] = useActionState(createCategoryAction, initialState);
   return (
-    <form action={action} className="category-form">
+    <form action={action} className="item-form">
       <input name="name" aria-label={t("categories.name")} placeholder={t("categories.name")} />
       <KindSelect defaultValue="kind" />
       <button type="submit" disabled={pending}>
@@ -40,7 +40,7 @@ export function CategoryRow({ id, label, kind }: { id: string; label: string; ki
 
   if (editing) {
     return (
-      <form action={action} className="category-form">
+      <form action={action} className="item-form">
         <input name="name" aria-label={t("categories.name")} defaultValue={label} autoFocus />
         <KindSelect defaultValue={kind} />
         <button type="submit" disabled={pending}>
@@ -55,7 +55,7 @@ export function CategoryRow({ id, label, kind }: { id: string; label: string; ki
   }
 
   return (
-    <div className="category-row">
+    <div className="item-row">
       <span>{label}</span>
       <button type="button" onClick={() => setEditing(true)}>
         {t("categories.edit")}

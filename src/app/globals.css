@@ -70,18 +70,18 @@ body {
   margin-left: auto;
 }
 
-.category-list {
+.item-list {
   list-style: none;
   margin: 0;
   padding: 0;
 }
 
-.category-list li + li {
+.item-list li + li {
   border-top: 1px solid color-mix(in srgb, var(--color-muted) 30%, transparent);
 }
 
-.category-row,
-.category-form,
+.item-row,
+.item-form,
 .stock-form {
   display: flex;
   flex-wrap: wrap;
@@ -90,11 +90,11 @@ body {
   padding: calc(var(--space) / 2) 0;
 }
 
-.category-row > span {
+.item-row > span:first-child {
   flex: 1;
 }
 
-.category-form input,
+.item-form input,
 .stock-form input {
   flex: 1;
   min-width: 0;
