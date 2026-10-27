@@ -3,7 +3,8 @@ import { asc, eq, inArray, isNull, or, sql } from "drizzle-orm";
 import type { MealTemplateContent } from "@/core/meal-templates";
 import type { FoodCategory } from "./food-categories";
 import type { Db } from "./index";
-import { foodCategories, layoutSlots, mealTemplates } from "./schema";
+import type { MealType } from "./meal-types";
+import { foodCategories, layoutSlots, mealTemplates, mealTypes } from "./schema";
 
 export interface MealTemplate extends MealTemplateContent {
   id: string;
@@ -102,6 +103,36 @@ export async function listPickableSlotCategories(db: Db, templateIds: string[]):
     })
     .from(foodCategories)
     .where(or(isNull(foodCategories.archivedAt), usedByTemplates));
+}
+
+export interface PickableMealType extends Pick<MealType, "id" | "seedKey" | "name" | "priority"> {
+  archived: boolean;
+}
+
+// The Meal Types the given templates can have: the non-Archived ones, plus any
+// Archived one those templates already use, so saving one never drops or swaps
+// out its Meal Type.
+export async function listPickableMealTypes(db: Db, templateIds: string[]): Promise<PickableMealType[]> {
+  const usedByTemplates =
+    templateIds.length > 0
+      ? inArray(
+          mealTypes.id,
+          db
+            .select({ id: mealTemplates.mealTypeId })
+            .from(mealTemplates)
+            .where(inArray(mealTemplates.id, templateIds)),
+        )
+      : undefined;
+  return db
+    .select({
+      id: mealTypes.id,
+      seedKey: mealTypes.seedKey,
+      name: mealTypes.name,
+      priority: mealTypes.priority,
+      archived: sql<boolean>`${mealTypes.archivedAt} is not null`,
+    })
+    .from(mealTypes)
+    .where(or(isNull(mealTypes.archivedAt), usedByTemplates));
 }
 
 // Nothing refers to a template, so it is always hard deleted, never Archived.

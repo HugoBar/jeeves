@@ -38,7 +38,7 @@ Started 2026-10-20 with `/grill-with-docs`. Resume by re-running it and pointing
 - **Table review (T1–T8)**, 2026-10-21:
   - **T1 Pack Size**: `pack_size_name?` + `pack_size_amount?` on `products`, CHECK both or neither.
   - **T2 Density**: grams per millilitre, `numeric(10,4)`; an exception to Q2, since 2 decimals could put a 1 l conversion off by 5 g.
-  - **T3 Archived**: `archived_at timestamptz?` on `products`, `recipes` and `food_categories`.
+  - **T3 Archived**: `archived_at timestamptz?` on `products`, `recipes`, `food_categories` and `meal_types`.
   - **T4 Portions**: whole numbers everywhere (`integer` on `recipes` and `meal_slots`); an exception to Q2. Eating half a Portion still uses one.
   - **T5 Ordering**: integer `position`, renumbered on reorder (ingredients, layout slots, meal slots).
   - **T6 Confirmation movements**: one Stock Movement per Product per Confirmation, summed over slots, with `meal_id`.
@@ -58,7 +58,7 @@ Every table: `id uuid`, `created_at timestamptz`. `?` = nullable.
 - `recipes(name, portions, steps, prep_time_minutes, source_url?, archived_at?)`
 - `ingredients(recipe_id, product_id, amount, unit, minor, position)`
 - `recipe_category_overrides(recipe_id, category_id, mode)`
-- `meal_types(seed_key?, name?, priority, allows_leftovers)`
+- `meal_types(seed_key?, name?, priority, allows_leftovers, archived_at?)`
 - `meal_templates(name, meal_type_id, hour)`
 - `meal_series(name?, meal_type_id, hour, weekdays, generated_through)`
 - `layout_slots(position, slot_category_id, template_id?, series_id?)`

@@ -12,6 +12,7 @@ import {
   createMealTemplate,
   deleteMealTemplate,
   getMealTemplate,
+  listPickableMealTypes,
   listPickableSlotCategories,
   updateMealTemplate,
 } from "@/db/meal-templates";
@@ -55,15 +56,22 @@ export async function removeMealTemplateAction(id: string): Promise<void> {
 }
 
 // Checks the fields and the slots together, so every error shows at once.
-// `templateIds` is the template being edited, if any, whose Archived Slot
-// Categories its slots may keep.
+// `templateIds` is the template being edited, if any, whose Archived Meal Type
+// and Slot Categories it may keep.
 async function parseMealTemplateForm(formData: FormData, templateIds: string[]) {
-  const pickable = await listPickableSlotCategories(getDb(), templateIds);
-  const fields = parseMealTemplateFields({
-    name: String(formData.get("name") ?? ""),
-    hour: String(formData.get("hour") ?? ""),
-    mealTypeId: String(formData.get("mealTypeId") ?? ""),
-  });
+  const db = getDb();
+  const [mealTypes, pickable] = await Promise.all([
+    listPickableMealTypes(db, templateIds),
+    listPickableSlotCategories(db, templateIds),
+  ]);
+  const fields = parseMealTemplateFields(
+    {
+      name: String(formData.get("name") ?? ""),
+      hour: String(formData.get("hour") ?? ""),
+      mealTypeId: String(formData.get("mealTypeId") ?? ""),
+    },
+    new Set(mealTypes.map((mealType) => mealType.id)),
+  );
   // Each slot row submits its Slot Category, in order.
   const slotCategoryIds = formData.getAll("slotCategoryId").map(String);
   const slots = parseTemplateSlots(slotCategoryIds, new Set(pickable.map((category) => category.id)));

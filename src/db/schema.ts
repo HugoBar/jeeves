@@ -178,7 +178,9 @@ export const recipeCategoryOverrides = pgTable(
 );
 
 // Seeded ones are stored by key and renamed like Food Categories (data-model
-// Q7). Several Meal Types can share a Meal Priority.
+// Q7). Several Meal Types can share a Meal Priority. Tables that reference a
+// Meal Type must use ON DELETE RESTRICT, never CASCADE: removing a referenced
+// one relies on that error to Archive it instead.
 export const mealTypes = pgTable(
   "meal_types",
   {
@@ -188,6 +190,7 @@ export const mealTypes = pgTable(
     name: text("name"),
     priority: integer("priority").notNull(),
     allowsLeftovers: boolean("allows_leftovers").notNull().default(false),
+    archivedAt: timestamp("archived_at", { withTimezone: true }),
   },
   (table) => [
     check("meal_types_seed_key_or_name", sql`${table.seedKey} is not null or ${table.name} is not null`),
@@ -197,7 +200,8 @@ export const mealTypes = pgTable(
 
 // Only a shortcut for creating a Meal: Meals copy from it and keep no link
 // (data-model Q5), so deleting one is a plain hard delete. A Meal Type a
-// template uses cannot be deleted.
+// template uses cannot be deleted, so removing it Archives it and the template
+// keeps it.
 export const mealTemplates = pgTable(
   "meal_templates",
   {

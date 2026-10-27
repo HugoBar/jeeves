@@ -70,11 +70,11 @@ A named dish, such as Steak or Lasagne, written for a stated number of Portions,
 _Avoid_: Dish, meal (when talking about the definition)
 
 **Archived**:
-A Recipe, Product or Food Category hidden from pickers and Suggestions but kept so past Meals still refer to it.
+A Recipe, Product, Food Category or Meal Type hidden from pickers and Suggestions but kept by whatever already refers to it, such as past Meals or a Meal Template.
 _Avoid_: Deleted
 
 **Remove**:
-Getting rid of a Recipe, Product or Food Category: it is hard deleted if nothing refers to it, and Archived otherwise.
+Getting rid of a Recipe, Product, Food Category or Meal Type: it is hard deleted if nothing refers to it, and Archived otherwise.
 _Avoid_: Delete, Discard
 
 **Ingredient**:
