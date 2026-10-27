@@ -1,8 +1,8 @@
 import { connection } from "next/server";
 import { getDb } from "@/db";
 import { t } from "@/strings";
+import { loadCategoryOptions } from "../../categories/category-options";
 import { createProductAction } from "../actions";
-import { loadCategoryOptions } from "../category-options";
 import { ProductForm } from "../product-form";
 
 export default async function NewProductPage() {

@@ -2,11 +2,21 @@
 
 import { redirect } from "next/navigation";
 import { parseIngredients, type IngredientError, type IngredientInput } from "@/core/ingredients";
-import { parseRecipeFields, type RecipeFieldError, type RecipeFieldsInput } from "@/core/recipes";
+import {
+  parseCategoryOverrides,
+  parseRecipeFields,
+  type CategoryOverrideInput,
+  type RecipeContent,
+  type RecipeFieldError,
+  type RecipeFieldsInput,
+} from "@/core/recipes";
 import { getDb } from "@/db";
 import { createRecipe, listPickableProducts, removeRecipe, updateRecipe } from "@/db/recipes";
 
-export type RecipeFormValues = RecipeFieldsInput & { ingredients: IngredientInput[] };
+export type RecipeFormValues = RecipeFieldsInput & {
+  ingredients: IngredientInput[];
+  categoryOverrides: CategoryOverrideInput[];
+};
 
 // `values` refills the form after a rejected submit, which React resets.
 export type RecipeFormState = {
@@ -19,7 +29,7 @@ export async function createRecipeAction(_state: RecipeFormState, formData: Form
   const values = valuesFrom(formData);
   const parsed = await parseRecipeForm(values);
   if (!parsed.ok) return { ...parsed.state, values };
-  const recipe = await createRecipe(getDb(), parsed.fields, parsed.ingredients);
+  const recipe = await createRecipe(getDb(), parsed.content);
   redirect(`/recipes/${recipe.id}`);
 }
 
@@ -31,7 +41,7 @@ export async function editRecipeAction(
   const values = valuesFrom(formData);
   const parsed = await parseRecipeForm(values, id);
   if (!parsed.ok) return { ...parsed.state, values };
-  await updateRecipe(getDb(), id, parsed.fields, parsed.ingredients);
+  await updateRecipe(getDb(), id, parsed.content);
   redirect(`/recipes/${id}`);
 }
 
@@ -55,17 +65,24 @@ async function parseRecipeForm(values: RecipeFormValues, recipeId?: string) {
       },
     };
   }
-  return { ok: true as const, fields: fields.fields, ingredients: ingredients.ingredients };
+  const content: RecipeContent = {
+    ...fields.fields,
+    ingredients: ingredients.ingredients,
+    categoryOverrides: parseCategoryOverrides(values.categoryOverrides),
+  };
+  return { ok: true as const, content };
 }
 
 // Ingredient rows submit their fields in order. An unticked Minor checkbox
-// submits nothing, so each ticked one submits its row's index.
+// submits nothing, so each ticked one submits its row's index. Each category
+// in the overrides picker submits its id and its mode, in order.
 function valuesFrom(formData: FormData): RecipeFormValues {
   const text = (key: string) => String(formData.get(key) ?? "");
   const all = (key: string) => formData.getAll(key).map(String);
   const amounts = all("ingredientAmount");
   const units = all("ingredientUnit");
   const minor = all("ingredientMinor");
+  const overrideModes = all("overrideMode");
   return {
     name: text("name"),
     portions: text("portions"),
@@ -77,6 +94,10 @@ function valuesFrom(formData: FormData): RecipeFormValues {
       amount: amounts[index] ?? "",
       unit: units[index] ?? "",
       minor: minor.includes(String(index)),
+    })),
+    categoryOverrides: all("overrideCategoryId").map((categoryId, index) => ({
+      categoryId,
+      mode: overrideModes[index] ?? "",
     })),
   };
 }

@@ -3,8 +3,11 @@
 import Link from "next/link";
 import { useActionState, useState } from "react";
 import type { IngredientError, IngredientInput } from "@/core/ingredients";
+import { CATEGORY_OVERRIDE_MODES } from "@/core/recipes";
 import { RECIPE_UNITS, type DefaultUnit } from "@/core/units";
 import { t } from "@/strings";
+import { groupCategoriesByKind } from "../categories/category-groups";
+import type { CategoryOption } from "../categories/category-options";
 import type { RecipeFormState, RecipeFormValues } from "./actions";
 
 // A Product the Ingredient picker offers. An Archived one is offered only in
@@ -20,12 +23,14 @@ export function RecipeForm({
   action,
   initialValues,
   products,
+  categories,
   submitLabel,
   cancelHref = "/recipes",
 }: {
   action: (state: RecipeFormState, formData: FormData) => Promise<RecipeFormState>;
   initialValues: RecipeFormValues;
   products: ProductOption[];
+  categories: CategoryOption[];
   submitLabel: string;
   cancelHref?: string;
 }) {
@@ -55,6 +60,32 @@ export function RecipeForm({
         <input name="sourceUrl" type="url" defaultValue={values.sourceUrl} />
       </label>
       <IngredientRows state={state} products={products} />
+      <fieldset className="category-picker">
+        <legend>{t("recipes.categoryOverrides")}</legend>
+        <p>{t("recipes.categoryOverridesHint")}</p>
+        {groupCategoriesByKind(categories).map((group) => (
+          <div key={group.kind}>
+            <h2>{group.heading}</h2>
+            {group.categories.map((category) => (
+              <label key={category.id}>
+                <input type="hidden" name="overrideCategoryId" value={category.id} />
+                {category.label}
+                <select
+                  name="overrideMode"
+                  defaultValue={values.categoryOverrides.find((o) => o.categoryId === category.id)?.mode ?? ""}
+                >
+                  <option value="">{t("recipes.categoryOverride.follow")}</option>
+                  {CATEGORY_OVERRIDE_MODES.map((mode) => (
+                    <option key={mode} value={mode}>
+                      {t(`recipes.categoryOverride.${mode}`)}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            ))}
+          </div>
+        ))}
+      </fieldset>
       <label>
         {t("recipes.steps")}
         <textarea name="steps" rows={10} defaultValue={values.steps} />

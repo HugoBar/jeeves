@@ -2,18 +2,11 @@
 
 import Link from "next/link";
 import { useActionState } from "react";
-import type { CategoryKind } from "@/core/food-categories";
 import { DEFAULT_UNITS, type DefaultUnit } from "@/core/units";
 import { t } from "@/strings";
 import { groupCategoriesByKind } from "../categories/category-groups";
+import type { CategoryOption } from "../categories/category-options";
 import type { ProductFormState, ProductFormValues } from "./actions";
-
-// A Food Category the picker offers, already labelled and sorted.
-export interface CategoryOption {
-  id: string;
-  label: string;
-  kind: CategoryKind;
-}
 
 // A Product's Default Unit is picked when creating it; once `fixedUnit` is
 // set, it is only shown.

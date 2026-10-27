@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { isUuid } from "@/core/uuid";
 import { getDb } from "@/db";
 import { getProduct } from "@/db/products";
 import { listStockMovements } from "@/db/stock-movements";
@@ -9,7 +10,6 @@ import { RemoveButton } from "../../remove-button";
 import { removeProductAction } from "../actions";
 import { correctAction, discardAction, restockAction } from "../stock-actions";
 import { StockForm } from "../stock-form";
-import { isUuid } from "../../uuid";
 
 // A Product: its Stock, the Restock, Discard and Correction forms, and its
 // Stock Movement history.

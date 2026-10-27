@@ -2,20 +2,21 @@ import { sortCategories } from "@/core/food-categories";
 import type { FoodCategory } from "@/db/food-categories";
 import { foodCategoryLabel, t } from "@/strings";
 
-// A Recipe's derived Food Categories: Roles first, then Kinds, each
-// alphabetical. The edit screen shows them `asLastSaved`, since they don't
-// follow the form until it is saved.
+// A set of a Recipe's Food Categories, with where it comes from: Roles first,
+// then Kinds, each alphabetical.
 export function RecipeFoodCategories({
   categories,
-  asLastSaved = false,
+  heading,
+  source,
 }: {
   categories: FoodCategory[];
-  asLastSaved?: boolean;
+  heading: string;
+  source: string;
 }) {
   return (
     <>
-      <h2>{t("recipes.foodCategories")}</h2>
-      <p>{t(asLastSaved ? "recipes.foodCategoriesSourceSaved" : "recipes.foodCategoriesSource")}</p>
+      <h2>{heading}</h2>
+      <p>{source}</p>
       {categories.length === 0 ? (
         <p>{t("recipes.foodCategoriesEmpty")}</p>
       ) : (

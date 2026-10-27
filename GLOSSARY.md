@@ -89,8 +89,12 @@ One person's share of a Recipe, always counted in whole numbers. A Meal Slot's P
 _Avoid_: Serving, yield
 
 **Food Category**:
-A user-defined label, either a Role or a Kind. Products carry Food Categories; a Recipe's are derived from its Ingredients' Products, adjustable per Recipe.
+A user-defined label, either a Role or a Kind. Products carry Food Categories; a Recipe's are derived from its non-Minor Ingredients' Products, then adjusted by its Food Category Overrides.
 _Avoid_: Tag, food type
+
+**Food Category Override**:
+A per-Recipe "add" or "remove" of one Food Category, stored apart from the Ingredients so it survives Ingredient edits. A Recipe's final Food Categories are the derived ones plus its "add" overrides, minus its "remove" ones.
+_Avoid_: Manual category, custom tag
 
 **Role**:
 A Food Category describing the part food plays in a meal, such as Main Dish or Side Dish. Used to find alternatives that can take the same place.

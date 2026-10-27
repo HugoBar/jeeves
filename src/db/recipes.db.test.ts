@@ -1,21 +1,22 @@
 import { eq, sql } from "drizzle-orm";
 import { beforeAll, describe, expect, it } from "vitest";
 import type { Ingredient } from "@/core/ingredients";
-import type { RecipeFields } from "@/core/recipes";
+import type { RecipeContent, RecipeFields } from "@/core/recipes";
 import type { DefaultUnit } from "@/core/units";
-import { createCategory, removeCategory } from "./food-categories";
+import { createCategory, getCategory, removeCategory } from "./food-categories";
 import { createProduct, getProduct, listActiveProducts, removeProduct, updateProduct } from "./products";
 import {
   createRecipe,
   getRecipe,
+  getRecipeFoodCategories,
   listActiveRecipes,
   listPickableProducts,
-  listRecipeFoodCategories,
+  listRecipeCategoryOverrides,
   listRecipeIngredients,
   removeRecipe,
   updateRecipe,
 } from "./recipes";
-import { ingredients, products, recipes } from "./schema";
+import { foodCategories, ingredients, products, recipes } from "./schema";
 import { createTestDb } from "./test-database";
 
 let db: Awaited<ReturnType<typeof createTestDb>>;
@@ -46,13 +47,23 @@ async function aProduct(
   return result.product;
 }
 
+// A Recipe's content: Lasagne's fields, with no Ingredients or overrides
+// unless given.
+function content(changes: Partial<RecipeContent> = {}): RecipeContent {
+  return { ...lasagne, ingredients: [], categoryOverrides: [], ...changes };
+}
+
+async function unarchiveCategory(id: string) {
+  await db.update(foodCategories).set({ archivedAt: null }).where(eq(foodCategories.id, id));
+}
+
 async function archiveProduct(id: string) {
   await db.update(products).set({ archivedAt: new Date() }).where(eq(products.id, id));
 }
 
 describe("createRecipe", () => {
   it("adds a Recipe to the Recipes list", async () => {
-    const recipe = await createRecipe(db, lasagne, []);
+    const recipe = await createRecipe(db, content());
 
     expect(recipe).toEqual({ id: expect.any(String), ...lasagne });
     expect(await listActiveRecipes(db)).toContainEqual(recipe);
@@ -70,7 +81,7 @@ describe("Ingredients on a Recipe", () => {
       { productId: flour.id, amount: 1, unit: "tbsp", minor: true },
     ];
 
-    const recipe = await createRecipe(db, { ...lasagne, name: "Fresh Pasta" }, added);
+    const recipe = await createRecipe(db, content({ name: "Fresh Pasta", ingredients: added }));
 
     expect(await listRecipeIngredients(db, recipe.id)).toEqual([
       { ...added[0], productName: "Pasta Flour" },
@@ -82,14 +93,22 @@ describe("Ingredients on a Recipe", () => {
   it("replaces a Recipe's Ingredients with the ones saved when editing", async () => {
     const rice = await aProduct("Arborio");
     const stock = await aProduct("Veg Stock", { defaultUnit: "ml" });
-    const recipe = await createRecipe(db, { ...lasagne, name: "Risotto" }, [
-      { productId: rice.id, amount: 200, unit: "g", minor: false },
-    ]);
+    const recipe = await createRecipe(
+      db,
+      content({ name: "Risotto", ingredients: [{ productId: rice.id, amount: 200, unit: "g", minor: false }] }),
+    );
 
-    await updateRecipe(db, recipe.id, { ...lasagne, name: "Risotto" }, [
-      { productId: stock.id, amount: 1, unit: "l", minor: false },
-      { productId: rice.id, amount: 250, unit: "g", minor: false },
-    ]);
+    await updateRecipe(
+      db,
+      recipe.id,
+      content({
+        name: "Risotto",
+        ingredients: [
+          { productId: stock.id, amount: 1, unit: "l", minor: false },
+          { productId: rice.id, amount: 250, unit: "g", minor: false },
+        ],
+      }),
+    );
 
     expect(await listRecipeIngredients(db, recipe.id)).toEqual([
       { productId: stock.id, productName: "Veg Stock", amount: 1, unit: "l", minor: false },
@@ -99,17 +118,18 @@ describe("Ingredients on a Recipe", () => {
 
   it("removes every Ingredient when saved with none", async () => {
     const bread = await aProduct("Sourdough");
-    const recipe = await createRecipe(db, { ...lasagne, name: "Plain Toast" }, [
-      { productId: bread.id, amount: 2, unit: "g", minor: false },
-    ]);
+    const recipe = await createRecipe(
+      db,
+      content({ name: "Plain Toast", ingredients: [{ productId: bread.id, amount: 2, unit: "g", minor: false }] }),
+    );
 
-    await updateRecipe(db, recipe.id, { ...lasagne, name: "Plain Toast" }, []);
+    await updateRecipe(db, recipe.id, content({ name: "Plain Toast" }));
 
     expect(await listRecipeIngredients(db, recipe.id)).toEqual([]);
   });
 });
 
-describe("listRecipeFoodCategories", () => {
+describe("getRecipeFoodCategories", () => {
   it("derives the non-Minor Ingredients' Products' Food Categories, each once, leaving out Archived ones", async () => {
     const meat = await createCategory(db, { name: "Mince", kind: "kind" });
     const main = await createCategory(db, { name: "Mains", kind: "role" });
@@ -121,13 +141,19 @@ describe("listRecipeFoodCategories", () => {
     // Beef still carries it, so it is only Archived.
     expect(await removeCategory(db, retired.id)).toBe("archived");
 
-    const recipe = await createRecipe(db, { ...lasagne, name: "Beef Lasagne" }, [
-      { productId: beef.id, amount: 500, unit: "g", minor: false },
-      { productId: sheets.id, amount: 250, unit: "g", minor: false },
-      { productId: basil.id, amount: 5, unit: "g", minor: true },
-    ]);
+    const recipe = await createRecipe(
+      db,
+      content({
+        name: "Beef Lasagne",
+        ingredients: [
+          { productId: beef.id, amount: 500, unit: "g", minor: false },
+          { productId: sheets.id, amount: 250, unit: "g", minor: false },
+          { productId: basil.id, amount: 5, unit: "g", minor: true },
+        ],
+      }),
+    );
 
-    const derived = await listRecipeFoodCategories(db, recipe.id);
+    const { derived } = await getRecipeFoodCategories(db, recipe.id);
     expect(derived.map((category) => category.id).sort()).toEqual([meat.id, main.id].sort());
   });
 
@@ -136,20 +162,180 @@ describe("listRecipeFoodCategories", () => {
     const grains = await createCategory(db, { name: "Rice Grains", kind: "kind" });
     const salmon = await aProduct("Salmon Fillet", { categoryIds: [fish.id] });
     const rice = await aProduct("Sushi Rice");
-    const recipe = await createRecipe(db, { ...lasagne, name: "Salmon Bowl" }, [
-      { productId: salmon.id, amount: 200, unit: "g", minor: false },
-    ]);
-    const ids = async () => (await listRecipeFoodCategories(db, recipe.id)).map((category) => category.id);
+    const recipe = await createRecipe(
+      db,
+      content({ name: "Salmon Bowl", ingredients: [{ productId: salmon.id, amount: 200, unit: "g", minor: false }] }),
+    );
+    const ids = async () => (await getRecipeFoodCategories(db, recipe.id)).derived.map((category) => category.id);
     expect(await ids()).toEqual([fish.id]);
 
-    await updateRecipe(db, recipe.id, { ...lasagne, name: "Salmon Bowl" }, [
-      { productId: salmon.id, amount: 200, unit: "g", minor: true },
-      { productId: rice.id, amount: 150, unit: "g", minor: false },
-    ]);
+    await updateRecipe(
+      db,
+      recipe.id,
+      content({
+        name: "Salmon Bowl",
+        ingredients: [
+          { productId: salmon.id, amount: 200, unit: "g", minor: true },
+          { productId: rice.id, amount: 150, unit: "g", minor: false },
+        ],
+      }),
+    );
     expect(await ids()).toEqual([]);
 
     await updateProduct(db, rice.id, { name: "Sushi Rice", density: null, packSize: null, categoryIds: [grains.id] });
     expect(await ids()).toEqual([grains.id]);
+  });
+});
+
+describe("Food Category overrides on a Recipe", () => {
+  const idsOf = (categories: { id: string }[]) => categories.map((category) => category.id).sort();
+
+  it("adds and removes Food Categories in the final set, leaving the derived set as is", async () => {
+    const pasta = await createCategory(db, { name: "Egg Pasta", kind: "kind" });
+    const eggs = await createCategory(db, { name: "Hen Eggs", kind: "kind" });
+    const main = await createCategory(db, { name: "Big Plate", kind: "role" });
+    const tagliatelle = await aProduct("Tagliatelle", { categoryIds: [pasta.id, eggs.id] });
+
+    const recipe = await createRecipe(
+      db,
+      content({
+        name: "Tagliatelle al Ragu",
+        ingredients: [{ productId: tagliatelle.id, amount: 300, unit: "g", minor: false }],
+        categoryOverrides: [
+          { categoryId: main.id, mode: "add" },
+          { categoryId: eggs.id, mode: "remove" },
+        ],
+      }),
+    );
+
+    const { derived, final } = await getRecipeFoodCategories(db, recipe.id);
+    expect(idsOf(derived)).toEqual([pasta.id, eggs.id].sort());
+    expect(idsOf(final)).toEqual([pasta.id, main.id].sort());
+  });
+
+  it("survive Ingredient edits, applying to what the new Ingredients give", async () => {
+    const dairy = await createCategory(db, { name: "Cow Dairy", kind: "kind" });
+    const soup = await createCategory(db, { name: "Bowl Food", kind: "role" });
+    const leek = await aProduct("Soup Leek");
+    const cream = await aProduct("Soup Cream", { categoryIds: [dairy.id] });
+    const overrides = [
+      { categoryId: soup.id, mode: "add" as const },
+      { categoryId: dairy.id, mode: "remove" as const },
+    ];
+    const recipe = await createRecipe(
+      db,
+      content({
+        name: "Leek Soup",
+        ingredients: [{ productId: leek.id, amount: 500, unit: "g", minor: false }],
+        categoryOverrides: overrides,
+      }),
+    );
+
+    await updateRecipe(
+      db,
+      recipe.id,
+      content({
+        name: "Leek Soup",
+        ingredients: [
+          { productId: leek.id, amount: 500, unit: "g", minor: false },
+          { productId: cream.id, amount: 100, unit: "g", minor: false },
+        ],
+        categoryOverrides: overrides,
+      }),
+    );
+
+    const { derived, final } = await getRecipeFoodCategories(db, recipe.id);
+    expect(idsOf(derived)).toEqual([dairy.id]);
+    expect(idsOf(final)).toEqual([soup.id]);
+    expect(await listRecipeCategoryOverrides(db, recipe.id)).toEqual(expect.arrayContaining(overrides));
+  });
+
+  it("replaces the overrides with the ones saved when editing", async () => {
+    const starter = await createCategory(db, { name: "First Course", kind: "role" });
+    const side = await createCategory(db, { name: "On The Side", kind: "role" });
+    const recipe = await createRecipe(
+      db,
+      content({ name: "Bruschetta", categoryOverrides: [{ categoryId: starter.id, mode: "add" }] }),
+    );
+
+    await updateRecipe(
+      db,
+      recipe.id,
+      content({ name: "Bruschetta", categoryOverrides: [{ categoryId: side.id, mode: "add" }] }),
+    );
+
+    expect(await listRecipeCategoryOverrides(db, recipe.id)).toEqual([{ categoryId: side.id, mode: "add" }]);
+  });
+
+  it("ignores overrides on Archived categories but keeps them through a save", async () => {
+    const dessert = await createCategory(db, { name: "Pudding", kind: "role" });
+    const fruit = await createCategory(db, { name: "Orchard Fruit", kind: "kind" });
+    const apple = await aProduct("Baking Apple", { categoryIds: [fruit.id] });
+    const appleIngredients: Ingredient[] = [{ productId: apple.id, amount: 400, unit: "g", minor: false }];
+    const recipe = await createRecipe(
+      db,
+      content({
+        name: "Apple Crumble",
+        ingredients: appleIngredients,
+        categoryOverrides: [
+          { categoryId: dessert.id, mode: "add" },
+          { categoryId: fruit.id, mode: "remove" },
+        ],
+      }),
+    );
+    // The override and Baking Apple still carry them, so they are only Archived.
+    expect(await removeCategory(db, dessert.id)).toBe("archived");
+    expect(await removeCategory(db, fruit.id)).toBe("archived");
+
+    expect(await getRecipeFoodCategories(db, recipe.id)).toEqual({ derived: [], final: [] });
+    expect(await listRecipeCategoryOverrides(db, recipe.id)).toEqual([]);
+
+    // Saving from the form, which no longer offers them, keeps their overrides.
+    await updateRecipe(db, recipe.id, content({ name: "Apple Crumble", ingredients: appleIngredients }));
+    await unarchiveCategory(dessert.id);
+    expect(idsOf((await getRecipeFoodCategories(db, recipe.id)).final)).toEqual([dessert.id]);
+  });
+
+  // The form doesn't offer them, so only a crafted request could.
+  it("doesn't save new overrides on Archived categories", async () => {
+    const drink = await createCategory(db, { name: "Beverage", kind: "role" });
+    await aProduct("Pressed Juice", { categoryIds: [drink.id] });
+    expect(await removeCategory(db, drink.id)).toBe("archived");
+
+    const recipe = await createRecipe(
+      db,
+      content({ name: "Lemonade", categoryOverrides: [{ categoryId: drink.id, mode: "add" }] }),
+    );
+
+    await unarchiveCategory(drink.id);
+    expect(await listRecipeCategoryOverrides(db, recipe.id)).toEqual([]);
+  });
+
+  // Neither can come from the form, which lists each category once by its id.
+  it("are saved once per category, skipping ids that are not a category's", async () => {
+    const dessert = await createCategory(db, { name: "Sweet Course", kind: "role" });
+
+    const recipe = await createRecipe(
+      db,
+      content({
+        name: "Rice Pudding",
+        categoryOverrides: [
+          { categoryId: dessert.id, mode: "add" },
+          { categoryId: dessert.id, mode: "remove" },
+          { categoryId: "not-a-uuid", mode: "add" },
+        ],
+      }),
+    );
+
+    expect(await listRecipeCategoryOverrides(db, recipe.id)).toEqual([{ categoryId: dessert.id, mode: "add" }]);
+  });
+
+  it("Archive a Food Category they use instead of letting it be deleted", async () => {
+    const snack = await createCategory(db, { name: "Nibbles", kind: "role" });
+    await createRecipe(db, content({ name: "Popcorn", categoryOverrides: [{ categoryId: snack.id, mode: "add" }] }));
+
+    expect(await removeCategory(db, snack.id)).toBe("archived");
+    expect(await getCategory(db, snack.id)).toMatchObject({ archivedAt: expect.any(Date) });
   });
 });
 
@@ -171,9 +357,10 @@ describe("listPickableProducts", () => {
   // was Archived since.
   it("also offers the Archived Products a Recipe already uses", async () => {
     const saffron = await aProduct("Saffron");
-    const recipe = await createRecipe(db, { ...lasagne, name: "Paella" }, [
-      { productId: saffron.id, amount: 0.5, unit: "g", minor: true },
-    ]);
+    const recipe = await createRecipe(
+      db,
+      content({ name: "Paella", ingredients: [{ productId: saffron.id, amount: 0.5, unit: "g", minor: true }] }),
+    );
     await archiveProduct(saffron.id);
 
     expect(await listPickableProducts(db, recipe.id)).toContainEqual(
@@ -185,10 +372,10 @@ describe("listPickableProducts", () => {
 
 describe("updateRecipe", () => {
   it("changes every field", async () => {
-    const recipe = await createRecipe(db, { ...lasagne, name: "Toast" }, []);
+    const recipe = await createRecipe(db, content({ name: "Toast" }));
     const changes = { name: "Cheese Toast", portions: 2, steps: "Grill.", prepTimeMinutes: 10, sourceUrl: null };
 
-    await updateRecipe(db, recipe.id, changes, []);
+    await updateRecipe(db, recipe.id, content(changes));
 
     expect(await getRecipe(db, recipe.id)).toEqual({ id: recipe.id, ...changes });
   });
@@ -196,7 +383,7 @@ describe("updateRecipe", () => {
 
 describe("listActiveRecipes", () => {
   it("leaves out Archived Recipes", async () => {
-    const recipe = await createRecipe(db, { ...lasagne, name: "Old Stew" }, []);
+    const recipe = await createRecipe(db, content({ name: "Old Stew" }));
     await db.update(recipes).set({ archivedAt: new Date() }).where(eq(recipes.id, recipe.id));
 
     expect((await listActiveRecipes(db)).map((r) => r.id)).not.toContain(recipe.id);
@@ -205,7 +392,7 @@ describe("listActiveRecipes", () => {
 
 describe("removeRecipe", () => {
   it("deletes a Recipe nothing refers to", async () => {
-    const recipe = await createRecipe(db, { ...lasagne, name: "Gazpacho" }, []);
+    const recipe = await createRecipe(db, content({ name: "Gazpacho" }));
 
     expect(await removeRecipe(db, recipe.id)).toBe("deleted");
     expect(await getRecipe(db, recipe.id)).toBeUndefined();
@@ -213,7 +400,7 @@ describe("removeRecipe", () => {
 
   // Nothing refers to a Recipe until Meal Slots, so a stand-in table does.
   it("archives a Recipe something refers to, keeping it but leaving the Recipes list", async () => {
-    const recipe = await createRecipe(db, { ...lasagne, name: "Chili" }, []);
+    const recipe = await createRecipe(db, content({ name: "Chili" }));
     await db.execute(sql`CREATE TABLE recipe_references (recipe_id uuid NOT NULL REFERENCES recipes (id))`);
     await db.execute(sql`INSERT INTO recipe_references VALUES (${recipe.id})`);
 
@@ -223,11 +410,25 @@ describe("removeRecipe", () => {
     await db.execute(sql`DROP TABLE recipe_references`);
   });
 
+  it("deletes a Recipe with Food Category overrides, and its overrides with it", async () => {
+    const salad = await createCategory(db, { name: "Leafy Plate", kind: "role" });
+    const recipe = await createRecipe(
+      db,
+      content({ name: "Green Salad", categoryOverrides: [{ categoryId: salad.id, mode: "add" }] }),
+    );
+
+    expect(await removeRecipe(db, recipe.id)).toBe("deleted");
+    expect(await listRecipeCategoryOverrides(db, recipe.id)).toEqual([]);
+    // Nothing refers to the category any more, so it is not Archived either.
+    expect(await removeCategory(db, salad.id)).toBe("deleted");
+  });
+
   it("deletes a Recipe with Ingredients, and its Ingredients with it", async () => {
     const beans = await aProduct("Black Beans");
-    const recipe = await createRecipe(db, { ...lasagne, name: "Bean Stew" }, [
-      { productId: beans.id, amount: 400, unit: "g", minor: false },
-    ]);
+    const recipe = await createRecipe(
+      db,
+      content({ name: "Bean Stew", ingredients: [{ productId: beans.id, amount: 400, unit: "g", minor: false }] }),
+    );
 
     expect(await removeRecipe(db, recipe.id)).toBe("deleted");
     expect(await listRecipeIngredients(db, recipe.id)).toEqual([]);
@@ -239,9 +440,10 @@ describe("removeRecipe", () => {
 describe("removing a Product used by an Ingredient", () => {
   it("Archives the Product instead, and the Ingredient keeps it", async () => {
     const leeks = await aProduct("Leeks", { defaultUnit: "pc" });
-    const recipe = await createRecipe(db, { ...lasagne, name: "Leek Soup" }, [
-      { productId: leeks.id, amount: 2, unit: "pc", minor: false },
-    ]);
+    const recipe = await createRecipe(
+      db,
+      content({ name: "Leek Soup", ingredients: [{ productId: leeks.id, amount: 2, unit: "pc", minor: false }] }),
+    );
 
     expect(await removeProduct(db, leeks.id)).toBe("archived");
     expect((await listActiveProducts(db)).map((p) => p.id)).not.toContain(leeks.id);
@@ -255,13 +457,16 @@ describe("removing a Product used by an Ingredient", () => {
 describe("recipes table", () => {
   // A cascading reference would silently drop what refers to a Recipe instead
   // of Archiving it. Its own Ingredients and Food Category overrides are the
-  // exception: they go with it, and overrides join this list when they land.
+  // exception: they go with it.
   it("is only referenced by foreign keys that block deletion, besides its own Ingredients and overrides", async () => {
     const cascading = await db.execute(sql`
       SELECT conrelid::regclass::text AS referencing_table FROM pg_constraint
       WHERE contype = 'f' AND confrelid = 'recipes'::regclass AND confdeltype NOT IN ('a', 'r')`);
 
-    expect(cascading.rows).toEqual([{ referencing_table: "ingredients" }]);
+    expect(cascading.rows.map((row) => row.referencing_table).sort()).toEqual([
+      "ingredients",
+      "recipe_category_overrides",
+    ]);
   });
 
   it.each([
@@ -281,7 +486,7 @@ describe("recipes table", () => {
 
 describe("ingredients table", () => {
   it("rejects an amount of 0", async () => {
-    const recipe = await createRecipe(db, { ...lasagne, name: "Empty Plate" }, []);
+    const recipe = await createRecipe(db, content({ name: "Empty Plate" }));
     const product = await aProduct("Air");
 
     await expect(
