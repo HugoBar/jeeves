@@ -112,16 +112,19 @@ export function RecipeForm({
 
 type Row = IngredientInput & { key: string };
 
-// Rows refilled from a submit are keyed by position; added ones get a fresh
-// key from this counter.
+// Every row gets a fresh key from this counter, including those refilled from
+// a submit.
 let nextRowKey = 0;
 
 function toRows(inputs: IngredientInput[]): Row[] {
-  return inputs.map((input, index) => ({ ...input, key: String(index) }));
+  return inputs.map((input) => ({ ...input, key: String(nextRowKey++) }));
 }
 
-// The Ingredient rows, in the order entered. They are controlled so rows can
-// be added and removed, and refilled from `state` after each submit.
+// The Ingredient rows, in the order entered, refilled from `state` after each
+// submit. The Product and Unit pickers are uncontrolled: React resets the form
+// after a submit, which would put a controlled select back to its first option,
+// but puts an uncontrolled one back to the value it mounted with. Refilled rows
+// get new keys, so they mount with what was sent.
 function IngredientRows({ state, products }: { state: RecipeFormState; products: ProductOption[] }) {
   const [rows, setRows] = useState(() => toRows(state.values.ingredients));
   const [shownState, setShownState] = useState(state);
@@ -138,7 +141,7 @@ function IngredientRows({ state, products }: { state: RecipeFormState; products:
     change(key, unit ? { productId, unit } : { productId });
   };
   const add = () =>
-    setRows((current) => [...current, { productId: "", amount: "", unit: "g", minor: false, key: `added-${nextRowKey++}` }]);
+    setRows((current) => [...current, ...toRows([{ productId: "", amount: "", unit: "g", minor: false }])]);
   const remove = (key: string) => setRows((current) => current.filter((row) => row.key !== key));
 
   return (
@@ -150,7 +153,7 @@ function IngredientRows({ state, products }: { state: RecipeFormState; products:
           <select
             name="ingredientProductId"
             aria-label={t("recipes.ingredientProduct")}
-            value={row.productId}
+            defaultValue={row.productId}
             onChange={(event) => pickProduct(row.key, event.target.value)}
           >
             <option value="">{t("recipes.ingredientPickProduct")}</option>
@@ -169,10 +172,12 @@ function IngredientRows({ state, products }: { state: RecipeFormState; products:
             value={row.amount}
             onChange={(event) => change(row.key, { amount: event.target.value })}
           />
+          {/* Remounted when the Product changes, to start at its Default Unit. */}
           <select
+            key={row.productId}
             name="ingredientUnit"
             aria-label={t("recipes.ingredientUnit")}
-            value={row.unit}
+            defaultValue={row.unit}
             onChange={(event) => change(row.key, { unit: event.target.value })}
           >
             {RECIPE_UNITS.map((unit) => (
