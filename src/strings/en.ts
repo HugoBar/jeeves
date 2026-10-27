@@ -150,4 +150,8 @@ export const en = {
   "foodCategory.dessert": "Dessert",
   "foodCategory.snack": "Snack",
   "foodCategory.drink": "Drink",
+  "mealType.breakfast": "Breakfast",
+  "mealType.lunch": "Lunch",
+  "mealType.snack": "Snack",
+  "mealType.dinner": "Dinner",
 } as const;

@@ -1,4 +1,5 @@
 import type { CategorySeedKey } from "@/core/food-categories";
+import type { MealTypeSeedKey } from "@/core/meal-types";
 import type { DefaultUnit, Unit } from "@/core/units";
 import { en } from "./en";
 
@@ -19,6 +20,11 @@ export function foodCategoryLabel(category: {
   name: string | null;
 }): string {
   return category.name ?? t(`foodCategory.${category.seedKey!}`);
+}
+
+// Same rule as Food Categories (data-model Q7).
+export function mealTypeLabel(mealType: { seedKey: MealTypeSeedKey | null; name: string | null }): string {
+  return mealType.name ?? t(`mealType.${mealType.seedKey!}`);
 }
 
 const quantityFormat = new Intl.NumberFormat("en", { maximumFractionDigits: 2 });
