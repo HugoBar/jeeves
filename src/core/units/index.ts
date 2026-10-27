@@ -1,4 +1,11 @@
-export type Unit = "g" | "kg" | "ml" | "l" | "tsp" | "tbsp" | "cup" | "pc";
+// The units an Ingredient can be written in.
+export const RECIPE_UNITS = ["g", "kg", "ml", "l", "tsp", "tbsp", "cup", "pc"] as const;
+
+export type Unit = (typeof RECIPE_UNITS)[number];
+
+export function parseRecipeUnit(input: unknown): Unit | null {
+  return RECIPE_UNITS.find((unit) => unit === input) ?? null;
+}
 
 // The units a Product's Stock can be counted in.
 export const DEFAULT_UNITS = ["g", "ml", "pc"] as const;

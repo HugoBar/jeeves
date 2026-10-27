@@ -4,7 +4,7 @@ import { sql } from "drizzle-orm";
 import type { CategorySeedKey } from "@/core/food-categories";
 import { AMOUNT_COLUMN, DENSITY_COLUMN } from "@/core/amounts";
 import { STOCK_MOVEMENT_TYPES } from "@/core/stock";
-import { DEFAULT_UNITS } from "@/core/units";
+import { DEFAULT_UNITS, RECIPE_UNITS } from "@/core/units";
 import {
   boolean,
   check,
@@ -107,8 +107,7 @@ export const stockMovements = pgTable(
 );
 
 // Portions are whole numbers (data-model T4), and so is prep time, in
-// minutes. Ingredients and Food Category overrides are added by their own
-// tickets.
+// minutes. Food Category overrides are added by their own ticket.
 export const recipes = pgTable(
   "recipes",
   {
@@ -125,5 +124,33 @@ export const recipes = pgTable(
   (table) => [
     check("recipes_portions_above_zero", sql`${table.portions} > 0`),
     check("recipes_prep_time_above_zero", sql`${table.prepTimeMinutes} > 0`),
+  ],
+);
+
+export const recipeUnit = pgEnum("recipe_unit", RECIPE_UNITS);
+
+// A Recipe's Ingredients go with it when it is hard deleted; a Product used by
+// one cannot be deleted, so removing it Archives it and the Ingredient keeps
+// it. `position` keeps the order entered (data-model T5).
+export const ingredients = pgTable(
+  "ingredients",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    recipeId: uuid("recipe_id")
+      .notNull()
+      .references(() => recipes.id, { onDelete: "cascade" }),
+    productId: uuid("product_id")
+      .notNull()
+      .references(() => products.id, { onDelete: "restrict" }),
+    amount: amount("amount").notNull(),
+    unit: recipeUnit("unit").notNull(),
+    minor: boolean("minor").notNull().default(false),
+    position: integer("position").notNull(),
+  },
+  (table) => [
+    check("ingredients_amount_above_zero", sql`${table.amount} > 0`),
+    uniqueIndex("ingredients_recipe_id_position").on(table.recipeId, table.position),
+    index("ingredients_product_id").on(table.productId),
   ],
 );

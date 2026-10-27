@@ -1,12 +1,17 @@
 import "server-only";
-import { eq, isNull } from "drizzle-orm";
+import { asc, eq, inArray, isNull, or, sql } from "drizzle-orm";
+import type { Ingredient, PickableProduct } from "@/core/ingredients";
 import type { RecipeFields } from "@/core/recipes";
 import { deleteOrArchive, type RemoveOutcome } from "./archive";
 import type { Db } from "./index";
-import { recipes } from "./schema";
+import { ingredients, products, recipes } from "./schema";
 
 export interface Recipe extends RecipeFields {
   id: string;
+}
+
+export interface RecipeIngredient extends Ingredient {
+  productName: string;
 }
 
 type RecipeRow = typeof recipes.$inferSelect;
@@ -21,9 +26,13 @@ export async function listActiveRecipes(db: Db): Promise<Recipe[]> {
   return rows.map(toRecipe);
 }
 
-export async function createRecipe(db: Db, fields: RecipeFields): Promise<Recipe> {
-  const [row] = await db.insert(recipes).values(fields).returning();
-  return toRecipe(row!);
+// `recipeIngredients` must already be checked by core's parseIngredients.
+export async function createRecipe(db: Db, fields: RecipeFields, recipeIngredients: Ingredient[]): Promise<Recipe> {
+  return db.transaction(async (tx) => {
+    const [row] = await tx.insert(recipes).values(fields).returning();
+    await insertIngredients(tx, row!.id, recipeIngredients);
+    return toRecipe(row!);
+  });
 }
 
 export async function getRecipe(db: Db, id: string): Promise<Recipe | undefined> {
@@ -31,8 +40,71 @@ export async function getRecipe(db: Db, id: string): Promise<Recipe | undefined>
   return row && toRecipe(row);
 }
 
-export async function updateRecipe(db: Db, id: string, changes: RecipeFields): Promise<void> {
-  await db.update(recipes).set(changes).where(eq(recipes.id, id));
+// Saving replaces every Ingredient, renumbering them in the order given.
+export async function updateRecipe(
+  db: Db,
+  id: string,
+  changes: RecipeFields,
+  recipeIngredients: Ingredient[],
+): Promise<void> {
+  await db.transaction(async (tx) => {
+    await tx.update(recipes).set(changes).where(eq(recipes.id, id));
+    await tx.delete(ingredients).where(eq(ingredients.recipeId, id));
+    await insertIngredients(tx, id, recipeIngredients);
+  });
+}
+
+async function insertIngredients(db: Db, recipeId: string, recipeIngredients: Ingredient[]): Promise<void> {
+  if (recipeIngredients.length === 0) return;
+  await db
+    .insert(ingredients)
+    .values(recipeIngredients.map((ingredient, position) => ({ ...ingredient, recipeId, position })));
+}
+
+// A Recipe's Ingredients in the order entered, with their Product's name.
+export async function listRecipeIngredients(db: Db, recipeId: string): Promise<RecipeIngredient[]> {
+  return db
+    .select({
+      productId: ingredients.productId,
+      productName: products.name,
+      amount: ingredients.amount,
+      unit: ingredients.unit,
+      minor: ingredients.minor,
+    })
+    .from(ingredients)
+    .innerJoin(products, eq(products.id, ingredients.productId))
+    .where(eq(ingredients.recipeId, recipeId))
+    .orderBy(asc(ingredients.position));
+}
+
+export interface PickableProductRow extends PickableProduct {
+  id: string;
+  archived: boolean;
+}
+
+// The Products an Ingredient can use, by name: the non-Archived ones, plus
+// any Archived one the Recipe being edited already uses, so saving it never
+// drops or swaps out that Ingredient.
+export async function listPickableProducts(db: Db, recipeId?: string): Promise<PickableProductRow[]> {
+  const usedByRecipe = recipeId
+    ? inArray(
+        products.id,
+        db.select({ id: ingredients.productId }).from(ingredients).where(eq(ingredients.recipeId, recipeId)),
+      )
+    : undefined;
+  const rows = await db
+    .select({
+      id: products.id,
+      name: products.name,
+      defaultUnit: products.defaultUnit,
+      density: products.density,
+      archived: sql<boolean>`${products.archivedAt} is not null`,
+    })
+    .from(products)
+    .where(or(isNull(products.archivedAt), usedByRecipe));
+  // Sorted here rather than by the database's collation, which may put
+  // capitals before lowercase.
+  return rows.sort((a, b) => a.name.localeCompare(b.name));
 }
 
 // A Recipe something refers to is only Archived. Its own Ingredients and Food
