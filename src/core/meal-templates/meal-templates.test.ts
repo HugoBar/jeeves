@@ -1,16 +1,21 @@
 import { describe, expect, it } from "vitest";
 import { moveSlot, parseTemplateSlots, parseMealTemplateFields, sortMealTemplates } from "./index";
 
+// The Meal Types a template can have in these tests.
+const pickable = new Set(["lunch-id"]);
+
 describe("parseMealTemplateFields", () => {
   it("reads a filled-in form, trimming text", () => {
-    expect(parseMealTemplateFields({ name: " Weekday Lunch ", hour: " 12:30 ", mealTypeId: " lunch-id " })).toEqual({
+    expect(
+      parseMealTemplateFields({ name: " Weekday Lunch ", hour: " 12:30 ", mealTypeId: " lunch-id " }, pickable),
+    ).toEqual({
       ok: true,
       fields: { name: "Weekday Lunch", hour: "12:30", mealTypeId: "lunch-id" },
     });
   });
 
   it.each([["00:00"], ["07:05"], ["23:59"]])("takes any time of day (%j)", (hour) => {
-    expect(parseMealTemplateFields({ name: "Early", hour, mealTypeId: "id" })).toMatchObject({
+    expect(parseMealTemplateFields({ name: "Early", hour, mealTypeId: "lunch-id" }, pickable)).toMatchObject({
       ok: true,
       fields: { hour },
     });
@@ -21,23 +26,31 @@ describe("parseMealTemplateFields rejects", () => {
   const filled = { name: "Weekday Lunch", hour: "12:30", mealTypeId: "lunch-id" };
 
   it.each([[""], ["   "]])("a blank name (%j)", (name) => {
-    expect(parseMealTemplateFields({ ...filled, name })).toEqual({ ok: false, errors: ["blankName"] });
+    expect(parseMealTemplateFields({ ...filled, name }, pickable)).toEqual({ ok: false, errors: ["blankName"] });
   });
 
   // The time input sends "HH:MM"; anything else is no time of day.
   it.each([[""], ["24:00"], ["12:60"], ["7:30"], ["12:30:00"], ["noon"]])(
     "an hour that is not a time of day (%j)",
     (hour) => {
-      expect(parseMealTemplateFields({ ...filled, hour })).toEqual({ ok: false, errors: ["invalidHour"] });
+      expect(parseMealTemplateFields({ ...filled, hour }, pickable)).toEqual({ ok: false, errors: ["invalidHour"] });
     },
   );
 
   it.each([[""], ["  "]])("a missing Meal Type (%j)", (mealTypeId) => {
-    expect(parseMealTemplateFields({ ...filled, mealTypeId })).toEqual({ ok: false, errors: ["noMealType"] });
+    expect(parseMealTemplateFields({ ...filled, mealTypeId }, pickable)).toEqual({ ok: false, errors: ["noMealType"] });
+  });
+
+  // An Archived or deleted Meal Type, or a crafted id.
+  it("a Meal Type it cannot have", () => {
+    expect(parseMealTemplateFields({ ...filled, mealTypeId: "archived-id" }, pickable)).toEqual({
+      ok: false,
+      errors: ["unavailableMealType"],
+    });
   });
 
   it("every invalid field at once", () => {
-    expect(parseMealTemplateFields({ name: "", hour: "", mealTypeId: "" })).toEqual({
+    expect(parseMealTemplateFields({ name: "", hour: "", mealTypeId: "" }, pickable)).toEqual({
       ok: false,
       errors: ["blankName", "invalidHour", "noMealType"],
     });

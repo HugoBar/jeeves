@@ -16,13 +16,19 @@ export interface MealTemplateContent extends MealTemplateFields {
 // "HH:MM" from 00:00 to 23:59, as a time input sends it.
 const HOUR = /^([01]\d|2[0-3]):[0-5]\d$/;
 
-export type MealTemplateFieldError = "blankName" | "invalidHour" | "noMealType";
+export type MealTemplateFieldError = "blankName" | "invalidHour" | "noMealType" | "unavailableMealType";
 
 export type MealTemplateFieldsResult =
   | { ok: true; fields: MealTemplateFields }
   | { ok: false; errors: MealTemplateFieldError[] };
 
-export function parseMealTemplateFields(input: MealTemplateFields): MealTemplateFieldsResult {
+// `pickable` holds the Meal Types a template can have: the non-Archived ones,
+// plus an Archived one the template already uses, which it keeps until the user
+// changes it.
+export function parseMealTemplateFields(
+  input: MealTemplateFields,
+  pickable: ReadonlySet<string>,
+): MealTemplateFieldsResult {
   const name = input.name.trim();
   const hour = input.hour.trim();
   const mealTypeId = input.mealTypeId.trim();
@@ -31,6 +37,7 @@ export function parseMealTemplateFields(input: MealTemplateFields): MealTemplate
   if (!name) errors.push("blankName");
   if (!HOUR.test(hour)) errors.push("invalidHour");
   if (!mealTypeId) errors.push("noMealType");
+  else if (!pickable.has(mealTypeId)) errors.push("unavailableMealType");
   if (errors.length) return { ok: false, errors };
 
   return { ok: true, fields: { name, hour, mealTypeId } };
