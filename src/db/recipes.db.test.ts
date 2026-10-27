@@ -3,12 +3,14 @@ import { beforeAll, describe, expect, it } from "vitest";
 import type { Ingredient } from "@/core/ingredients";
 import type { RecipeFields } from "@/core/recipes";
 import type { DefaultUnit } from "@/core/units";
-import { createProduct, getProduct, listActiveProducts, removeProduct } from "./products";
+import { createCategory, removeCategory } from "./food-categories";
+import { createProduct, getProduct, listActiveProducts, removeProduct, updateProduct } from "./products";
 import {
   createRecipe,
   getRecipe,
   listActiveRecipes,
   listPickableProducts,
+  listRecipeFoodCategories,
   listRecipeIngredients,
   removeRecipe,
   updateRecipe,
@@ -31,8 +33,15 @@ const lasagne: RecipeFields = {
 };
 
 // A plain Product under a name no other test uses.
-async function aProduct(name: string, defaultUnit: DefaultUnit = "g", density: number | null = null) {
-  const result = await createProduct(db, { name, defaultUnit, density, packSize: null, categoryIds: [] });
+async function aProduct(
+  name: string,
+  {
+    defaultUnit = "g",
+    density = null,
+    categoryIds = [],
+  }: { defaultUnit?: DefaultUnit; density?: number | null; categoryIds?: string[] } = {},
+) {
+  const result = await createProduct(db, { name, defaultUnit, density, packSize: null, categoryIds });
   if (!result.ok) throw new Error(`Could not create ${name}: ${result.error}`);
   return result.product;
 }
@@ -54,7 +63,7 @@ describe("createRecipe", () => {
 describe("Ingredients on a Recipe", () => {
   it("saves a new Recipe's Ingredients and lists them in the order entered, with their Product names", async () => {
     const flour = await aProduct("Pasta Flour");
-    const eggs = await aProduct("Pasta Eggs", "pc");
+    const eggs = await aProduct("Pasta Eggs", { defaultUnit: "pc" });
     const added: Ingredient[] = [
       { productId: flour.id, amount: 300.5, unit: "g", minor: false },
       { productId: eggs.id, amount: 3, unit: "pc", minor: false },
@@ -72,7 +81,7 @@ describe("Ingredients on a Recipe", () => {
 
   it("replaces a Recipe's Ingredients with the ones saved when editing", async () => {
     const rice = await aProduct("Arborio");
-    const stock = await aProduct("Veg Stock", "ml");
+    const stock = await aProduct("Veg Stock", { defaultUnit: "ml" });
     const recipe = await createRecipe(db, { ...lasagne, name: "Risotto" }, [
       { productId: rice.id, amount: 200, unit: "g", minor: false },
     ]);
@@ -100,10 +109,54 @@ describe("Ingredients on a Recipe", () => {
   });
 });
 
+describe("listRecipeFoodCategories", () => {
+  it("derives the non-Minor Ingredients' Products' Food Categories, each once, leaving out Archived ones", async () => {
+    const meat = await createCategory(db, { name: "Mince", kind: "kind" });
+    const main = await createCategory(db, { name: "Mains", kind: "role" });
+    const herbs = await createCategory(db, { name: "Herbs", kind: "kind" });
+    const retired = await createCategory(db, { name: "Retired", kind: "kind" });
+    const beef = await aProduct("Ground Beef", { categoryIds: [meat.id, main.id, retired.id] });
+    const sheets = await aProduct("Lasagne Sheets", { categoryIds: [main.id] });
+    const basil = await aProduct("Basil", { categoryIds: [herbs.id] });
+    // Beef still carries it, so it is only Archived.
+    expect(await removeCategory(db, retired.id)).toBe("archived");
+
+    const recipe = await createRecipe(db, { ...lasagne, name: "Beef Lasagne" }, [
+      { productId: beef.id, amount: 500, unit: "g", minor: false },
+      { productId: sheets.id, amount: 250, unit: "g", minor: false },
+      { productId: basil.id, amount: 5, unit: "g", minor: true },
+    ]);
+
+    const derived = await listRecipeFoodCategories(db, recipe.id);
+    expect(derived.map((category) => category.id).sort()).toEqual([meat.id, main.id].sort());
+  });
+
+  it("follows changes to the Ingredients and to their Products' Food Categories", async () => {
+    const fish = await createCategory(db, { name: "Oily Fish", kind: "kind" });
+    const grains = await createCategory(db, { name: "Rice Grains", kind: "kind" });
+    const salmon = await aProduct("Salmon Fillet", { categoryIds: [fish.id] });
+    const rice = await aProduct("Sushi Rice");
+    const recipe = await createRecipe(db, { ...lasagne, name: "Salmon Bowl" }, [
+      { productId: salmon.id, amount: 200, unit: "g", minor: false },
+    ]);
+    const ids = async () => (await listRecipeFoodCategories(db, recipe.id)).map((category) => category.id);
+    expect(await ids()).toEqual([fish.id]);
+
+    await updateRecipe(db, recipe.id, { ...lasagne, name: "Salmon Bowl" }, [
+      { productId: salmon.id, amount: 200, unit: "g", minor: true },
+      { productId: rice.id, amount: 150, unit: "g", minor: false },
+    ]);
+    expect(await ids()).toEqual([]);
+
+    await updateProduct(db, rice.id, { name: "Sushi Rice", density: null, packSize: null, categoryIds: [grains.id] });
+    expect(await ids()).toEqual([grains.id]);
+  });
+});
+
 describe("listPickableProducts", () => {
   it("offers non-Archived Products, by name, with what converting needs", async () => {
-    const product = await aProduct("Picked Oil", "ml", 0.92);
-    const archived = await aProduct("Gone Oil", "ml");
+    const product = await aProduct("Picked Oil", { defaultUnit: "ml", density: 0.92 });
+    const archived = await aProduct("Gone Oil", { defaultUnit: "ml" });
     await archiveProduct(archived.id);
 
     const pickable = await listPickableProducts(db);
@@ -185,7 +238,7 @@ describe("removeRecipe", () => {
 
 describe("removing a Product used by an Ingredient", () => {
   it("Archives the Product instead, and the Ingredient keeps it", async () => {
-    const leeks = await aProduct("Leeks", "pc");
+    const leeks = await aProduct("Leeks", { defaultUnit: "pc" });
     const recipe = await createRecipe(db, { ...lasagne, name: "Leek Soup" }, [
       { productId: leeks.id, amount: 2, unit: "pc", minor: false },
     ]);

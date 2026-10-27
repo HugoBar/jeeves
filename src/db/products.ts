@@ -3,7 +3,7 @@ import { and, eq, inArray, isNull } from "drizzle-orm";
 import type { ProductFields } from "@/core/products";
 import type { DefaultUnit } from "@/core/units";
 import { deleteOrArchive, type RemoveOutcome } from "./archive";
-import { activeCategoryIds, keepActiveCategoryIds } from "./food-categories";
+import { activeCategoryIds, activeCategoryIdsByProduct, keepActiveCategoryIds } from "./food-categories";
 import type { Db } from "./index";
 import { isUniqueViolation } from "./postgres-errors";
 import { productFoodCategories, products } from "./schema";
@@ -44,23 +44,6 @@ function toColumns({ name, density, packSize }: ProductFields) {
     packSizeName: packSize?.name ?? null,
     packSizeAmount: packSize?.amount ?? null,
   };
-}
-
-// Each Product's links to non-Archived Food Categories, by Product id.
-async function activeCategoryIdsByProduct(db: Db, productIds: string[]): Promise<Map<string, string[]>> {
-  const byProduct = new Map<string, string[]>(productIds.map((id) => [id, []]));
-  if (productIds.length === 0) return byProduct;
-  const links = await db
-    .select()
-    .from(productFoodCategories)
-    .where(
-      and(
-        inArray(productFoodCategories.productId, productIds),
-        inArray(productFoodCategories.categoryId, activeCategoryIds(db)),
-      ),
-    );
-  for (const link of links) byProduct.get(link.productId)!.push(link.categoryId);
-  return byProduct;
 }
 
 // The Stock list: every Product that is not Archived.

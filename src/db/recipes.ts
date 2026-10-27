@@ -1,10 +1,11 @@
 import "server-only";
 import { asc, eq, inArray, isNull, or, sql } from "drizzle-orm";
 import type { Ingredient, PickableProduct } from "@/core/ingredients";
-import type { RecipeFields } from "@/core/recipes";
+import { deriveFoodCategoryIds, type RecipeFields } from "@/core/recipes";
 import { deleteOrArchive, type RemoveOutcome } from "./archive";
+import { activeCategoryIdsByProduct, type FoodCategory } from "./food-categories";
 import type { Db } from "./index";
-import { ingredients, products, recipes } from "./schema";
+import { foodCategories, ingredients, products, recipes } from "./schema";
 
 export interface Recipe extends RecipeFields {
   id: string;
@@ -75,6 +76,22 @@ export async function listRecipeIngredients(db: Db, recipeId: string): Promise<R
     .innerJoin(products, eq(products.id, ingredients.productId))
     .where(eq(ingredients.recipeId, recipeId))
     .orderBy(asc(ingredients.position));
+}
+
+// A Recipe's derived Food Categories, computed from its Ingredients on every
+// read. Archived categories are left out, even where a Product still links to
+// them.
+export async function listRecipeFoodCategories(db: Db, recipeId: string): Promise<FoodCategory[]> {
+  const rows = await db
+    .select({ productId: ingredients.productId, minor: ingredients.minor })
+    .from(ingredients)
+    .where(eq(ingredients.recipeId, recipeId));
+  const categoryIdsByProduct = await activeCategoryIdsByProduct(db, [...new Set(rows.map((row) => row.productId))]);
+  const ids = deriveFoodCategoryIds(
+    rows.map((row) => ({ minor: row.minor, categoryIds: categoryIdsByProduct.get(row.productId)! })),
+  );
+  if (ids.length === 0) return [];
+  return db.select().from(foodCategories).where(inArray(foodCategories.id, ids));
 }
 
 export interface PickableProductRow extends PickableProduct {
