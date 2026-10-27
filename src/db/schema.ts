@@ -211,3 +211,27 @@ export const mealTemplates = pgTable(
   },
   (table) => [index("meal_templates_meal_type_id").on(table.mealTypeId)],
 );
+
+// A Meal Template's slots, each only a Slot Category, never food. They go with
+// the template when it is deleted; a category one uses cannot be deleted, so
+// removing it Archives it and the slot keeps it. `position` keeps the order
+// entered (data-model T5). Meal Series will own slots too (data-model Q5),
+// making `template_id` nullable with a CHECK for exactly one owner.
+export const layoutSlots = pgTable(
+  "layout_slots",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    templateId: uuid("template_id")
+      .notNull()
+      .references(() => mealTemplates.id, { onDelete: "cascade" }),
+    slotCategoryId: uuid("slot_category_id")
+      .notNull()
+      .references(() => foodCategories.id, { onDelete: "restrict" }),
+    position: integer("position").notNull(),
+  },
+  (table) => [
+    uniqueIndex("layout_slots_template_id_position").on(table.templateId, table.position),
+    index("layout_slots_slot_category_id").on(table.slotCategoryId),
+  ],
+);
