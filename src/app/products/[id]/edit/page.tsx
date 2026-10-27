@@ -1,11 +1,11 @@
 import { notFound } from "next/navigation";
 import { toProductFieldsInput } from "@/core/products";
+import { isUuid } from "@/core/uuid";
 import { getDb } from "@/db";
 import { getProduct } from "@/db/products";
 import { t } from "@/strings";
-import { isUuid } from "../../../uuid";
+import { loadCategoryOptions } from "../../../categories/category-options";
 import { editProductAction } from "../../actions";
-import { loadCategoryOptions } from "../../category-options";
 import { ProductForm } from "../../product-form";
 
 export default async function EditProductPage({ params }: { params: Promise<{ id: string }> }) {

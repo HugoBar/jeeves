@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { deriveFoodCategoryIds, parseRecipeFields, toRecipeFieldsInput } from "./index";
+import {
+  applyCategoryOverrides,
+  deriveFoodCategoryIds,
+  parseCategoryOverrides,
+  parseRecipeFields,
+  toRecipeFieldsInput,
+} from "./index";
 
 const filled = {
   name: " Lasagne ",
@@ -125,5 +131,56 @@ describe("deriveFoodCategoryIds", () => {
         { minor: false, categoryIds: ["dairy"] },
       ]),
     ).toEqual(["dairy"]);
+  });
+});
+
+describe("applyCategoryOverrides", () => {
+  it("adds the \"add\" overrides to the derived set and takes out the \"remove\" ones", () => {
+    const ids = applyCategoryOverrides(
+      ["pasta", "red-meat", "dairy"],
+      [
+        { categoryId: "main", mode: "add" },
+        { categoryId: "dairy", mode: "remove" },
+      ],
+    );
+
+    expect(ids.sort()).toEqual(["main", "pasta", "red-meat"]);
+  });
+
+  it("is the derived set when there are no overrides", () => {
+    expect(applyCategoryOverrides(["pasta", "main"], []).sort()).toEqual(["main", "pasta"]);
+  });
+
+  // The overrides are kept as set, so they still apply once the Ingredients change.
+  it("ignores an \"add\" the Ingredients already give and a \"remove\" they don't", () => {
+    const ids = applyCategoryOverrides(
+      ["pasta"],
+      [
+        { categoryId: "pasta", mode: "add" },
+        { categoryId: "dairy", mode: "remove" },
+      ],
+    );
+
+    expect(ids).toEqual(["pasta"]);
+  });
+});
+
+describe("parseCategoryOverrides", () => {
+  it("reads the picked overrides, skipping categories left to follow the Ingredients", () => {
+    expect(
+      parseCategoryOverrides([
+        { categoryId: "main", mode: "add" },
+        { categoryId: "pasta", mode: "" },
+        { categoryId: "dairy", mode: "remove" },
+      ]),
+    ).toEqual([
+      { categoryId: "main", mode: "add" },
+      { categoryId: "dairy", mode: "remove" },
+    ]);
+  });
+
+  // The form only offers "add" and "remove", so anything else is a crafted request.
+  it("throws on any other mode", () => {
+    expect(() => parseCategoryOverrides([{ categoryId: "main", mode: "always" }])).toThrow(RangeError);
   });
 });

@@ -1,9 +1,9 @@
 import "server-only";
-import { and, eq, inArray, isNull } from "drizzle-orm";
+import { eq, isNull } from "drizzle-orm";
 import type { ProductFields } from "@/core/products";
 import type { DefaultUnit } from "@/core/units";
 import { deleteOrArchive, type RemoveOutcome } from "./archive";
-import { activeCategoryIds, activeCategoryIdsByProduct, keepActiveCategoryIds } from "./food-categories";
+import { activeCategoryIdsByProduct, replaceActiveCategoryLinks, type CategoryLinkTable } from "./food-categories";
 import type { Db } from "./index";
 import { isUniqueViolation } from "./postgres-errors";
 import { productFoodCategories, products } from "./schema";
@@ -94,14 +94,6 @@ export async function updateProduct(
       await tx.update(products).set(toColumns(changes)).where(eq(products.id, id));
       // Archived categories cannot be picked, so their links are not among the
       // changes and are kept.
-      await tx
-        .delete(productFoodCategories)
-        .where(
-          and(
-            eq(productFoodCategories.productId, id),
-            inArray(productFoodCategories.categoryId, activeCategoryIds(tx)),
-          ),
-        );
       await linkCategories(tx, id, changes.categoryIds);
     });
     return { ok: true };
@@ -111,14 +103,21 @@ export async function updateProduct(
   }
 }
 
+const CATEGORY_LINKS: CategoryLinkTable<typeof productFoodCategories> = {
+  table: productFoodCategories,
+  ownerId: productFoodCategories.productId,
+  categoryId: productFoodCategories.categoryId,
+};
+
 // Links the Product to the picked categories that are not Archived, and
 // returns their ids. One Archived after the form was loaded is left out.
-async function linkCategories(db: Db, productId: string, categoryIds: string[]): Promise<string[]> {
-  const active = await keepActiveCategoryIds(db, categoryIds);
-  if (active.length > 0) {
-    await db.insert(productFoodCategories).values(active.map((categoryId) => ({ productId, categoryId })));
-  }
-  return active;
+function linkCategories(db: Db, productId: string, categoryIds: string[]): Promise<string[]> {
+  return replaceActiveCategoryLinks(
+    db,
+    CATEGORY_LINKS,
+    productId,
+    categoryIds.map((categoryId) => ({ productId, categoryId })),
+  );
 }
 
 // A Stock Movement refers to its Product, so one ever Restocked is only

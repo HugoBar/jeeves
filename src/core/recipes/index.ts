@@ -1,7 +1,8 @@
 import { parseWholeAboveZero } from "@/core/amounts";
+import type { Ingredient } from "@/core/ingredients";
 
-// What the user can set on a Recipe. Ingredients and Food Categories are
-// edited separately.
+// What the user can set on a Recipe itself. Its Ingredients and Food Category
+// overrides are saved with it, as RecipeContent.
 export interface RecipeFields {
   name: string;
   // How many Portions the Recipe is written for.
@@ -85,4 +86,55 @@ export function deriveFoodCategoryIds(
     if (!ingredient.minor) for (const id of ingredient.categoryIds) ids.add(id);
   }
   return [...ids];
+}
+
+export const CATEGORY_OVERRIDE_MODES = ["add", "remove"] as const;
+
+export type CategoryOverrideMode = (typeof CATEGORY_OVERRIDE_MODES)[number];
+
+// A per-Recipe adjustment to its derived Food Categories, stored apart from
+// the Ingredients so it survives Ingredient edits.
+export interface CategoryOverride {
+  categoryId: string;
+  mode: CategoryOverrideMode;
+}
+
+// A Recipe's final Food Categories: the derived set, plus "add" overrides,
+// minus "remove" overrides. Computed on read, never stored.
+export function applyCategoryOverrides(
+  derivedIds: readonly string[],
+  overrides: readonly CategoryOverride[],
+): string[] {
+  const ids = new Set(derivedIds);
+  for (const { categoryId, mode } of overrides) {
+    if (mode === "add") ids.add(categoryId);
+    else ids.delete(categoryId);
+  }
+  return [...ids];
+}
+
+// Raw values from one category of the overrides picker; an empty mode leaves
+// the category to follow the Ingredients.
+export interface CategoryOverrideInput {
+  categoryId: string;
+  mode: string;
+}
+
+export function parseCategoryOverrides(inputs: readonly CategoryOverrideInput[]): CategoryOverride[] {
+  const overrides: CategoryOverride[] = [];
+  for (const { categoryId, mode } of inputs) {
+    if (mode === "") continue;
+    // The form only offers these modes, so anything else is a crafted request.
+    const parsed = CATEGORY_OVERRIDE_MODES.find((known) => known === mode);
+    if (!parsed) throw new RangeError(`Not a Food Category override mode: ${mode}`);
+    overrides.push({ categoryId, mode: parsed });
+  }
+  return overrides;
+}
+
+// Everything saving a Recipe stores, already checked: its fields, its
+// Ingredients in order, and its Food Category overrides.
+export interface RecipeContent extends RecipeFields {
+  ingredients: Ingredient[];
+  categoryOverrides: CategoryOverride[];
 }

@@ -3,6 +3,7 @@
 import { sql } from "drizzle-orm";
 import type { CategorySeedKey } from "@/core/food-categories";
 import { AMOUNT_COLUMN, DENSITY_COLUMN } from "@/core/amounts";
+import { CATEGORY_OVERRIDE_MODES } from "@/core/recipes";
 import { STOCK_MOVEMENT_TYPES } from "@/core/stock";
 import { DEFAULT_UNITS, RECIPE_UNITS } from "@/core/units";
 import {
@@ -107,7 +108,7 @@ export const stockMovements = pgTable(
 );
 
 // Portions are whole numbers (data-model T4), and so is prep time, in
-// minutes. Food Category overrides are added by their own ticket.
+// minutes.
 export const recipes = pgTable(
   "recipes",
   {
@@ -153,4 +154,23 @@ export const ingredients = pgTable(
     uniqueIndex("ingredients_recipe_id_position").on(table.recipeId, table.position),
     index("ingredients_product_id").on(table.productId),
   ],
+);
+
+export const categoryOverrideMode = pgEnum("category_override_mode", CATEGORY_OVERRIDE_MODES);
+
+// A Recipe's Food Category overrides go with it when it is hard deleted; a
+// category one uses cannot be deleted, so removing it Archives it and the
+// override is kept, though ignored.
+export const recipeCategoryOverrides = pgTable(
+  "recipe_category_overrides",
+  {
+    recipeId: uuid("recipe_id")
+      .notNull()
+      .references(() => recipes.id, { onDelete: "cascade" }),
+    categoryId: uuid("category_id")
+      .notNull()
+      .references(() => foodCategories.id, { onDelete: "restrict" }),
+    mode: categoryOverrideMode("mode").notNull(),
+  },
+  (table) => [primaryKey({ columns: [table.recipeId, table.categoryId] })],
 );

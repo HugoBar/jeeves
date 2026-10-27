@@ -1,13 +1,13 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import Markdown from "react-markdown";
+import { isUuid } from "@/core/uuid";
 import { getDb } from "@/db";
-import { getRecipe, listRecipeFoodCategories, listRecipeIngredients } from "@/db/recipes";
+import { getRecipe, getRecipeFoodCategories, listRecipeIngredients } from "@/db/recipes";
 import { formatQuantity, t } from "@/strings";
 import { RemoveButton } from "../../remove-button";
 import { removeRecipeAction } from "../actions";
 import { RecipeFoodCategories } from "../recipe-food-categories";
-import { isUuid } from "../../uuid";
 
 // A Recipe: its Portions, prep time, source, Food Categories, Ingredients and
 // steps.
@@ -18,7 +18,7 @@ export default async function RecipePage({ params }: { params: Promise<{ id: str
   if (!recipe) notFound();
   const [ingredients, foodCategories] = await Promise.all([
     listRecipeIngredients(getDb(), id),
-    listRecipeFoodCategories(getDb(), id),
+    getRecipeFoodCategories(getDb(), id),
   ]);
 
   return (
@@ -41,7 +41,11 @@ export default async function RecipePage({ params }: { params: Promise<{ id: str
           </a>
         </p>
       )}
-      <RecipeFoodCategories categories={foodCategories} />
+      <RecipeFoodCategories
+        categories={foodCategories.final}
+        heading={t("recipes.foodCategories")}
+        source={t("recipes.foodCategoriesSource")}
+      />
       <h2>{t("recipes.ingredients")}</h2>
       {ingredients.length === 0 ? (
         <p>{t("recipes.ingredientsEmpty")}</p>
