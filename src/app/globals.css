@@ -162,7 +162,8 @@ body {
   gap: calc(var(--space) / 2);
 }
 
-.ingredient-rows {
+.ingredient-rows,
+.slot-rows {
   display: flex;
   flex-direction: column;
   align-items: flex-start;
@@ -171,11 +172,22 @@ body {
   padding: calc(var(--space) / 2);
 }
 
-.ingredient-row {
+.ingredient-row,
+.slot-row {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: calc(var(--space) / 2);
+}
+
+/* A template's slots sit on their own line within its row or form. */
+.slot-rows,
+.slot-list {
+  flex-basis: 100%;
+}
+
+.slot-list {
+  margin: 0;
 }
 
 .ingredient-row input[inputmode="decimal"] {

@@ -78,6 +78,13 @@
       "when": 1793122574389,
       "tag": "0010_meal_templates",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1793125338314,
+      "tag": "0011_layout_slots",
+      "breakpoints": true
     }
   ]
 }

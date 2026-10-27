@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseMealTemplateFields, sortMealTemplates } from "./index";
+import { moveSlot, parseTemplateSlots, parseMealTemplateFields, sortMealTemplates } from "./index";
 
 describe("parseMealTemplateFields", () => {
   it("reads a filled-in form, trimming text", () => {
@@ -61,5 +61,70 @@ describe("sortMealTemplates", () => {
       "Weekday Dinner",
       "Weekend Dinner",
     ]);
+  });
+});
+
+describe("parseTemplateSlots", () => {
+  const pickable = new Set(["main-id", "side-id", "archived-id"]);
+
+  it("keeps each slot's Slot Category in the order given", () => {
+    expect(parseTemplateSlots(["side-id", "main-id", "side-id"], pickable)).toEqual({
+      ok: true,
+      slotCategoryIds: ["side-id", "main-id", "side-id"],
+    });
+  });
+
+  it("takes no slots at all", () => {
+    expect(parseTemplateSlots([], pickable)).toEqual({ ok: true, slotCategoryIds: [] });
+  });
+});
+
+describe("parseTemplateSlots rejects", () => {
+  const pickable = new Set(["main-id", "side-id"]);
+
+  // `row` counts from 1, as the form shows the slots.
+  it("a slot with no Slot Category picked", () => {
+    expect(parseTemplateSlots(["main-id", ""], pickable)).toEqual({
+      ok: false,
+      errors: [{ row: 2, code: "noSlotCategory" }],
+    });
+  });
+
+  // Removed, or Archived and not already on this template: only a stale form
+  // or a crafted request sends one.
+  it("a Slot Category that cannot be picked", () => {
+    expect(parseTemplateSlots(["gone-id", "side-id"], pickable)).toEqual({
+      ok: false,
+      errors: [{ row: 1, code: "unavailableSlotCategory" }],
+    });
+  });
+
+  it("every invalid slot at once", () => {
+    expect(parseTemplateSlots(["", "main-id", "gone-id"], pickable)).toEqual({
+      ok: false,
+      errors: [
+        { row: 1, code: "noSlotCategory" },
+        { row: 3, code: "unavailableSlotCategory" },
+      ],
+    });
+  });
+});
+
+describe("moveSlot", () => {
+  const slots = ["Starter", "Main Dish", "Dessert"];
+
+  it("moves a slot up one place", () => {
+    expect(moveSlot(slots, 1, -1)).toEqual(["Main Dish", "Starter", "Dessert"]);
+  });
+
+  it("moves a slot down one place", () => {
+    expect(moveSlot(slots, 1, 1)).toEqual(["Starter", "Dessert", "Main Dish"]);
+  });
+
+  it.each([
+    [0, -1],
+    [2, 1],
+  ] as const)("leaves the order alone when slot %i cannot move by %i", (index, offset) => {
+    expect(moveSlot(slots, index, offset)).toEqual(slots);
   });
 });
