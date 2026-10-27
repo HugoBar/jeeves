@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseRecipeFields, toRecipeFieldsInput } from "./index";
+import { deriveFoodCategoryIds, parseRecipeFields, toRecipeFieldsInput } from "./index";
 
 const filled = {
   name: " Lasagne ",
@@ -99,5 +99,31 @@ describe("toRecipeFieldsInput", () => {
     expect(
       toRecipeFieldsInput({ name: "Toast", portions: 1, steps: "", prepTimeMinutes: 5, sourceUrl: null }),
     ).toEqual({ name: "Toast", portions: "1", steps: "", prepTimeMinutes: "5", sourceUrl: "" });
+  });
+});
+
+describe("deriveFoodCategoryIds", () => {
+  it("is the union of the non-Minor Ingredients' Food Categories, each once", () => {
+    const ids = deriveFoodCategoryIds([
+      { minor: false, categoryIds: ["pasta", "main"] },
+      { minor: false, categoryIds: ["red-meat", "main"] },
+      { minor: true, categoryIds: ["vegetables"] },
+    ]);
+
+    expect(ids.sort()).toEqual(["main", "pasta", "red-meat"]);
+  });
+
+  it("is empty for a Recipe with no Ingredients, or only Minor ones", () => {
+    expect(deriveFoodCategoryIds([])).toEqual([]);
+    expect(deriveFoodCategoryIds([{ minor: true, categoryIds: ["vegetables"] }])).toEqual([]);
+  });
+
+  it("keeps a category a non-Minor Ingredient gives, even if a Minor one carries it too", () => {
+    expect(
+      deriveFoodCategoryIds([
+        { minor: true, categoryIds: ["dairy"] },
+        { minor: false, categoryIds: ["dairy"] },
+      ]),
+    ).toEqual(["dairy"]);
   });
 });

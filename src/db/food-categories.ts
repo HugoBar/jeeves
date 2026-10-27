@@ -3,7 +3,7 @@ import { and, eq, inArray, isNull } from "drizzle-orm";
 import type { CategoryKind } from "@/core/food-categories";
 import { deleteOrArchive, type RemoveOutcome } from "./archive";
 import type { Db } from "./index";
-import { foodCategories } from "./schema";
+import { foodCategories, productFoodCategories } from "./schema";
 
 export type FoodCategory = typeof foodCategories.$inferSelect;
 
@@ -16,6 +16,23 @@ export function listActiveCategories(db: Db): Promise<FoodCategory[]> {
 // tables' queries (`inArray(column, activeCategoryIds(db))`).
 export function activeCategoryIds(db: Db) {
   return db.select({ id: foodCategories.id }).from(foodCategories).where(isNull(foodCategories.archivedAt));
+}
+
+// Each Product's links to non-Archived Food Categories, by Product id.
+export async function activeCategoryIdsByProduct(db: Db, productIds: string[]): Promise<Map<string, string[]>> {
+  const byProduct = new Map<string, string[]>(productIds.map((id) => [id, []]));
+  if (productIds.length === 0) return byProduct;
+  const links = await db
+    .select()
+    .from(productFoodCategories)
+    .where(
+      and(
+        inArray(productFoodCategories.productId, productIds),
+        inArray(productFoodCategories.categoryId, activeCategoryIds(db)),
+      ),
+    );
+  for (const link of links) byProduct.get(link.productId)!.push(link.categoryId);
+  return byProduct;
 }
 
 // Of the given ids, those of categories that exist and are not Archived.

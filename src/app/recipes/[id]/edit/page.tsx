@@ -2,10 +2,11 @@ import { notFound } from "next/navigation";
 import { toIngredientInput } from "@/core/ingredients";
 import { toRecipeFieldsInput } from "@/core/recipes";
 import { getDb } from "@/db";
-import { getRecipe, listPickableProducts, listRecipeIngredients } from "@/db/recipes";
+import { getRecipe, listPickableProducts, listRecipeFoodCategories, listRecipeIngredients } from "@/db/recipes";
 import { t } from "@/strings";
 import { isUuid } from "../../../uuid";
 import { editRecipeAction } from "../../actions";
+import { RecipeFoodCategories } from "../../recipe-food-categories";
 import { RecipeForm } from "../../recipe-form";
 
 export default async function EditRecipePage({ params }: { params: Promise<{ id: string }> }) {
@@ -13,9 +14,10 @@ export default async function EditRecipePage({ params }: { params: Promise<{ id:
   if (!isUuid(id)) notFound();
   const recipe = await getRecipe(getDb(), id);
   if (!recipe) notFound();
-  const [ingredients, products] = await Promise.all([
+  const [ingredients, products, foodCategories] = await Promise.all([
     listRecipeIngredients(getDb(), id),
     listPickableProducts(getDb(), id),
+    listRecipeFoodCategories(getDb(), id),
   ]);
 
   return (
@@ -28,6 +30,7 @@ export default async function EditRecipePage({ params }: { params: Promise<{ id:
         submitLabel={t("recipes.save")}
         cancelHref={`/recipes/${recipe.id}`}
       />
+      <RecipeFoodCategories categories={foodCategories} asLastSaved />
     </section>
   );
 }

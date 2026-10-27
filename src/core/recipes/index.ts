@@ -73,3 +73,16 @@ function isWebAddress(text: string): boolean {
     return false;
   }
 }
+
+// A Recipe's Food Categories, computed on read and never stored: the union of
+// its non-Minor Ingredients' Products' Food Categories, each once. Minor
+// Ingredients contribute nothing.
+export function deriveFoodCategoryIds(
+  ingredients: readonly { minor: boolean; categoryIds: readonly string[] }[],
+): string[] {
+  const ids = new Set<string>();
+  for (const ingredient of ingredients) {
+    if (!ingredient.minor) for (const id of ingredient.categoryIds) ids.add(id);
+  }
+  return [...ids];
+}
