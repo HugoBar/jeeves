@@ -18,7 +18,7 @@ export default async function CategoriesPage() {
       {groupCategoriesByKind(categories).map((group) => (
         <section key={group.kind}>
           <h2>{group.heading}</h2>
-          <ul className="category-list">
+          <ul className="item-list">
             {group.categories.map((category) => (
               <li key={category.id}>
                 <CategoryRow id={category.id} label={foodCategoryLabel(category)} kind={category.kind} />
