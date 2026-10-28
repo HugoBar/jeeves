@@ -133,22 +133,63 @@ export interface RecipeFoodCategories {
   final: FoodCategory[];
 }
 
+// Each Recipe's Food Category ids, by Recipe id, computed from its
+// Ingredients and overrides on every read: derived from the Ingredients alone,
+// and final after the overrides. Archived categories are left out of both,
+// even where a Product or an override still points at them.
+async function foodCategoryIdsByRecipe(
+  db: Db,
+  recipeIds: string[],
+): Promise<Map<string, { derivedIds: string[]; finalIds: string[] }>> {
+  if (recipeIds.length === 0) return new Map();
+  const [rows, overrides] = await Promise.all([
+    db
+      .select({ recipeId: ingredients.recipeId, productId: ingredients.productId, minor: ingredients.minor })
+      .from(ingredients)
+      .where(inArray(ingredients.recipeId, recipeIds)),
+    db
+      .select({
+        recipeId: recipeCategoryOverrides.recipeId,
+        categoryId: recipeCategoryOverrides.categoryId,
+        mode: recipeCategoryOverrides.mode,
+      })
+      .from(recipeCategoryOverrides)
+      .where(
+        and(
+          inArray(recipeCategoryOverrides.recipeId, recipeIds),
+          inArray(recipeCategoryOverrides.categoryId, activeCategoryIds(db)),
+        ),
+      ),
+  ]);
+  const categoryIdsByProduct = await activeCategoryIdsByProduct(db, [...new Set(rows.map((row) => row.productId))]);
+  return new Map(
+    recipeIds.map((recipeId) => {
+      const derivedIds = deriveFoodCategoryIds(
+        rows
+          .filter((row) => row.recipeId === recipeId)
+          .map((row) => ({ minor: row.minor, categoryIds: categoryIdsByProduct.get(row.productId)! })),
+      );
+      const finalIds = applyCategoryOverrides(
+        derivedIds,
+        overrides.filter((override) => override.recipeId === recipeId),
+      );
+      return [recipeId, { derivedIds, finalIds }];
+    }),
+  );
+}
+
+// Each Recipe's final Food Category ids, after overrides, by Recipe id.
+// Archived categories are left out.
+export async function finalCategoryIdsByRecipe(db: Db, recipeIds: string[]): Promise<Map<string, string[]>> {
+  const byRecipe = await foodCategoryIdsByRecipe(db, recipeIds);
+  return new Map([...byRecipe].map(([recipeId, { finalIds }]) => [recipeId, finalIds]));
+}
+
 // A Recipe's Food Categories, computed from its Ingredients and overrides on
 // every read. Archived categories are left out of both sets, even where a
 // Product or an override still points at them.
 export async function getRecipeFoodCategories(db: Db, recipeId: string): Promise<RecipeFoodCategories> {
-  const [rows, overrides] = await Promise.all([
-    db
-      .select({ productId: ingredients.productId, minor: ingredients.minor })
-      .from(ingredients)
-      .where(eq(ingredients.recipeId, recipeId)),
-    listRecipeCategoryOverrides(db, recipeId),
-  ]);
-  const categoryIdsByProduct = await activeCategoryIdsByProduct(db, [...new Set(rows.map((row) => row.productId))]);
-  const derivedIds = deriveFoodCategoryIds(
-    rows.map((row) => ({ minor: row.minor, categoryIds: categoryIdsByProduct.get(row.productId)! })),
-  );
-  const finalIds = applyCategoryOverrides(derivedIds, overrides);
+  const { derivedIds, finalIds } = (await foodCategoryIdsByRecipe(db, [recipeId])).get(recipeId)!;
   const ids = [...new Set([...derivedIds, ...finalIds])];
   if (ids.length === 0) return { derived: [], final: [] };
   const categories = await db.select().from(foodCategories).where(inArray(foodCategories.id, ids));

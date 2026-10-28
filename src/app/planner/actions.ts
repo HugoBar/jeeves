@@ -4,11 +4,14 @@ import { refresh } from "next/cache";
 import {
   parseMealChanges,
   parseMealSlotCategory,
+  parseMealSlotFill,
   parseNewMeal,
   parseNewMealFromTemplate,
+  pickableForSlot,
   type MealFieldError,
   type MealFromTemplateError,
   type MealSlotCategoryError,
+  type MealSlotFillError,
   type NewMealInput,
 } from "@/core/meals";
 import { getDb } from "@/db";
@@ -19,7 +22,10 @@ import {
   createMeal,
   createMealFromTemplate,
   deleteMeal,
+  fillMealSlot,
   getMeal,
+  getMealSlotContext,
+  listFoodsForSlots,
   setMealSlotCategory,
   setMealUntracked,
   updateMeal,
@@ -32,6 +38,7 @@ export type MealChangesFormValues = Pick<NewMealInput, "hour" | "name">;
 export type MealChangesFormState = { errors: MealFieldError[]; values: MealChangesFormValues };
 export type MealFromTemplateFormState = { errors: MealFromTemplateError[]; templateId: string };
 export type MealSlotCategoryFormState = { error: MealSlotCategoryError | null };
+export type MealSlotFillFormState = { error: MealSlotFillError | null };
 
 // `date` is the planner day the form was opened on.
 export async function createMealAction(
@@ -101,6 +108,38 @@ export async function setMealSlotCategoryAction(
   await setMealSlotCategory(db, slotId, parsed.slotCategoryId);
   refresh();
   return { error: null };
+}
+
+// A slot can only be filled with what its picker offers: a non-Archived
+// Recipe or Product carrying its Slot Category, or Leftovers if its Meal Type
+// allows them.
+export async function fillMealSlotAction(
+  slotId: string,
+  _state: MealSlotFillFormState,
+  formData: FormData,
+): Promise<MealSlotFillFormState> {
+  const db = getDb();
+  const slot = await getMealSlotContext(db, slotId);
+  if (!slot) throw new Error("Meal Slot not found");
+  const { recipes, products } = await listFoodsForSlots(db);
+  const ids = (foods: { id: string }[]) => new Set(foods.map((food) => food.id));
+  const parsed = parseMealSlotFill(
+    { food: String(formData.get("food") ?? ""), amount: String(formData.get("amount") ?? "") },
+    {
+      recipeIds: ids(pickableForSlot(recipes, slot.slotCategoryId)),
+      productIds: ids(pickableForSlot(products, slot.slotCategoryId)),
+      allowsLeftovers: slot.allowsLeftovers,
+    },
+  );
+  if (!parsed.ok) return { error: parsed.error };
+  await fillMealSlot(db, slotId, parsed.fill);
+  refresh();
+  return { error: null };
+}
+
+export async function emptyMealSlotAction(slotId: string): Promise<void> {
+  await fillMealSlot(getDb(), slotId, { content: "empty" });
+  refresh();
 }
 
 export async function setMealUntrackedAction(id: string, untracked: boolean): Promise<void> {

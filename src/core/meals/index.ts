@@ -1,3 +1,4 @@
+import { AMOUNT_COLUMN, parsePositive, parseWholeAboveZero } from "@/core/amounts";
 import { isDate } from "@/core/planner";
 
 // A Meal's stored status (data-model Q3). Only Planned exists until
@@ -6,11 +7,19 @@ export const MEAL_STATUSES = ["planned"] as const;
 
 export type MealStatus = (typeof MEAL_STATUSES)[number];
 
-// What a Meal Slot holds (data-model Q4). Only empty exists until slots can
-// be filled with food.
-export const MEAL_SLOT_CONTENTS = ["empty"] as const;
+// What a Meal Slot holds (data-model Q4).
+export const MEAL_SLOT_CONTENTS = ["empty", "recipe", "product", "leftovers"] as const;
 
 export type MealSlotContent = (typeof MEAL_SLOT_CONTENTS)[number];
+
+// A Meal Slot's content with the values that go with it: a Recipe's Portions
+// (whole numbers, data-model T4) or a Product's quantity in its Default Unit.
+// Leftovers deduct nothing, so they carry nothing.
+export type MealSlotFill =
+  | { content: "empty" }
+  | { content: "recipe"; recipeId: string; portions: number }
+  | { content: "product"; productId: string; quantity: number }
+  | { content: "leftovers" };
 
 // What the user sets on a Meal made from scratch: its day, Meal Type and hour,
 // plus an optional name shown in place of the Meal Type (data-model Q5).
@@ -104,6 +113,77 @@ export function parseMealSlotCategory(categoryId: string, pickable: ReadonlySet<
   if (!slotCategoryId) return { ok: false, error: "noSlotCategory" };
   if (!pickable.has(slotCategoryId)) return { ok: false, error: "unavailableSlotCategory" };
   return { ok: true, slotCategoryId };
+}
+
+// What one slot's picker offers: the non-Archived Recipes and Products
+// carrying its Slot Category, and Leftovers if its Meal Type allows them.
+export interface MealSlotPickable {
+  recipeIds: ReadonlySet<string>;
+  productIds: ReadonlySet<string>;
+  allowsLeftovers: boolean;
+}
+
+// Raw values from a slot's fill form. `food` is the picked option:
+// "recipe:<id>", "product:<id>" or "leftovers". `amount` is the Portions or
+// quantity, ignored for Leftovers.
+export interface MealSlotFillInput {
+  food: string;
+  amount: string;
+}
+
+// The fill form's option value for a Recipe or Product, as parseMealSlotFill
+// reads it.
+export function slotFoodValue(content: "recipe" | "product", id: string): string {
+  return `${content}:${id}`;
+}
+
+export type MealSlotFillError = "noFood" | "unavailableFood" | "invalidPortions" | "invalidQuantity";
+
+export type MealSlotFillResult = { ok: true; fill: MealSlotFill } | { ok: false; error: MealSlotFillError };
+
+export function parseMealSlotFill(input: MealSlotFillInput, pickable: MealSlotPickable): MealSlotFillResult {
+  const food = input.food.trim();
+  const amount = input.amount.trim();
+  if (!food) return { ok: false, error: "noFood" };
+  if (food === "leftovers") {
+    return pickable.allowsLeftovers ? { ok: true, fill: { content: "leftovers" } } : { ok: false, error: "unavailableFood" };
+  }
+
+  const [kind, id = ""] = food.split(/:(.*)/);
+  if (kind === "recipe" && pickable.recipeIds.has(id)) {
+    const portions = parseWholeAboveZero(amount);
+    if (portions === null) return { ok: false, error: "invalidPortions" };
+    return { ok: true, fill: { content: "recipe", recipeId: id, portions } };
+  }
+  if (kind === "product" && pickable.productIds.has(id)) {
+    const quantity = parsePositive(amount, AMOUNT_COLUMN);
+    if (quantity === null) return { ok: false, error: "invalidQuantity" };
+    return { ok: true, fill: { content: "product", productId: id, quantity } };
+  }
+  return { ok: false, error: "unavailableFood" };
+}
+
+// The Recipes or Products a slot's picker offers: those carrying its Slot
+// Category. For a Recipe, `categoryIds` is its final Food Categories, after
+// overrides.
+export function pickableForSlot<T extends { categoryIds: readonly string[] }>(
+  foods: readonly T[],
+  slotCategoryId: string,
+): T[] {
+  return foods.filter((food) => food.categoryIds.includes(slotCategoryId));
+}
+
+// Whether a slot keeps what it holds when its Slot Category changes: a Recipe
+// or Product only if it carries the new one. Leftovers have no Food
+// Categories, so they always stay. `foodCategoryIds` is the Recipe's final or
+// the Product's Food Categories.
+export function slotKeepsFood(
+  content: MealSlotContent,
+  foodCategoryIds: readonly string[],
+  slotCategoryId: string,
+): boolean {
+  if (content === "recipe" || content === "product") return foodCategoryIds.includes(slotCategoryId);
+  return true;
 }
 
 export type MealChangesResult = { ok: true; changes: MealChanges } | { ok: false; errors: "invalidHour"[] };

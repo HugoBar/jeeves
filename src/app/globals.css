@@ -308,6 +308,25 @@ body {
   gap: calc(var(--space) / 2);
 }
 
+/* A Meal Slot's Slot Category, then its food and buttons, wrapping as needed. */
+.slot-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: calc(var(--space) / 2);
+  padding: calc(var(--space) / 4) 0;
+}
+
+.planner-amount {
+  display: flex;
+  align-items: center;
+  gap: calc(var(--space) / 4);
+}
+
+.planner-amount input {
+  width: 6em;
+}
+
 .planner-editing {
   flex-basis: 100%;
   margin: 0;

@@ -4,7 +4,11 @@ import {
   parseMealChanges,
   parseMealSlotCategory,
   parseNewMeal,
+  parseMealSlotFill,
   parseNewMealFromTemplate,
+  pickableForSlot,
+  slotFoodValue,
+  slotKeepsFood,
   sortMeals,
 } from "./index";
 
@@ -111,6 +115,110 @@ describe("parseMealSlotCategory", () => {
   // Archived one only until it is changed.
   it("rejects a Food Category that is Archived or gone", () => {
     expect(parseMealSlotCategory("archived-id", pickable)).toEqual({ ok: false, error: "unavailableSlotCategory" });
+  });
+});
+
+describe("parseMealSlotFill", () => {
+  // What a Lunch slot for Grains offers in these tests: Recipes and Products
+  // carrying Grains, and Leftovers.
+  const pickable = { recipeIds: new Set(["risotto-id"]), productIds: new Set(["bread-id"]), allowsLeftovers: true };
+
+  it("reads a Recipe with its Portions", () => {
+    expect(parseMealSlotFill({ food: " recipe:risotto-id ", amount: " 3 " }, pickable)).toEqual({
+      ok: true,
+      fill: { content: "recipe", recipeId: "risotto-id", portions: 3 },
+    });
+  });
+
+  it("reads a Product with a quantity in its Default Unit, rounded as stored", () => {
+    expect(parseMealSlotFill({ food: "product:bread-id", amount: "120.456" }, pickable)).toEqual({
+      ok: true,
+      fill: { content: "product", productId: "bread-id", quantity: 120.46 },
+    });
+  });
+
+  it("reads Leftovers, ignoring any amount", () => {
+    expect(parseMealSlotFill({ food: "leftovers", amount: "2" }, pickable)).toEqual({
+      ok: true,
+      fill: { content: "leftovers" },
+    });
+  });
+
+  it("reads the option values the form builds", () => {
+    expect(parseMealSlotFill({ food: slotFoodValue("recipe", "risotto-id"), amount: "2" }, pickable)).toMatchObject({
+      ok: true,
+      fill: { recipeId: "risotto-id" },
+    });
+    expect(parseMealSlotFill({ food: slotFoodValue("product", "bread-id"), amount: "2" }, pickable)).toMatchObject({
+      ok: true,
+      fill: { productId: "bread-id" },
+    });
+  });
+
+  it.each([[""], ["  "]])("rejects nothing picked (%j)", (food) => {
+    expect(parseMealSlotFill({ food, amount: "2" }, pickable)).toEqual({ ok: false, error: "noFood" });
+  });
+
+  it.each([["0"], ["-1"], ["1.5"], ["2.0"], [""], ["two"]])(
+    "rejects Portions that are not a whole number above 0 (%j)",
+    (amount) => {
+      expect(parseMealSlotFill({ food: "recipe:risotto-id", amount }, pickable)).toEqual({
+        ok: false,
+        error: "invalidPortions",
+      });
+    },
+  );
+
+  it.each([["0"], ["-5"], [""], ["0.001"], ["lots"]])("rejects a quantity that is not above 0 (%j)", (amount) => {
+    expect(parseMealSlotFill({ food: "product:bread-id", amount }, pickable)).toEqual({
+      ok: false,
+      error: "invalidQuantity",
+    });
+  });
+
+  // Archived, not carrying the Slot Category, or a crafted value.
+  it.each([["recipe:bread-id"], ["product:risotto-id"], ["recipe:archived-id"], ["recipe:"], ["dessert:cake-id"]])(
+    "rejects food the slot does not offer (%j)",
+    (food) => {
+      expect(parseMealSlotFill({ food, amount: "2" }, pickable)).toEqual({ ok: false, error: "unavailableFood" });
+    },
+  );
+
+  it("rejects Leftovers when the Meal Type does not allow them", () => {
+    expect(parseMealSlotFill({ food: "leftovers", amount: "" }, { ...pickable, allowsLeftovers: false })).toEqual({
+      ok: false,
+      error: "unavailableFood",
+    });
+  });
+});
+
+describe("pickableForSlot", () => {
+  it("keeps only the food carrying the Slot Category", () => {
+    const foods = [
+      { id: "risotto", categoryIds: ["grains", "vegetables"] },
+      { id: "apple", categoryIds: ["fruit"] },
+      { id: "water", categoryIds: [] },
+    ];
+
+    expect(pickableForSlot(foods, "grains").map((food) => food.id)).toEqual(["risotto"]);
+  });
+});
+
+describe("slotKeepsFood", () => {
+  it("keeps a Recipe or Product carrying the new Slot Category", () => {
+    expect(slotKeepsFood("recipe", ["grains", "vegetables"], "vegetables")).toBe(true);
+    expect(slotKeepsFood("product", ["fruit"], "fruit")).toBe(true);
+  });
+
+  it("drops a Recipe or Product not carrying it", () => {
+    expect(slotKeepsFood("recipe", ["grains"], "fruit")).toBe(false);
+    expect(slotKeepsFood("product", [], "fruit")).toBe(false);
+  });
+
+  // Leftovers have no Food Categories, so no Slot Category rules them out.
+  it("keeps Leftovers and an empty slot whatever the Slot Category", () => {
+    expect(slotKeepsFood("leftovers", [], "fruit")).toBe(true);
+    expect(slotKeepsFood("empty", [], "fruit")).toBe(true);
   });
 });
 
