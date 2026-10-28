@@ -1,4 +1,5 @@
 import { AMOUNT_COLUMN, parsePositive, parseWholeAboveZero } from "@/core/amounts";
+import type { CategoryKind } from "@/core/food-categories";
 import { isDate } from "@/core/planner";
 
 // A Meal's stored status (data-model Q3). Only Planned exists until
@@ -163,6 +164,48 @@ export function parseMealSlotFill(input: MealSlotFillInput, pickable: MealSlotPi
   return { ok: false, error: "unavailableFood" };
 }
 
+// What adding a slot by hand offers: every non-Archived Recipe and Product,
+// by id, each with its slotCategoryChoices' ids. Leftovers are not offered:
+// they have no Food Categories to give the slot.
+export interface NewMealSlotPickable {
+  recipes: ReadonlyMap<string, readonly string[]>;
+  products: ReadonlyMap<string, readonly string[]>;
+}
+
+// Raw values from the add slot form: the fill form's, plus the Slot Category
+// picked from the food's choices. Blank takes the first, which the chooser
+// pre-selects and which is the only one when no chooser shows.
+export interface NewMealSlotInput extends MealSlotFillInput {
+  slotCategoryId: string;
+}
+
+export interface NewMealSlot {
+  slotCategoryId: string;
+  fill: Extract<MealSlotFill, { content: "recipe" | "product" }>;
+}
+
+export type NewMealSlotError = MealSlotFillError | "uncategorisedFood" | "unavailableSlotCategory";
+
+export type NewMealSlotResult = { ok: true; slot: NewMealSlot } | { ok: false; error: NewMealSlotError };
+
+export function parseNewMealSlot(input: NewMealSlotInput, pickable: NewMealSlotPickable): NewMealSlotResult {
+  const parsed = parseMealSlotFill(input, {
+    recipeIds: new Set(pickable.recipes.keys()),
+    productIds: new Set(pickable.products.keys()),
+    allowsLeftovers: false,
+  });
+  if (!parsed.ok) return parsed;
+  const { fill } = parsed;
+  // Leftovers were refused above; this only narrows the type.
+  if (fill.content !== "recipe" && fill.content !== "product") return { ok: false, error: "unavailableFood" };
+
+  const choices = fill.content === "recipe" ? pickable.recipes.get(fill.recipeId)! : pickable.products.get(fill.productId)!;
+  if (choices.length === 0) return { ok: false, error: "uncategorisedFood" };
+  const slotCategoryId = input.slotCategoryId.trim() || choices[0]!;
+  if (!choices.includes(slotCategoryId)) return { ok: false, error: "unavailableSlotCategory" };
+  return { ok: true, slot: { slotCategoryId, fill } };
+}
+
 // The Recipes or Products a slot's picker offers: those carrying its Slot
 // Category. For a Recipe, `categoryIds` is its final Food Categories, after
 // overrides.
@@ -171,6 +214,21 @@ export function pickableForSlot<T extends { categoryIds: readonly string[] }>(
   slotCategoryId: string,
 ): T[] {
   return foods.filter((food) => food.categoryIds.includes(slotCategoryId));
+}
+
+// The Slot Categories a slot added by hand can take from the Recipe or
+// Product put in it: its Roles, else its Kinds (spec "Planning"). The first is
+// pre-selected; none means it cannot be hand-added. `categories` holds
+// the non-Archived Food Categories in the order the chooser lists them, so an
+// Archived one is never offered. `foodCategoryIds` is the Recipe's final or
+// the Product's Food Categories.
+export function slotCategoryChoices<T extends { id: string; kind: CategoryKind }>(
+  foodCategoryIds: readonly string[],
+  categories: readonly T[],
+): T[] {
+  const carried = categories.filter((category) => foodCategoryIds.includes(category.id));
+  const roles = carried.filter((category) => category.kind === "role");
+  return roles.length > 0 ? roles : carried;
 }
 
 // Whether a slot keeps what it holds when its Slot Category changes: a Recipe
@@ -205,4 +263,12 @@ export function sortMeals<T extends { hour: string; createdAt: Date }>(meals: re
 // `today` is the viewer's date (spec "Platform").
 export function isPlanned(meal: { status: MealStatus; date: string }, today: string): boolean {
   return meal.status === "planned" && meal.date >= today;
+}
+
+// A Meal's slots can be added, removed, filled or changed only while it is
+// Planned. `today` is the viewer's date, sent with each change, so a planner
+// left open past midnight cannot change a Meal whose day has since passed.
+// Without a real date the Meal's day cannot be checked, so nothing changes.
+export function canChangeSlots(meal: { status: MealStatus; date: string }, today: string): boolean {
+  return isDate(today) && isPlanned(meal, today);
 }
