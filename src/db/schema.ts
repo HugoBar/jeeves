@@ -4,7 +4,7 @@ import { sql } from "drizzle-orm";
 import type { CategorySeedKey } from "@/core/food-categories";
 import { AMOUNT_COLUMN, DENSITY_COLUMN } from "@/core/amounts";
 import type { MealTypeSeedKey } from "@/core/meal-types";
-import { MEAL_STATUSES } from "@/core/meals";
+import { MEAL_SLOT_CONTENTS, MEAL_STATUSES } from "@/core/meals";
 import { CATEGORY_OVERRIDE_MODES } from "@/core/recipes";
 import { STOCK_MOVEMENT_TYPES } from "@/core/stock";
 import { DEFAULT_UNITS, RECIPE_UNITS } from "@/core/units";
@@ -265,4 +265,30 @@ export const meals = pgTable(
     untracked: boolean("untracked").notNull().default(false),
   },
   (table) => [index("meals_date").on(table.date), index("meals_meal_type_id").on(table.mealTypeId)],
+);
+
+export const mealSlotContent = pgEnum("meal_slot_content", MEAL_SLOT_CONTENTS);
+
+// A Meal's slots, each with a Slot Category and what it holds (data-model
+// Q4). They go with the Meal when it is deleted; a category one uses cannot be
+// deleted, so removing it Archives it and the slot keeps it. `position` keeps
+// the order (data-model T5). The food columns come with filling slots.
+export const mealSlots = pgTable(
+  "meal_slots",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    mealId: uuid("meal_id")
+      .notNull()
+      .references(() => meals.id, { onDelete: "cascade" }),
+    slotCategoryId: uuid("slot_category_id")
+      .notNull()
+      .references(() => foodCategories.id, { onDelete: "restrict" }),
+    position: integer("position").notNull(),
+    content: mealSlotContent("content").notNull().default("empty"),
+  },
+  (table) => [
+    uniqueIndex("meal_slots_meal_id_position").on(table.mealId, table.position),
+    index("meal_slots_slot_category_id").on(table.slotCategoryId),
+  ],
 );
