@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { foodCategoryLabel, mealTypeLabel, t } from "./index";
+import { editingLabel, foodCategoryLabel, formatDayHeading, formatWeekRange, mealTypeLabel, t } from "./index";
 
 describe("t", () => {
   it("returns the UI string for a key", () => {
@@ -32,5 +32,31 @@ describe("mealTypeLabel", () => {
 
   it("shows the typed name of a renamed seeded Meal Type", () => {
     expect(mealTypeLabel({ seedKey: "snack", name: "Afternoon Bite" })).toBe("Afternoon Bite");
+  });
+});
+
+describe("formatWeekRange", () => {
+  it("names the month once when the week stays in it", () => {
+    expect(formatWeekRange("2026-10-19", "2026-10-25")).toBe("19-25 Oct");
+  });
+
+  it("names both months when the week runs into the next", () => {
+    expect(formatWeekRange("2026-10-26", "2026-11-01")).toBe("26 Oct-1 Nov");
+  });
+});
+
+describe("editingLabel", () => {
+  it("names a day of this week by its weekday", () => {
+    expect(editingLabel("2026-10-22", "this")).toBe("Editing: Thursday");
+  });
+
+  it("says next for a day of next week", () => {
+    expect(editingLabel("2026-10-27", "next")).toBe("Editing: next Tuesday");
+  });
+});
+
+describe("formatDayHeading", () => {
+  it("shows the weekday and day of the month", () => {
+    expect(formatDayHeading("2026-11-01")).toBe("Sun 1");
   });
 });

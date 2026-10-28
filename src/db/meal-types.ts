@@ -31,7 +31,7 @@ export async function updateMealType(
   await db.update(mealTypes).set(changes).where(eq(mealTypes.id, id));
 }
 
-// A Meal Type a Meal Template uses is only Archived; the template keeps it.
+// A Meal Type a Meal or Meal Template uses is only Archived; they keep it.
 export function removeMealType(db: Db, id: string): Promise<RemoveOutcome> {
   return deleteOrArchive(db, mealTypes, id);
 }

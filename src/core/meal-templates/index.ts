@@ -1,3 +1,5 @@
+import { isHour } from "@/core/meals";
+
 // What the user sets on a Meal Template. It is only a shortcut: a Meal created
 // from it copies these and keeps no link to it (data-model Q5).
 export interface MealTemplateFields {
@@ -12,9 +14,6 @@ export interface MealTemplateFields {
 export interface MealTemplateContent extends MealTemplateFields {
   slotCategoryIds: string[];
 }
-
-// "HH:MM" from 00:00 to 23:59, as a time input sends it.
-const HOUR = /^([01]\d|2[0-3]):[0-5]\d$/;
 
 export type MealTemplateFieldError = "blankName" | "invalidHour" | "noMealType" | "unavailableMealType";
 
@@ -35,7 +34,7 @@ export function parseMealTemplateFields(
 
   const errors: MealTemplateFieldError[] = [];
   if (!name) errors.push("blankName");
-  if (!HOUR.test(hour)) errors.push("invalidHour");
+  if (!isHour(hour)) errors.push("invalidHour");
   if (!mealTypeId) errors.push("noMealType");
   else if (!pickable.has(mealTypeId)) errors.push("unavailableMealType");
   if (errors.length) return { ok: false, errors };
