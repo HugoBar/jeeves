@@ -44,3 +44,31 @@ export function formatDateTime(value: Date): string {
 export function formatDelta(delta: number, unit: DefaultUnit): string {
   return `${delta > 0 ? "+" : ""}${formatQuantity(delta, unit)}`;
 }
+
+// Planner days are plain "YYYY-MM-DD" dates with no time zone, so they are
+// read and shown at UTC midnight, where the date never shifts.
+function dayPart(date: string, options: Intl.DateTimeFormatOptions): string {
+  return new Date(`${date}T00:00:00Z`).toLocaleDateString("en", { ...options, timeZone: "UTC" });
+}
+
+// A week's dates for its planner header: "19-25 Oct", or "26 Oct-1 Nov" when
+// it runs into the next month.
+export function formatWeekRange(first: string, last: string): string {
+  const day = (date: string) => dayPart(date, { day: "numeric" });
+  const month = (date: string) => dayPart(date, { month: "short" });
+  return month(first) === month(last)
+    ? `${day(first)}-${day(last)} ${month(last)}`
+    : `${day(first)} ${month(first)}-${day(last)} ${month(last)}`;
+}
+
+// A planner day's heading: "Sun 1".
+export function formatDayHeading(date: string): string {
+  return `${dayPart(date, { weekday: "short" })} ${dayPart(date, { day: "numeric" })}`;
+}
+
+// Which day a Meal form edits, saying "next" for a day of next week (spec
+// "Planning").
+export function editingLabel(date: string, week: "this" | "next"): string {
+  const day = dayPart(date, { weekday: "long" });
+  return t(week === "next" ? "planner.editingNext" : "planner.editing", { day });
+}
