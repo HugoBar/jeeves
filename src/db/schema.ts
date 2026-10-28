@@ -270,9 +270,12 @@ export const meals = pgTable(
 export const mealSlotContent = pgEnum("meal_slot_content", MEAL_SLOT_CONTENTS);
 
 // A Meal's slots, each with a Slot Category and what it holds (data-model
-// Q4). They go with the Meal when it is deleted; a category one uses cannot be
+// Q4): CHECKs allow only the columns of its `content`, so a Recipe slot has a
+// Recipe and whole Portions (T4), a Product slot a Product and a quantity in
+// its Default Unit, and an empty or Leftovers slot neither. They go with the
+// Meal when it is deleted; a category, Recipe or Product one uses cannot be
 // deleted, so removing it Archives it and the slot keeps it. `position` keeps
-// the order (data-model T5). The food columns come with filling slots.
+// the order (data-model T5).
 export const mealSlots = pgTable(
   "meal_slots",
   {
@@ -286,9 +289,25 @@ export const mealSlots = pgTable(
       .references(() => foodCategories.id, { onDelete: "restrict" }),
     position: integer("position").notNull(),
     content: mealSlotContent("content").notNull().default("empty"),
+    recipeId: uuid("recipe_id").references(() => recipes.id, { onDelete: "restrict" }),
+    portions: integer("portions"),
+    productId: uuid("product_id").references(() => products.id, { onDelete: "restrict" }),
+    quantity: amount("quantity"),
   },
   (table) => [
+    check(
+      "meal_slots_recipe_columns",
+      sql`(${table.recipeId} is not null) = (${table.content} = 'recipe') and (${table.portions} is not null) = (${table.content} = 'recipe')`,
+    ),
+    check(
+      "meal_slots_product_columns",
+      sql`(${table.productId} is not null) = (${table.content} = 'product') and (${table.quantity} is not null) = (${table.content} = 'product')`,
+    ),
+    check("meal_slots_portions_above_zero", sql`${table.portions} > 0`),
+    check("meal_slots_quantity_above_zero", sql`${table.quantity} > 0`),
     uniqueIndex("meal_slots_meal_id_position").on(table.mealId, table.position),
     index("meal_slots_slot_category_id").on(table.slotCategoryId),
+    index("meal_slots_recipe_id").on(table.recipeId),
+    index("meal_slots_product_id").on(table.productId),
   ],
 );

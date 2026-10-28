@@ -1,20 +1,42 @@
 import "server-only";
 import { and, asc, eq, gte, inArray, lte, sql } from "drizzle-orm";
-import type { MealChanges, MealSlotContent, MealStatus, NewMealFields, NewMealFromTemplateFields } from "@/core/meals";
-import type { FoodCategory } from "./food-categories";
+import {
+  slotKeepsFood,
+  type MealChanges,
+  type MealSlotContent,
+  type MealSlotFill,
+  type MealStatus,
+  type NewMealFields,
+  type NewMealFromTemplateFields,
+} from "@/core/meals";
+import type { DefaultUnit } from "@/core/units";
+import { activeCategoryIdsByProduct, type FoodCategory } from "./food-categories";
 import type { Db } from "./index";
 import { getMealTemplate } from "./meal-templates";
 import type { MealType } from "./meal-types";
-import { foodCategories, mealSlots, meals, mealTypes } from "./schema";
+import { listActiveProducts } from "./products";
+import { finalCategoryIdsByRecipe, listActiveRecipes } from "./recipes";
+import { foodCategories, mealSlots, meals, mealTypes, products, recipes } from "./schema";
 
-// A Meal Slot with what its card needs of its Slot Category. That category
-// may be Archived: the slot keeps it until it is changed.
-export interface MealSlot {
+// What a Meal Slot holds, with what its card needs of its Recipe or Product.
+// That Recipe or Product may be Archived: the slot keeps it.
+export type MealSlotFood =
+  | { content: "empty" | "leftovers" }
+  | { content: "recipe"; recipeId: string; portions: number; recipe: { name: string; archived: boolean } }
+  | {
+      content: "product";
+      productId: string;
+      quantity: number;
+      product: { name: string; defaultUnit: DefaultUnit; archived: boolean };
+    };
+
+// A Meal Slot with what its card needs of its Slot Category and food. That
+// category may be Archived: the slot keeps it until it is changed.
+export type MealSlot = {
   id: string;
   slotCategoryId: string;
-  content: MealSlotContent;
   slotCategory: Pick<FoodCategory, "seedKey" | "name"> & { archived: boolean };
-}
+} & MealSlotFood;
 
 // A Meal as the planner shows it, with what its card needs of its Meal Type
 // and its slots in order. That Meal Type may be Archived: the Meal keeps it.
@@ -23,7 +45,7 @@ export interface Meal extends NewMealFields {
   createdAt: Date;
   status: MealStatus;
   untracked: boolean;
-  mealType: Pick<MealType, "seedKey" | "name"> & { archived: boolean };
+  mealType: Pick<MealType, "seedKey" | "name" | "allowsLeftovers"> & { archived: boolean };
   slots: MealSlot[];
 }
 
@@ -41,6 +63,7 @@ function selectMeals(db: Db) {
       mealType: {
         seedKey: mealTypes.seedKey,
         name: mealTypes.name,
+        allowsLeftovers: mealTypes.allowsLeftovers,
         archived: sql<boolean>`${mealTypes.archivedAt} is not null`,
       },
     })
@@ -57,19 +80,66 @@ async function slotsByMeal(db: Db, mealIds: string[]): Promise<Map<string, MealS
       mealId: mealSlots.mealId,
       id: mealSlots.id,
       slotCategoryId: mealSlots.slotCategoryId,
-      content: mealSlots.content,
       slotCategory: {
         seedKey: foodCategories.seedKey,
         name: foodCategories.name,
         archived: sql<boolean>`${foodCategories.archivedAt} is not null`,
       },
+      content: mealSlots.content,
+      recipeId: mealSlots.recipeId,
+      portions: mealSlots.portions,
+      recipeName: recipes.name,
+      recipeArchived: sql<boolean>`${recipes.archivedAt} is not null`,
+      productId: mealSlots.productId,
+      quantity: mealSlots.quantity,
+      productName: products.name,
+      productDefaultUnit: products.defaultUnit,
+      productArchived: sql<boolean>`${products.archivedAt} is not null`,
     })
     .from(mealSlots)
     .innerJoin(foodCategories, eq(mealSlots.slotCategoryId, foodCategories.id))
+    .leftJoin(recipes, eq(mealSlots.recipeId, recipes.id))
+    .leftJoin(products, eq(mealSlots.productId, products.id))
     .where(inArray(mealSlots.mealId, mealIds))
     .orderBy(asc(mealSlots.position));
-  for (const { mealId, ...slot } of rows) byMeal.get(mealId)!.push(slot);
+  for (const { mealId, id, slotCategoryId, slotCategory, ...food } of rows) {
+    byMeal.get(mealId)!.push({ id, slotCategoryId, slotCategory, ...toFood(food) });
+  }
   return byMeal;
+}
+
+// The CHECKs on meal_slots guarantee the columns of the slot's content are
+// set, and the references that its Recipe or Product exists.
+function toFood(row: {
+  content: MealSlotContent;
+  recipeId: string | null;
+  portions: number | null;
+  recipeName: string | null;
+  recipeArchived: boolean;
+  productId: string | null;
+  quantity: number | null;
+  productName: string | null;
+  productDefaultUnit: DefaultUnit | null;
+  productArchived: boolean;
+}): MealSlotFood {
+  switch (row.content) {
+    case "recipe":
+      return {
+        content: "recipe",
+        recipeId: row.recipeId!,
+        portions: row.portions!,
+        recipe: { name: row.recipeName!, archived: row.recipeArchived },
+      };
+    case "product":
+      return {
+        content: "product",
+        productId: row.productId!,
+        quantity: row.quantity!,
+        product: { name: row.productName!, defaultUnit: row.productDefaultUnit!, archived: row.productArchived },
+      };
+    default:
+      return { content: row.content };
+  }
 }
 
 // Rows with their slots added. Postgres reads a `time` back as "HH:MM:SS";
@@ -121,9 +191,84 @@ export async function updateMeal(db: Db, id: string, changes: MealChanges): Prom
   await db.update(meals).set(changes).where(eq(meals.id, id));
 }
 
+// Every food column of a slot cleared, as an empty slot has them.
+const NO_FOOD = { recipeId: null, portions: null, productId: null, quantity: null };
+
+// The fill must already be checked by core's parseMealSlotFill. It replaces
+// whatever the slot held; `{ content: "empty" }` empties it.
+export async function fillMealSlot(db: Db, slotId: string, fill: MealSlotFill): Promise<void> {
+  await db
+    .update(mealSlots)
+    .set({ ...NO_FOOD, ...fill })
+    .where(eq(mealSlots.id, slotId));
+}
+
 // The Slot Category must already be checked by core's parseMealSlotCategory.
+// A Recipe or Product that does not carry the new one is taken out, emptying
+// the slot; Leftovers stay.
 export async function setMealSlotCategory(db: Db, slotId: string, slotCategoryId: string): Promise<void> {
-  await db.update(mealSlots).set({ slotCategoryId }).where(eq(mealSlots.id, slotId));
+  await db.transaction(async (tx) => {
+    const [slot] = await tx
+      .select({ content: mealSlots.content, recipeId: mealSlots.recipeId, productId: mealSlots.productId })
+      .from(mealSlots)
+      .where(eq(mealSlots.id, slotId));
+    if (!slot) return;
+    const keeps = slotKeepsFood(slot.content, await foodCategoryIds(tx, slot), slotCategoryId);
+    await tx
+      .update(mealSlots)
+      .set(keeps ? { slotCategoryId } : { slotCategoryId, content: "empty", ...NO_FOOD })
+      .where(eq(mealSlots.id, slotId));
+  });
+}
+
+// The non-Archived Food Categories of a slot's Recipe (final, after
+// overrides) or Product; none for anything else.
+async function foodCategoryIds(db: Db, slot: { recipeId: string | null; productId: string | null }): Promise<string[]> {
+  if (slot.recipeId) return (await finalCategoryIdsByRecipe(db, [slot.recipeId])).get(slot.recipeId)!;
+  if (slot.productId) return (await activeCategoryIdsByProduct(db, [slot.productId])).get(slot.productId)!;
+  return [];
+}
+
+// What checking a slot's fill needs: its Slot Category and whether its Meal's
+// Meal Type allows Leftovers. Undefined if the slot is gone.
+export async function getMealSlotContext(
+  db: Db,
+  slotId: string,
+): Promise<{ slotCategoryId: string; allowsLeftovers: boolean } | undefined> {
+  const [row] = await db
+    .select({ slotCategoryId: mealSlots.slotCategoryId, allowsLeftovers: mealTypes.allowsLeftovers })
+    .from(mealSlots)
+    .innerJoin(meals, eq(mealSlots.mealId, meals.id))
+    .innerJoin(mealTypes, eq(meals.mealTypeId, mealTypes.id))
+    .where(eq(mealSlots.id, slotId));
+  return row;
+}
+
+// A Recipe a slot's picker can offer, with its final Food Categories.
+export interface SlotRecipe {
+  id: string;
+  name: string;
+  portions: number;
+  categoryIds: string[];
+}
+
+// A Product a slot's picker can offer, with its Food Categories.
+export interface SlotProduct {
+  id: string;
+  name: string;
+  defaultUnit: DefaultUnit;
+  categoryIds: string[];
+}
+
+// Every non-Archived Recipe and Product, with the non-Archived Food
+// Categories a slot's picker matches against its Slot Category.
+export async function listFoodsForSlots(db: Db): Promise<{ recipes: SlotRecipe[]; products: SlotProduct[] }> {
+  const [activeRecipes, activeProducts] = await Promise.all([listActiveRecipes(db), listActiveProducts(db)]);
+  const categoryIds = await finalCategoryIdsByRecipe(db, activeRecipes.map((recipe) => recipe.id));
+  return {
+    recipes: activeRecipes.map(({ id, name, portions }) => ({ id, name, portions, categoryIds: categoryIds.get(id)! })),
+    products: activeProducts.map(({ id, name, defaultUnit, categoryIds }) => ({ id, name, defaultUnit, categoryIds })),
+  };
 }
 
 export async function setMealUntracked(db: Db, id: string, untracked: boolean): Promise<void> {
