@@ -1,16 +1,26 @@
 "use client";
 
 import { Fragment, useActionState, useState, useSyncExternalStore } from "react";
-import { sortMeals, type MealFieldError } from "@/core/meals";
+import {
+  isPlanned,
+  sortMeals,
+  type MealFieldError,
+  type MealFromTemplateError,
+  type MealStatus,
+} from "@/core/meals";
 import { localDate, plannerWeeks } from "@/core/planner";
 import { editingLabel, formatDayHeading, formatWeekRange, t } from "@/strings";
 import { RemoveButton } from "../remove-button";
 import {
   createMealAction,
+  createMealFromTemplateAction,
   editMealAction,
   removeMealAction,
+  setMealSlotCategoryAction,
   setMealUntrackedAction,
   type MealChangesFormState,
+  type MealFromTemplateFormState,
+  type MealSlotCategoryFormState,
   type NewMealFormState,
 } from "./actions";
 
@@ -24,13 +34,33 @@ export interface PlannerMeal {
   name: string | null;
   mealTypeLabel: string;
   mealTypeArchived: boolean;
+  status: MealStatus;
   untracked: boolean;
+  slots: PlannerMealSlot[];
 }
 
-// A Meal Type the picker offers, by the label the user sees.
-export interface MealTypeOption {
+// A Meal Slot with what its card shows. Its Slot Category may be Archived:
+// the slot keeps it until it is changed.
+export interface PlannerMealSlot {
+  id: string;
+  slotCategoryId: string;
+  slotCategoryLabel: string;
+  slotCategoryArchived: boolean;
+}
+
+// A Meal Type, Meal Template or Food Category a picker offers, by the label
+// the user sees.
+export interface PickerOption {
   id: string;
   label: string;
+}
+
+// What the planner's pickers offer: Meal Types and Food Categories that are
+// not Archived, and every Meal Template.
+interface Pickers {
+  mealTypes: PickerOption[];
+  templates: PickerOption[];
+  slotCategories: PickerOption[];
 }
 
 type Week = "this" | "next";
@@ -45,12 +75,12 @@ const subscribe = () => () => {};
 // "Today" is the date in the viewer's time zone (spec "Platform"). The server
 // cannot know that zone, so it renders nothing and the browser fills the
 // planner in after hydration.
-export function Planner({ meals, mealTypes }: { meals: PlannerMeal[]; mealTypes: MealTypeOption[] }) {
+export function Planner({ meals, ...pickers }: { meals: PlannerMeal[] } & Pickers) {
   const today = useSyncExternalStore(subscribe, () => localDate(new Date()), () => null);
   if (!today) return null;
 
   const { thisWeek, nextWeek } = plannerWeeks(today);
-  const props = { today, meals, mealTypes };
+  const props = { today, meals, pickers };
   return (
     <>
       <PlannerWeek week="this" days={thisWeek} {...props} />
@@ -64,13 +94,13 @@ function PlannerWeek({
   days,
   today,
   meals,
-  mealTypes,
+  pickers,
 }: {
   week: Week;
   days: string[];
   today: string;
   meals: PlannerMeal[];
-  mealTypes: MealTypeOption[];
+  pickers: Pickers;
 }) {
   const dates = formatWeekRange(days[0]!, days[6]!);
   return (
@@ -83,9 +113,9 @@ function PlannerWeek({
           key={date}
           date={date}
           week={week}
-          isToday={date === today}
+          today={today}
           meals={sortMeals(meals.filter((meal) => meal.date === date))}
-          mealTypes={mealTypes}
+          pickers={pickers}
         />
       ))}
     </section>
@@ -95,17 +125,18 @@ function PlannerWeek({
 function PlannerDay({
   date,
   week,
-  isToday,
+  today,
   meals,
-  mealTypes,
+  pickers,
 }: {
   date: string;
   week: Week;
-  isToday: boolean;
+  today: string;
   meals: PlannerMeal[];
-  mealTypes: MealTypeOption[];
+  pickers: Pickers;
 }) {
-  const [adding, setAdding] = useState(false);
+  const [adding, setAdding] = useState<"scratch" | "template" | null>(null);
+  const isToday = date === today;
   return (
     <section className={isToday ? "planner-day planner-day-today" : "planner-day"} aria-current={isToday ? "date" : undefined}>
       <h3>
@@ -118,17 +149,33 @@ function PlannerDay({
         <ul className="planner-meals">
           {meals.map((meal) => (
             <li key={meal.id}>
-              <MealCard meal={meal} week={week} />
+              <MealCard meal={meal} week={week} today={today} slotCategories={pickers.slotCategories} />
             </li>
           ))}
         </ul>
       )}
-      {adding ? (
-        <AddMealForm date={date} week={week} mealTypes={mealTypes} onDone={() => setAdding(false)} />
-      ) : (
-        <button type="button" onClick={() => setAdding(true)}>
-          {t("planner.addMeal")}
-        </button>
+      {adding === "scratch" && (
+        <AddMealForm date={date} week={week} mealTypes={pickers.mealTypes} onDone={() => setAdding(null)} />
+      )}
+      {adding === "template" && (
+        <AddMealFromTemplateForm
+          date={date}
+          week={week}
+          templates={pickers.templates}
+          onDone={() => setAdding(null)}
+        />
+      )}
+      {adding === null && (
+        <span className="planner-add">
+          <button type="button" onClick={() => setAdding("scratch")}>
+            {t("planner.addMeal")}
+          </button>
+          {pickers.templates.length > 0 && (
+            <button type="button" onClick={() => setAdding("template")}>
+              {t("planner.addFromTemplate")}
+            </button>
+          )}
+        </span>
       )}
     </section>
   );
@@ -142,7 +189,7 @@ function AddMealForm({
 }: {
   date: string;
   week: Week;
-  mealTypes: MealTypeOption[];
+  mealTypes: PickerOption[];
   onDone: () => void;
 }) {
   const [state, action, pending] = useActionState(
@@ -180,10 +227,70 @@ function AddMealForm({
   );
 }
 
+// Copies the picked template's name, Meal Type, hour and empty slots; the
+// Meal can be edited afterwards like any other.
+function AddMealFromTemplateForm({
+  date,
+  week,
+  templates,
+  onDone,
+}: {
+  date: string;
+  week: Week;
+  templates: PickerOption[];
+  onDone: () => void;
+}) {
+  const [state, action, pending] = useActionState(
+    async ({ submits, ...previous }: Submitted<MealFromTemplateFormState>, formData: FormData) => {
+      const next = await createMealFromTemplateAction(date, previous, formData);
+      if (next.errors.length === 0) onDone();
+      return { ...next, submits: submits + 1 };
+    },
+    { errors: [], templateId: "", submits: 0 },
+  );
+  return (
+    <form action={action} className="item-form planner-form">
+      <p className="planner-editing">{editingLabel(date, week)}</p>
+      <select
+        key={state.submits}
+        name="templateId"
+        aria-label={t("planner.template")}
+        defaultValue={state.templateId}
+        autoFocus
+      >
+        <option value="">{t("planner.pickTemplate")}</option>
+        {templates.map((template) => (
+          <option key={template.id} value={template.id}>
+            {template.label}
+          </option>
+        ))}
+      </select>
+      <button type="submit" disabled={pending}>
+        {t("planner.add")}
+      </button>
+      <button type="button" onClick={onDone}>
+        {t("planner.cancel")}
+      </button>
+      <FormErrors state={state} />
+    </form>
+  );
+}
+
 // A Meal on its day, edited in place. Its Meal Type is shown but never changes.
-function MealCard({ meal, week }: { meal: PlannerMeal; week: Week }) {
+function MealCard({
+  meal,
+  week,
+  today,
+  slotCategories,
+}: {
+  meal: PlannerMeal;
+  week: Week;
+  today: string;
+  slotCategories: PickerOption[];
+}) {
   const [editing, setEditing] = useState(false);
   const label = meal.name ?? meal.mealTypeLabel;
+  const planned = isPlanned(meal, today);
 
   if (editing) return <EditMealForm meal={meal} week={week} onDone={() => setEditing(false)} />;
 
@@ -208,7 +315,53 @@ function MealCard({ meal, week }: { meal: PlannerMeal; week: Week }) {
           confirmMessage={t("planner.removeConfirm", { name: label })}
         />
       </span>
+      {meal.slots.length > 0 && (
+        <ol className="slot-list" aria-label={t("planner.slots")}>
+          {meal.slots.map((slot) => (
+            // A new key once a change is saved, so the picker mounts with it.
+            <li key={`${slot.id}:${slot.slotCategoryId}`}>
+              {planned ? (
+                <SlotCategoryPicker slot={slot} slotCategories={slotCategories} />
+              ) : (
+                slot.slotCategoryLabel
+              )}
+            </li>
+          ))}
+        </ol>
+      )}
     </div>
+  );
+}
+
+// A Planned slot's Slot Category, saved as soon as one is picked; a past
+// Meal's slots only show theirs as it was. The picker offers only
+// non-Archived Food Categories, plus the slot's own if it is Archived, which
+// it warns about until it is changed.
+function SlotCategoryPicker({ slot, slotCategories }: { slot: PlannerMealSlot; slotCategories: PickerOption[] }) {
+  const [state, action, pending] = useActionState(
+    (previous: MealSlotCategoryFormState, formData: FormData) =>
+      setMealSlotCategoryAction(slot.id, previous, formData),
+    { error: null },
+  );
+  return (
+    <form action={action}>
+      <select
+        name="slotCategoryId"
+        aria-label={t("planner.slotCategory")}
+        defaultValue={slot.slotCategoryId}
+        disabled={pending}
+        onChange={(event) => event.currentTarget.form?.requestSubmit()}
+      >
+        {slot.slotCategoryArchived && <option value={slot.slotCategoryId}>{slot.slotCategoryLabel}</option>}
+        {slotCategories.map((category) => (
+          <option key={category.id} value={category.id}>
+            {category.label}
+          </option>
+        ))}
+      </select>
+      {slot.slotCategoryArchived && <span className="form-error"> {t("planner.slotArchived")}</span>}
+      {state.error && <p className="form-error">{t(`planner.error.${state.error}`)}</p>}
+    </form>
   );
 }
 
@@ -242,7 +395,7 @@ function EditMealForm({ meal, week, onDone }: { meal: PlannerMeal; week: Week; o
   );
 }
 
-function FormErrors({ state }: { state: { errors: MealFieldError[] } }) {
+function FormErrors({ state }: { state: { errors: (MealFieldError | MealFromTemplateError)[] } }) {
   return state.errors.map((error) => (
     <p key={error} className="form-error">
       {t(`planner.error.${error}`)}

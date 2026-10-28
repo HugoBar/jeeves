@@ -6,6 +6,12 @@ export const MEAL_STATUSES = ["planned"] as const;
 
 export type MealStatus = (typeof MEAL_STATUSES)[number];
 
+// What a Meal Slot holds (data-model Q4). Only empty exists until slots can
+// be filled with food.
+export const MEAL_SLOT_CONTENTS = ["empty"] as const;
+
+export type MealSlotContent = (typeof MEAL_SLOT_CONTENTS)[number];
+
 // What the user sets on a Meal made from scratch: its day, Meal Type and hour,
 // plus an optional name shown in place of the Meal Type (data-model Q5).
 export interface NewMealFields {
@@ -54,6 +60,52 @@ export function parseNewMeal(input: NewMealInput, pickable: ReadonlySet<string>)
   return { ok: true, fields: { date, mealTypeId, ...changes.changes } };
 }
 
+// A Meal made from a Meal Template copies its name, Meal Type, hour and empty
+// slots, and keeps no link to it (data-model Q5). The template's Meal Type may
+// be Archived: the Meal keeps it, as the template does.
+export interface NewMealFromTemplateFields {
+  date: string;
+  templateId: string;
+}
+
+export type MealFromTemplateError = "invalidDate" | "noMealTemplate" | "unavailableMealTemplate";
+
+export type NewMealFromTemplateResult =
+  | { ok: true; fields: NewMealFromTemplateFields }
+  | { ok: false; errors: MealFromTemplateError[] };
+
+// `templates` holds the ids of every Meal Template.
+export function parseNewMealFromTemplate(
+  input: NewMealFromTemplateFields,
+  templates: ReadonlySet<string>,
+): NewMealFromTemplateResult {
+  const date = input.date.trim();
+  const templateId = input.templateId.trim();
+
+  const errors: MealFromTemplateError[] = [];
+  if (!isDate(date)) errors.push("invalidDate");
+  if (!templateId) errors.push("noMealTemplate");
+  else if (!templates.has(templateId)) errors.push("unavailableMealTemplate");
+  if (errors.length) return { ok: false, errors };
+
+  return { ok: true, fields: { date, templateId } };
+}
+
+export type MealSlotCategoryError = "noSlotCategory" | "unavailableSlotCategory";
+
+export type MealSlotCategoryResult =
+  | { ok: true; slotCategoryId: string }
+  | { ok: false; error: MealSlotCategoryError };
+
+// `pickable` holds the Food Categories a slot can be changed to: the
+// non-Archived ones. A slot keeps an Archived one only until it is changed.
+export function parseMealSlotCategory(categoryId: string, pickable: ReadonlySet<string>): MealSlotCategoryResult {
+  const slotCategoryId = categoryId.trim();
+  if (!slotCategoryId) return { ok: false, error: "noSlotCategory" };
+  if (!pickable.has(slotCategoryId)) return { ok: false, error: "unavailableSlotCategory" };
+  return { ok: true, slotCategoryId };
+}
+
 export type MealChangesResult = { ok: true; changes: MealChanges } | { ok: false; errors: "invalidHour"[] };
 
 export function parseMealChanges(input: { hour: string; name: string }): MealChangesResult {
@@ -66,4 +118,11 @@ export function parseMealChanges(input: { hour: string; name: string }): MealCha
 // created first, as Projected Stock orders them (spec "Projected Stock").
 export function sortMeals<T extends { hour: string; createdAt: Date }>(meals: readonly T[]): T[] {
   return [...meals].sort((a, b) => a.hour.localeCompare(b.hour) || a.createdAt.getTime() - b.createdAt.getTime());
+}
+
+// Planned: a Meal not Confirmed or Skipped whose day has not passed. Once it
+// has, the Meal is Unconfirmed, which is never stored (data-model Q3).
+// `today` is the viewer's date (spec "Platform").
+export function isPlanned(meal: { status: MealStatus; date: string }, today: string): boolean {
+  return meal.status === "planned" && meal.date >= today;
 }

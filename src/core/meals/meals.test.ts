@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { parseMealChanges, parseNewMeal, sortMeals } from "./index";
+import {
+  isPlanned,
+  parseMealChanges,
+  parseMealSlotCategory,
+  parseNewMeal,
+  parseNewMealFromTemplate,
+  sortMeals,
+} from "./index";
 
 // The Meal Types a new Meal can have in these tests.
 const pickable = new Set(["lunch-id"]);
@@ -54,6 +61,59 @@ describe("parseNewMeal rejects", () => {
   });
 });
 
+describe("parseNewMealFromTemplate", () => {
+  // The Meal Templates that exist in these tests.
+  const templates = new Set(["office-lunch-id"]);
+
+  it("reads the planner day and the picked template", () => {
+    expect(parseNewMealFromTemplate({ date: "2026-10-27", templateId: " office-lunch-id " }, templates)).toEqual({
+      ok: true,
+      fields: { date: "2026-10-27", templateId: "office-lunch-id" },
+    });
+  });
+
+  it.each([[""], ["  "]])("rejects a missing template (%j)", (templateId) => {
+    expect(parseNewMealFromTemplate({ date: "2026-10-27", templateId }, templates)).toEqual({
+      ok: false,
+      errors: ["noMealTemplate"],
+    });
+  });
+
+  // Deleted since the planner loaded, or a crafted id.
+  it("rejects a template that does not exist", () => {
+    expect(parseNewMealFromTemplate({ date: "2026-10-27", templateId: "deleted-id" }, templates)).toEqual({
+      ok: false,
+      errors: ["unavailableMealTemplate"],
+    });
+  });
+
+  it("rejects a date that is no day", () => {
+    expect(parseNewMealFromTemplate({ date: "2026-02-30", templateId: "office-lunch-id" }, templates)).toEqual({
+      ok: false,
+      errors: ["invalidDate"],
+    });
+  });
+});
+
+describe("parseMealSlotCategory", () => {
+  // The non-Archived Food Categories in these tests.
+  const pickable = new Set(["grains-id"]);
+
+  it("reads a picked Slot Category", () => {
+    expect(parseMealSlotCategory(" grains-id ", pickable)).toEqual({ ok: true, slotCategoryId: "grains-id" });
+  });
+
+  it.each([[""], ["  "]])("rejects a missing Slot Category (%j)", (categoryId) => {
+    expect(parseMealSlotCategory(categoryId, pickable)).toEqual({ ok: false, error: "noSlotCategory" });
+  });
+
+  // Archived since the planner loaded, or a crafted id. A slot keeps an
+  // Archived one only until it is changed.
+  it("rejects a Food Category that is Archived or gone", () => {
+    expect(parseMealSlotCategory("archived-id", pickable)).toEqual({ ok: false, error: "unavailableSlotCategory" });
+  });
+});
+
 describe("parseMealChanges", () => {
   it("reads a new hour and name", () => {
     expect(parseMealChanges({ hour: "13:00", name: " Late Lunch " })).toEqual({
@@ -81,5 +141,18 @@ describe("sortMeals", () => {
     ];
 
     expect(sortMeals(meals).map((meal) => meal.id)).toEqual(["breakfast", "first-lunch", "second-lunch", "dinner"]);
+  });
+});
+
+describe("isPlanned", () => {
+  it("is true for a Planned Meal today or on a later day", () => {
+    expect(isPlanned({ status: "planned", date: "2026-10-28" }, "2026-10-28")).toBe(true);
+    expect(isPlanned({ status: "planned", date: "2026-11-02" }, "2026-10-28")).toBe(true);
+  });
+
+  // Unconfirmed: never stored, only Planned with a day that has passed
+  // (data-model Q3).
+  it("is false once the Meal's day has passed", () => {
+    expect(isPlanned({ status: "planned", date: "2026-10-27" }, "2026-10-28")).toBe(false);
   });
 });
