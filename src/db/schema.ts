@@ -4,12 +4,14 @@ import { sql } from "drizzle-orm";
 import type { CategorySeedKey } from "@/core/food-categories";
 import { AMOUNT_COLUMN, DENSITY_COLUMN } from "@/core/amounts";
 import type { MealTypeSeedKey } from "@/core/meal-types";
+import { MEAL_STATUSES } from "@/core/meals";
 import { CATEGORY_OVERRIDE_MODES } from "@/core/recipes";
 import { STOCK_MOVEMENT_TYPES } from "@/core/stock";
 import { DEFAULT_UNITS, RECIPE_UNITS } from "@/core/units";
 import {
   boolean,
   check,
+  date,
   index,
   integer,
   numeric,
@@ -238,4 +240,29 @@ export const layoutSlots = pgTable(
     uniqueIndex("layout_slots_template_id_position").on(table.templateId, table.position),
     index("layout_slots_slot_category_id").on(table.slotCategoryId),
   ],
+);
+
+export const mealStatus = pgEnum("meal_status", MEAL_STATUSES);
+
+// One Meal Type eaten on one day. Unconfirmed is never stored: it is a Planned
+// Meal whose day has passed (data-model Q3). `date` and `hour` are plain
+// values with no time zone (Q9). Its Meal Type never changes; one a Meal uses
+// cannot be deleted, so removing it Archives it and the Meal keeps it. A day
+// can have several Meals of one Meal Type, so there is no unique
+// (date, meal_type_id). The Meal Series link comes with Meal Series (#16).
+export const meals = pgTable(
+  "meals",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    date: date("date", { mode: "string" }).notNull(),
+    hour: time("hour", { precision: 0 }).notNull(),
+    mealTypeId: uuid("meal_type_id")
+      .notNull()
+      .references(() => mealTypes.id, { onDelete: "restrict" }),
+    name: text("name"),
+    status: mealStatus("status").notNull().default("planned"),
+    untracked: boolean("untracked").notNull().default(false),
+  },
+  (table) => [index("meals_date").on(table.date), index("meals_meal_type_id").on(table.mealTypeId)],
 );
