@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import Link from "next/link";
 import { t } from "@/strings";
+import { SaveFirstHouseholdTimeZone } from "./save-first-household-time-zone";
 import { ServiceWorkerRegistration } from "./service-worker-registration";
 import { theme } from "./theme";
 import "./globals.css";
@@ -33,9 +34,11 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
             <Link href="/categories">{t("nav.categories")}</Link>
             <Link href="/meal-types">{t("nav.mealTypes")}</Link>
             <Link href="/meal-templates">{t("nav.mealTemplates")}</Link>
+            <Link href="/settings">{t("nav.settings")}</Link>
           </nav>
         </header>
         <main className="app-main">{children}</main>
+        <SaveFirstHouseholdTimeZone />
         <ServiceWorkerRegistration />
       </body>
     </html>
