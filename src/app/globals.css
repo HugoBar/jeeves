@@ -301,7 +301,8 @@ body {
   min-width: 8em;
 }
 
-.planner-meal-actions {
+.planner-meal-actions,
+.planner-add {
   display: flex;
   flex-wrap: wrap;
   gap: calc(var(--space) / 2);

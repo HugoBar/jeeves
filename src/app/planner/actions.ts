@@ -1,16 +1,37 @@
 "use server";
 
 import { refresh } from "next/cache";
-import { parseMealChanges, parseNewMeal, type MealFieldError, type NewMealInput } from "@/core/meals";
+import {
+  parseMealChanges,
+  parseMealSlotCategory,
+  parseNewMeal,
+  parseNewMealFromTemplate,
+  type MealFieldError,
+  type MealFromTemplateError,
+  type MealSlotCategoryError,
+  type NewMealInput,
+} from "@/core/meals";
 import { getDb } from "@/db";
+import { listActiveCategories } from "@/db/food-categories";
+import { listMealTemplates } from "@/db/meal-templates";
 import { listActiveMealTypes } from "@/db/meal-types";
-import { createMeal, deleteMeal, getMeal, setMealUntracked, updateMeal } from "@/db/meals";
+import {
+  createMeal,
+  createMealFromTemplate,
+  deleteMeal,
+  getMeal,
+  setMealSlotCategory,
+  setMealUntracked,
+  updateMeal,
+} from "@/db/meals";
 
 // `values` refills the form after a rejected submit, which React resets.
 export type NewMealFormValues = Omit<NewMealInput, "date">;
 export type NewMealFormState = { errors: MealFieldError[]; values: NewMealFormValues };
 export type MealChangesFormValues = Pick<NewMealInput, "hour" | "name">;
 export type MealChangesFormState = { errors: MealFieldError[]; values: MealChangesFormValues };
+export type MealFromTemplateFormState = { errors: MealFromTemplateError[]; templateId: string };
+export type MealSlotCategoryFormState = { error: MealSlotCategoryError | null };
 
 // `date` is the planner day the form was opened on.
 export async function createMealAction(
@@ -33,6 +54,25 @@ export async function createMealAction(
   return { errors: [], values: { mealTypeId: "", hour: "", name: "" } };
 }
 
+// `date` is the planner day the form was opened on. Any Meal Template can be
+// used, even one whose Meal Type is Archived: the Meal keeps it, as the
+// template does.
+export async function createMealFromTemplateAction(
+  date: string,
+  _state: MealFromTemplateFormState,
+  formData: FormData,
+): Promise<MealFromTemplateFormState> {
+  const db = getDb();
+  const templates = new Set((await listMealTemplates(db)).map((template) => template.id));
+  const templateId = String(formData.get("templateId") ?? "");
+  const parsed = parseNewMealFromTemplate({ date, templateId }, templates);
+  if (!parsed.ok) return { errors: parsed.errors, templateId };
+  // Deleted after it was checked.
+  if (!(await createMealFromTemplate(db, parsed.fields))) return { errors: ["unavailableMealTemplate"], templateId };
+  refresh();
+  return { errors: [], templateId: "" };
+}
+
 export async function editMealAction(
   id: string,
   _state: MealChangesFormState,
@@ -46,6 +86,21 @@ export async function editMealAction(
   await updateMeal(db, id, parsed.changes);
   refresh();
   return { errors: [], values };
+}
+
+// A slot can only be changed to a Food Category that is not Archived.
+export async function setMealSlotCategoryAction(
+  slotId: string,
+  _state: MealSlotCategoryFormState,
+  formData: FormData,
+): Promise<MealSlotCategoryFormState> {
+  const db = getDb();
+  const pickable = new Set((await listActiveCategories(db)).map((category) => category.id));
+  const parsed = parseMealSlotCategory(String(formData.get("slotCategoryId") ?? ""), pickable);
+  if (!parsed.ok) return { error: parsed.error };
+  await setMealSlotCategory(db, slotId, parsed.slotCategoryId);
+  refresh();
+  return { error: null };
 }
 
 export async function setMealUntrackedAction(id: string, untracked: boolean): Promise<void> {
