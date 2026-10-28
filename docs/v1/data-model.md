@@ -16,7 +16,7 @@ Started 2026-10-20 with `/grill-with-docs`. Resume by re-running it and pointing
 - **Q10**: no "Breakfast" Role (it is a Meal Type); removed from #4.
 - **Q11 Shopping List**: Products only, no free-text items. (Ticking vs Restock: see round 2.)
 
-- **Q9b Time zone**: resolved in [#15](https://github.com/HugoBar/jeeves/issues/15). One Household Time Zone (HTZ), stored in `settings`; default from the first browser, editable.
+- **Q9b Time zone**: resolved in [#15](https://github.com/HugoBar/jeeves/issues/15). One Household Time Zone (HTZ), stored in `settings`; default from the first browser, editable. Later parked in [#61](https://github.com/HugoBar/jeeves/issues/61): "today" is the date in the viewer's browser time zone, and V1 has no `settings` table.
 - **Q11b Ticking**: ticking only marks an item as in the cart (untickable, no Stock change); a "Restock ticked items" action asks for quantities (pre-filled with the pack-rounded amount), performs one Restock each and removes those items. Spec, glossary and #14 updated.
 - **Q11c Regenerating**: keeps manual items and items already on the list with their tick (only matters for ticked-but-not-yet-restocked items).
 - **Q12 Reopen**: reopening writes opposite Stock Movements that add back exactly what the Confirmation removed (respecting clamping); Meal-caused movements link to their Meal. Glossary entry **Reopen** added; Stock Movement causes now include Reopen. Spec and #10 updated.
@@ -64,7 +64,6 @@ Every table: `id uuid`, `created_at timestamptz`. `?` = nullable.
 - `layout_slots(position, slot_category_id, template_id?, series_id?)`
 - `meals(date, hour, meal_type_id, name?, status, untracked, series_id?)`
 - `meal_slots(meal_id, position, slot_category_id, content, recipe_id?, product_id?, portions?, quantity?)`
-- `settings(household_time_zone)`: single row; IANA name, e.g. `Europe/Paris`
 
 ## Open
 
@@ -73,4 +72,4 @@ Every table: `id uuid`, `created_at timestamptz`. `?` = nullable.
 ## After Q5
 
 - ADRs: done. `docs/adr/0003` (Stock stored alongside movement history) and `0004` (Meal Series repeats are real Meals).
-- Time zone: resolved ([#15](https://github.com/HugoBar/jeeves/issues/15)).
+- Time zone: resolved ([#15](https://github.com/HugoBar/jeeves/issues/15)), then parked ([#61](https://github.com/HugoBar/jeeves/issues/61)).

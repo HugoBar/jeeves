@@ -80,9 +80,9 @@ See [#1](https://github.com/HugoBar/jeeves/issues/1). Daily 07:00 in-app badge +
 
 ### Platform
 - One Next.js + TypeScript app; all domain logic in a framework-free `core` module (ADR 0001). Drizzle + Postgres (ADR 0002). Self-hosted as a Docker container.
-- One Household Time Zone (HTZ) decides "today" everywhere (Unconfirmed, week boundaries, 07:00 badge, days-until-Meal, Meal Series). Default: the first browser's time zone, saved once; changeable in Settings. Meal dates and hours never change with it.
+- "Today" (Unconfirmed, week boundaries, 07:00 badge, days-until-Meal, Meal Series) is the date in the viewer's browser time zone. Meal dates and hours are plain values and never change with it.
 - Mobile-first, responsive, installable PWA. English UI, i18n-ready: every user-facing string comes from the centralised UI strings file, including seeded data (Food Categories, Meal Types), which is stored by stable key. Only text the user types (names, steps, renames of seeded items) is stored as-is.
 - No authentication in V1 (LAN only).
 
 ## Out of scope (later)
-Web push, low-stock alerts and Always Stocked Products, whole-meal Suggestions, UI translations, auth and remote access, expiry dates, batches, Shopping List history, repeating food in a Meal Series, starting a Meal Series from a past Meal.
+Web push, low-stock alerts and Always Stocked Products, whole-meal Suggestions, UI translations, auth and remote access, expiry dates, batches, Shopping List history, repeating food in a Meal Series, starting a Meal Series from a past Meal, one shared time zone for "today" ([#61](https://github.com/HugoBar/jeeves/issues/61)).

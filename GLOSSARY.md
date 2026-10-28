@@ -153,7 +153,3 @@ A past Meal in which nothing was eaten: it counts toward neither history nor Sto
 
 **Unconfirmed**:
 A Meal whose day has passed without being Confirmed or Skipped.
-
-**Household Time Zone** (HTZ):
-The one time zone that decides what "today" is everywhere in the app: when a Meal becomes Unconfirmed, which week is current, and how many days away a Meal is. Meal hours are fixed times of day and are not affected by it.
-_Avoid_: Server time, local time
