@@ -1,5 +1,5 @@
 import "server-only";
-import { and, asc, eq, gte, inArray, lte, sql } from "drizzle-orm";
+import { and, asc, eq, gt, gte, inArray, lte, max, sql } from "drizzle-orm";
 import {
   slotKeepsFood,
   type MealChanges,
@@ -7,6 +7,7 @@ import {
   type MealSlotFill,
   type MealStatus,
   type NewMealFields,
+  type NewMealSlot,
   type NewMealFromTemplateFields,
 } from "@/core/meals";
 import type { DefaultUnit } from "@/core/units";
@@ -203,6 +204,40 @@ export async function fillMealSlot(db: Db, slotId: string, fill: MealSlotFill): 
     .where(eq(mealSlots.id, slotId));
 }
 
+// A slot added by hand, after the Meal's others. It must already be checked by
+// core's parseNewMealSlot.
+export async function addMealSlot(db: Db, mealId: string, { slotCategoryId, fill }: NewMealSlot): Promise<void> {
+  await db.transaction(async (tx) => {
+    const [last] = await tx
+      .select({ position: max(mealSlots.position) })
+      .from(mealSlots)
+      .where(eq(mealSlots.mealId, mealId));
+    const position = last?.position == null ? 0 : last.position + 1;
+    await tx.insert(mealSlots).values({ mealId, slotCategoryId, position, ...NO_FOOD, ...fill });
+  });
+}
+
+// The slots after it move up one, keeping their order (data-model T5). One at
+// a time, first to last, as each takes the position just freed: the unique
+// (meal, position) index is checked row by row. Nothing if the slot is gone.
+export async function removeMealSlot(db: Db, slotId: string): Promise<void> {
+  await db.transaction(async (tx) => {
+    const [removed] = await tx
+      .delete(mealSlots)
+      .where(eq(mealSlots.id, slotId))
+      .returning({ mealId: mealSlots.mealId, position: mealSlots.position });
+    if (!removed) return;
+    const after = await tx
+      .select({ id: mealSlots.id, position: mealSlots.position })
+      .from(mealSlots)
+      .where(and(eq(mealSlots.mealId, removed.mealId), gt(mealSlots.position, removed.position)))
+      .orderBy(asc(mealSlots.position));
+    for (const slot of after) {
+      await tx.update(mealSlots).set({ position: slot.position - 1 }).where(eq(mealSlots.id, slot.id));
+    }
+  });
+}
+
 // The Slot Category must already be checked by core's parseMealSlotCategory.
 // A Recipe or Product that does not carry the new one is taken out, emptying
 // the slot; Leftovers stay.
@@ -229,14 +264,21 @@ async function foodCategoryIds(db: Db, slot: { recipeId: string | null; productI
   return [];
 }
 
-// What checking a slot's fill needs: its Slot Category and whether its Meal's
-// Meal Type allows Leftovers. Undefined if the slot is gone.
+// What checking a change to a slot needs: its Slot Category, its Meal's
+// status and day, and whether its Meal Type allows Leftovers. Undefined if
+// the slot is gone.
 export async function getMealSlotContext(
   db: Db,
   slotId: string,
-): Promise<{ slotCategoryId: string; allowsLeftovers: boolean } | undefined> {
+): Promise<
+  { slotCategoryId: string; allowsLeftovers: boolean; meal: Pick<Meal, "status" | "date"> } | undefined
+> {
   const [row] = await db
-    .select({ slotCategoryId: mealSlots.slotCategoryId, allowsLeftovers: mealTypes.allowsLeftovers })
+    .select({
+      slotCategoryId: mealSlots.slotCategoryId,
+      allowsLeftovers: mealTypes.allowsLeftovers,
+      meal: { status: meals.status, date: meals.date },
+    })
     .from(mealSlots)
     .innerJoin(meals, eq(mealSlots.mealId, meals.id))
     .innerJoin(mealTypes, eq(meals.mealTypeId, mealTypes.id))

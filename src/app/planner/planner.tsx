@@ -4,23 +4,27 @@ import { Fragment, useActionState, useState, useSyncExternalStore } from "react"
 import {
   isPlanned,
   pickableForSlot,
+  slotCategoryChoices,
   slotFoodValue,
   sortMeals,
   type MealFieldError,
   type MealFromTemplateError,
   type MealStatus,
 } from "@/core/meals";
+import type { CategoryKind } from "@/core/food-categories";
 import { localDate, plannerWeeks } from "@/core/planner";
 import type { DefaultUnit } from "@/core/units";
 import { editingLabel, formatDayHeading, formatQuantity, formatWeekRange, t } from "@/strings";
 import { RemoveButton } from "../remove-button";
 import {
+  addMealSlotAction,
   createMealAction,
   createMealFromTemplateAction,
   editMealAction,
   emptyMealSlotAction,
   fillMealSlotAction,
   removeMealAction,
+  removeMealSlotAction,
   setMealSlotCategoryAction,
   setMealUntrackedAction,
   type MealChangesFormState,
@@ -28,6 +32,7 @@ import {
   type MealSlotCategoryFormState,
   type MealSlotFillFormState,
   type NewMealFormState,
+  type NewMealSlotFormState,
 } from "./actions";
 
 // A Meal with what its card shows. Its Meal Type may be Archived: the Meal
@@ -78,12 +83,18 @@ export interface PickerOption {
   label: string;
 }
 
+// A Food Category a Slot Category picker offers. Its Role or Kind decides
+// whether a slot added by hand can take it.
+export interface SlotCategoryOption extends PickerOption {
+  kind: CategoryKind;
+}
+
 // What the planner's pickers offer: Meal Types, Food Categories, Recipes and
 // Products that are not Archived, and every Meal Template.
 interface Pickers {
   mealTypes: PickerOption[];
   templates: PickerOption[];
-  slotCategories: PickerOption[];
+  slotCategories: SlotCategoryOption[];
   slotFoods: SlotFoods;
 }
 
@@ -95,6 +106,10 @@ type Week = "this" | "next";
 type Submitted<State> = State & { submits: number };
 
 const subscribe = () => () => {};
+
+// The viewer's date as they submit, which slot actions check the Meal's day
+// against: a planner left open past midnight still shows yesterday as today.
+const viewerToday = () => localDate(new Date());
 
 // "Today" is the date in the viewer's time zone (spec "Platform"). The server
 // cannot know that zone, so it renders nothing and the browser fills the
@@ -313,6 +328,7 @@ function MealCard({
   pickers: Pick<Pickers, "slotCategories" | "slotFoods">;
 }) {
   const [editing, setEditing] = useState(false);
+  const [addingSlot, setAddingSlot] = useState(false);
   const label = meal.name ?? meal.mealTypeLabel;
   const planned = isPlanned(meal, today);
 
@@ -349,6 +365,11 @@ function MealCard({
                 <>
                   <SlotCategoryPicker slot={slot} slotCategories={pickers.slotCategories} />
                   <SlotFood slot={slot} allowsLeftovers={meal.allowsLeftovers} foods={pickers.slotFoods} />
+                  <RemoveButton
+                    action={() => removeMealSlotAction(slot.id, viewerToday())}
+                    label={t("planner.removeSlot")}
+                    confirmMessage={t("planner.removeSlotConfirm", { category: slot.slotCategoryLabel })}
+                  />
                 </>
               ) : (
                 <>
@@ -360,6 +381,21 @@ function MealCard({
           ))}
         </ol>
       )}
+      {planned &&
+        (addingSlot ? (
+          <AddSlotForm
+            mealId={meal.id}
+            foods={pickers.slotFoods}
+            slotCategories={pickers.slotCategories}
+            onDone={() => setAddingSlot(false)}
+          />
+        ) : (
+          <span className="planner-add">
+            <button type="button" onClick={() => setAddingSlot(true)}>
+              {t("planner.addSlot")}
+            </button>
+          </span>
+        ))}
     </div>
   );
 }
@@ -368,10 +404,10 @@ function MealCard({
 // Meal's slots only show theirs as it was. The picker offers only
 // non-Archived Food Categories, plus the slot's own if it is Archived, which
 // it warns about until it is changed.
-function SlotCategoryPicker({ slot, slotCategories }: { slot: PlannerMealSlot; slotCategories: PickerOption[] }) {
+function SlotCategoryPicker({ slot, slotCategories }: { slot: PlannerMealSlot; slotCategories: SlotCategoryOption[] }) {
   const [state, action, pending] = useActionState(
     (previous: MealSlotCategoryFormState, formData: FormData) =>
-      setMealSlotCategoryAction(slot.id, previous, formData),
+      setMealSlotCategoryAction(slot.id, viewerToday(), previous, formData),
     { error: null },
   );
   return (
@@ -416,7 +452,7 @@ function SlotFood({ slot, allowsLeftovers, foods }: { slot: PlannerMealSlot; all
       <button type="button" onClick={() => setFilling(true)}>
         {t("planner.changeSlot")}
       </button>
-      <form action={emptyMealSlotAction.bind(null, slot.id)}>
+      <form action={() => emptyMealSlotAction(slot.id, viewerToday())}>
         <button type="submit">{t("planner.emptySlot")}</button>
       </form>
     </>
@@ -455,49 +491,40 @@ function pickedFood(food: PlannerSlotFood, offered: ReadonlySet<string>): { food
   return { food: value, amount: "" };
 }
 
-// Fills a slot, or changes what it holds. The picker offers only non-Archived
-// Recipes and Products carrying the slot's Slot Category, and Leftovers if
-// the Meal Type allows them. Picking a Recipe sets the Portions to the
-// Recipe's own, which can then be changed. Unmounted when closed, so its
-// errors go with it.
-function SlotFillForm({
-  slot,
-  allowsLeftovers,
-  foods,
-  onDone,
-}: {
-  slot: PlannerMealSlot;
-  allowsLeftovers: boolean;
-  foods: SlotFoods;
-  onDone: () => void;
-}) {
-  const recipes = pickableForSlot(foods.recipes, slot.slotCategoryId);
-  const products = pickableForSlot(foods.products, slot.slotCategoryId);
-  const offered = new Set([
-    ...recipes.map((recipe) => slotFoodValue("recipe", recipe.id)),
-    ...products.map((product) => slotFoodValue("product", product.id)),
-    ...(allowsLeftovers ? ["leftovers"] : []),
-  ]);
-  // Controlled, so a rejected submit keeps what was picked and typed.
-  const [values, setValues] = useState(() => pickedFood(slot.food, offered));
-  const [state, action, pending] = useActionState(async (previous: MealSlotFillFormState, formData: FormData) => {
-    const next = await fillMealSlotAction(slot.id, previous, formData);
-    if (!next.error) onDone();
-    return next;
-  }, { error: null });
+// A picked Recipe or Product and its Portions or quantity, as the food
+// picker's fields hold them.
+type FoodValues = { food: string; amount: string };
 
+// The food picker and its amount, shared by filling a slot and adding one.
+// Picking a Recipe sets the Portions to the Recipe's own, which can then be
+// changed. `emptyLabel` is the picker's blank first option.
+function FoodFields({
+  recipes,
+  products,
+  allowsLeftovers,
+  emptyLabel,
+  values,
+  onChange,
+}: {
+  recipes: SlotFoods["recipes"];
+  products: SlotFoods["products"];
+  allowsLeftovers: boolean;
+  emptyLabel: string;
+  values: FoodValues;
+  onChange: (values: FoodValues) => void;
+}) {
   const recipeFor = (food: string) => recipes.find((option) => slotFoodValue("recipe", option.id) === food);
   const recipe = recipeFor(values.food);
   const product = products.find((option) => slotFoodValue("product", option.id) === values.food);
   function pick(food: string) {
     const picked = recipeFor(food);
-    setValues({ food, amount: picked ? String(picked.portions) : "" });
+    onChange({ food, amount: picked ? String(picked.portions) : "" });
   }
 
   return (
-    <form action={action} className="item-form planner-form">
+    <>
       <select name="food" aria-label={t("planner.food")} value={values.food} onChange={(event) => pick(event.target.value)} autoFocus>
-        <option value="">{offered.size === 0 ? t("planner.nothingPickable") : t("planner.pickFood")}</option>
+        <option value="">{emptyLabel}</option>
         {recipes.length > 0 && (
           <optgroup label={t("planner.recipes")}>
             {recipes.map((option) => (
@@ -524,12 +551,55 @@ function SlotFillForm({
             name="amount"
             inputMode={recipe ? "numeric" : "decimal"}
             value={values.amount}
-            onChange={(event) => setValues({ ...values, amount: event.target.value })}
+            onChange={(event) => onChange({ ...values, amount: event.target.value })}
             required
           />
           {recipe ? t("planner.portions") : t(`unit.${product!.defaultUnit}`)}
         </label>
       )}
+    </>
+  );
+}
+
+// Fills a slot, or changes what it holds. The picker offers only non-Archived
+// Recipes and Products carrying the slot's Slot Category, and Leftovers if
+// the Meal Type allows them. Unmounted when closed, so its errors go with it.
+function SlotFillForm({
+  slot,
+  allowsLeftovers,
+  foods,
+  onDone,
+}: {
+  slot: PlannerMealSlot;
+  allowsLeftovers: boolean;
+  foods: SlotFoods;
+  onDone: () => void;
+}) {
+  const recipes = pickableForSlot(foods.recipes, slot.slotCategoryId);
+  const products = pickableForSlot(foods.products, slot.slotCategoryId);
+  const offered = new Set([
+    ...recipes.map((recipe) => slotFoodValue("recipe", recipe.id)),
+    ...products.map((product) => slotFoodValue("product", product.id)),
+    ...(allowsLeftovers ? ["leftovers"] : []),
+  ]);
+  // Controlled, so a rejected submit keeps what was picked and typed.
+  const [values, setValues] = useState(() => pickedFood(slot.food, offered));
+  const [state, action, pending] = useActionState(async (previous: MealSlotFillFormState, formData: FormData) => {
+    const next = await fillMealSlotAction(slot.id, viewerToday(), previous, formData);
+    if (!next.error) onDone();
+    return next;
+  }, { error: null });
+
+  return (
+    <form action={action} className="item-form planner-form">
+      <FoodFields
+        recipes={recipes}
+        products={products}
+        allowsLeftovers={allowsLeftovers}
+        emptyLabel={offered.size === 0 ? t("planner.nothingPickable") : t("planner.pickFood")}
+        values={values}
+        onChange={setValues}
+      />
       <button type="submit" disabled={pending}>
         {t("planner.save")}
       </button>
@@ -537,6 +607,82 @@ function SlotFillForm({
         {t("planner.cancel")}
       </button>
       {state.error && <p className="form-error">{t(`planner.error.${state.error}`)}</p>}
+    </form>
+  );
+}
+
+// Adds a slot filled with a non-Archived Recipe or Product, after the Meal's
+// others. The slot takes its Role, else its Kind; with several, a chooser
+// shows with the first pre-selected. A Recipe or Product with no Food
+// Category cannot be added. Leftovers are not offered: they have no Food
+// Category to give the slot. Unmounted when closed, so its errors go with it.
+function AddSlotForm({
+  mealId,
+  foods,
+  slotCategories,
+  onDone,
+}: {
+  mealId: string;
+  foods: SlotFoods;
+  slotCategories: SlotCategoryOption[];
+  onDone: () => void;
+}) {
+  // Controlled, so a rejected submit keeps what was picked and typed.
+  const [values, setValues] = useState<FoodValues>({ food: "", amount: "" });
+  const [slotCategoryId, setSlotCategoryId] = useState("");
+  const [state, action, pending] = useActionState(async (previous: NewMealSlotFormState, formData: FormData) => {
+    const next = await addMealSlotAction(mealId, viewerToday(), previous, formData);
+    if (!next.error) onDone();
+    return next;
+  }, { error: null });
+
+  const picked =
+    foods.recipes.find((option) => slotFoodValue("recipe", option.id) === values.food) ??
+    foods.products.find((option) => slotFoodValue("product", option.id) === values.food);
+  const choices = picked ? slotCategoryChoices(picked.categoryIds, slotCategories) : [];
+  const uncategorised = picked !== undefined && choices.length === 0;
+  function pick(next: FoodValues) {
+    // Other food pre-selects its own first Slot Category.
+    if (next.food !== values.food) setSlotCategoryId("");
+    setValues(next);
+  }
+
+  return (
+    <form action={action} className="item-form planner-form">
+      <FoodFields
+        recipes={foods.recipes}
+        products={foods.products}
+        allowsLeftovers={false}
+        emptyLabel={t("planner.pickFood")}
+        values={values}
+        onChange={pick}
+      />
+      {choices.length === 1 && <input type="hidden" name="slotCategoryId" value={choices[0]!.id} />}
+      {choices.length > 1 && (
+        <select
+          name="slotCategoryId"
+          aria-label={t("planner.slotCategory")}
+          value={slotCategoryId || choices[0]!.id}
+          onChange={(event) => setSlotCategoryId(event.target.value)}
+        >
+          {choices.map((category) => (
+            <option key={category.id} value={category.id}>
+              {category.label}
+            </option>
+          ))}
+        </select>
+      )}
+      <button type="submit" disabled={pending || uncategorised}>
+        {t("planner.add")}
+      </button>
+      <button type="button" onClick={onDone}>
+        {t("planner.cancel")}
+      </button>
+      {uncategorised ? (
+        <p className="form-error">{t("planner.error.uncategorisedFood")}</p>
+      ) : (
+        state.error && <p className="form-error">{t(`planner.error.${state.error}`)}</p>
+      )}
     </form>
   );
 }

@@ -51,13 +51,16 @@ export default async function PlannerPage() {
   }));
 
   const templateOptions = sortMealTemplates(templates).map((template) => ({ id: template.id, label: template.name }));
-  // A slot's picker offers only Food Categories that are not Archived.
+  // A slot's picker offers only Food Categories that are not Archived. A slot
+  // added by hand is offered its food's Roles, else Kinds, in this order too.
   const slotCategoryOptions = sortCategories(categories, foodCategoryLabel).map((category) => ({
     id: category.id,
     label: foodCategoryLabel(category),
+    kind: category.kind,
   }));
 
-  // Each slot's fill picker offers those of these carrying its Slot Category.
+  // Each slot's fill picker offers those of these carrying its Slot Category;
+  // adding a slot offers them all.
   const byName = (a: { name: string }, b: { name: string }) => a.name.localeCompare(b.name);
   const slotFoods: SlotFoods = {
     recipes: foods.recipes.toSorted(byName).map(({ name, ...recipe }) => ({ ...recipe, label: name })),

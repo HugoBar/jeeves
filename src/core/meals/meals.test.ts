@@ -1,12 +1,15 @@
 import { describe, expect, it } from "vitest";
 import {
+  canChangeSlots,
   isPlanned,
   parseMealChanges,
   parseMealSlotCategory,
   parseNewMeal,
   parseMealSlotFill,
   parseNewMealFromTemplate,
+  parseNewMealSlot,
   pickableForSlot,
+  slotCategoryChoices,
   slotFoodValue,
   slotKeepsFood,
   sortMeals,
@@ -204,6 +207,118 @@ describe("pickableForSlot", () => {
   });
 });
 
+describe("slotCategoryChoices", () => {
+  // The non-Archived Food Categories, in the order the chooser lists them.
+  const categories = [
+    { id: "main", kind: "role" },
+    { id: "side", kind: "role" },
+    { id: "fish", kind: "kind" },
+    { id: "grains", kind: "kind" },
+  ] as const;
+
+  it("offers the food's Roles, in the chooser's order, leaving its Kinds out", () => {
+    expect(slotCategoryChoices(["grains", "side", "fish", "main"], categories).map((c) => c.id)).toEqual([
+      "main",
+      "side",
+    ]);
+  });
+
+  it("offers the food's Kinds when it has no Role", () => {
+    expect(slotCategoryChoices(["grains", "fish"], categories).map((c) => c.id)).toEqual(["fish", "grains"]);
+  });
+
+  // An Archived one is not among the categories, so food carrying only
+  // Archived ones has none to offer.
+  it("never offers a Food Category that is not listed, such as an Archived one", () => {
+    expect(slotCategoryChoices(["archived-role", "grains"], categories).map((c) => c.id)).toEqual(["grains"]);
+    expect(slotCategoryChoices(["archived-role"], categories)).toEqual([]);
+  });
+
+  it("offers nothing for food with no Food Categories", () => {
+    expect(slotCategoryChoices([], categories)).toEqual([]);
+  });
+});
+
+describe("parseNewMealSlot", () => {
+  // What adding a slot offers in these tests: every non-Archived Recipe and
+  // Product, each with the Slot Categories it can give the slot.
+  const pickable = {
+    recipes: new Map([
+      ["risotto-id", ["main-id", "side-id"]],
+      ["water-recipe-id", []],
+    ]),
+    products: new Map([["bread-id", ["grains-id"]]]),
+  };
+
+  it("reads a Recipe with its Portions and the Slot Category chosen", () => {
+    expect(
+      parseNewMealSlot({ food: " recipe:risotto-id ", amount: " 3 ", slotCategoryId: " side-id " }, pickable),
+    ).toEqual({
+      ok: true,
+      slot: { slotCategoryId: "side-id", fill: { content: "recipe", recipeId: "risotto-id", portions: 3 } },
+    });
+  });
+
+  it("reads a Product with a quantity", () => {
+    expect(parseNewMealSlot({ food: "product:bread-id", amount: "120", slotCategoryId: "grains-id" }, pickable)).toEqual(
+      {
+        ok: true,
+        slot: { slotCategoryId: "grains-id", fill: { content: "product", productId: "bread-id", quantity: 120 } },
+      },
+    );
+  });
+
+  // The chooser only shows with several choices, pre-selecting the first.
+  it.each([[""], ["  "]])("takes the first choice when none is sent (%j)", (slotCategoryId) => {
+    expect(parseNewMealSlot({ food: "recipe:risotto-id", amount: "2", slotCategoryId }, pickable)).toMatchObject({
+      ok: true,
+      slot: { slotCategoryId: "main-id" },
+    });
+  });
+
+  // Not the food's Role or Kind, Archived since the planner loaded, or crafted.
+  it("rejects a Slot Category the food does not offer", () => {
+    expect(
+      parseNewMealSlot({ food: "recipe:risotto-id", amount: "2", slotCategoryId: "grains-id" }, pickable),
+    ).toEqual({ ok: false, error: "unavailableSlotCategory" });
+  });
+
+  it("rejects food with no non-Archived Food Categories", () => {
+    expect(
+      parseNewMealSlot({ food: "recipe:water-recipe-id", amount: "2", slotCategoryId: "" }, pickable),
+    ).toEqual({ ok: false, error: "uncategorisedFood" });
+  });
+
+  // Leftovers have no Food Categories, so they only fill an existing slot.
+  it.each([["leftovers"], ["recipe:archived-id"], ["product:risotto-id"]])(
+    "rejects Leftovers and food not offered (%j)",
+    (food) => {
+      expect(parseNewMealSlot({ food, amount: "2", slotCategoryId: "main-id" }, pickable)).toEqual({
+        ok: false,
+        error: "unavailableFood",
+      });
+    },
+  );
+
+  it("rejects nothing picked", () => {
+    expect(parseNewMealSlot({ food: "", amount: "", slotCategoryId: "" }, pickable)).toEqual({
+      ok: false,
+      error: "noFood",
+    });
+  });
+
+  it("rejects an amount the fill would", () => {
+    expect(parseNewMealSlot({ food: "recipe:risotto-id", amount: "0", slotCategoryId: "" }, pickable)).toEqual({
+      ok: false,
+      error: "invalidPortions",
+    });
+    expect(parseNewMealSlot({ food: "product:bread-id", amount: "", slotCategoryId: "" }, pickable)).toEqual({
+      ok: false,
+      error: "invalidQuantity",
+    });
+  });
+});
+
 describe("slotKeepsFood", () => {
   it("keeps a Recipe or Product carrying the new Slot Category", () => {
     expect(slotKeepsFood("recipe", ["grains", "vegetables"], "vegetables")).toBe(true);
@@ -262,5 +377,21 @@ describe("isPlanned", () => {
   // (data-model Q3).
   it("is false once the Meal's day has passed", () => {
     expect(isPlanned({ status: "planned", date: "2026-10-27" }, "2026-10-28")).toBe(false);
+  });
+});
+
+describe("canChangeSlots", () => {
+  it("allows slot changes on a Planned Meal", () => {
+    expect(canChangeSlots({ status: "planned", date: "2026-10-28" }, "2026-10-28")).toBe(true);
+  });
+
+  // The planner was left open past midnight, so it still offers the buttons.
+  it("refuses them once the Meal's day has passed", () => {
+    expect(canChangeSlots({ status: "planned", date: "2026-10-27" }, "2026-10-28")).toBe(false);
+  });
+
+  // A crafted request: without a real date the Meal's day cannot be checked.
+  it.each([[""], ["tomorrow"], ["2026-13-01"]])("refuses them when today is not a date (%j)", (today) => {
+    expect(canChangeSlots({ status: "planned", date: "2026-10-28" }, today)).toBe(false);
   });
 });

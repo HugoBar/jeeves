@@ -1,24 +1,30 @@
 "use server";
 
 import { refresh } from "next/cache";
+import { sortCategories } from "@/core/food-categories";
 import {
+  canChangeSlots,
   parseMealChanges,
   parseMealSlotCategory,
   parseMealSlotFill,
   parseNewMeal,
   parseNewMealFromTemplate,
+  parseNewMealSlot,
   pickableForSlot,
+  slotCategoryChoices,
   type MealFieldError,
   type MealFromTemplateError,
   type MealSlotCategoryError,
   type MealSlotFillError,
   type NewMealInput,
+  type NewMealSlotError,
 } from "@/core/meals";
 import { getDb } from "@/db";
 import { listActiveCategories } from "@/db/food-categories";
 import { listMealTemplates } from "@/db/meal-templates";
 import { listActiveMealTypes } from "@/db/meal-types";
 import {
+  addMealSlot,
   createMeal,
   createMealFromTemplate,
   deleteMeal,
@@ -26,10 +32,12 @@ import {
   getMeal,
   getMealSlotContext,
   listFoodsForSlots,
+  removeMealSlot,
   setMealSlotCategory,
   setMealUntracked,
   updateMeal,
 } from "@/db/meals";
+import { foodCategoryLabel } from "@/strings";
 
 // `values` refills the form after a rejected submit, which React resets.
 export type NewMealFormValues = Omit<NewMealInput, "date">;
@@ -37,8 +45,10 @@ export type NewMealFormState = { errors: MealFieldError[]; values: NewMealFormVa
 export type MealChangesFormValues = Pick<NewMealInput, "hour" | "name">;
 export type MealChangesFormState = { errors: MealFieldError[]; values: MealChangesFormValues };
 export type MealFromTemplateFormState = { errors: MealFromTemplateError[]; templateId: string };
-export type MealSlotCategoryFormState = { error: MealSlotCategoryError | null };
-export type MealSlotFillFormState = { error: MealSlotFillError | null };
+// "notPlanned": the Meal's day passed since the planner was loaded.
+export type MealSlotCategoryFormState = { error: MealSlotCategoryError | "notPlanned" | null };
+export type MealSlotFillFormState = { error: MealSlotFillError | "notPlanned" | null };
+export type NewMealSlotFormState = { error: NewMealSlotError | "notPlanned" | null };
 
 // `date` is the planner day the form was opened on.
 export async function createMealAction(
@@ -95,13 +105,19 @@ export async function editMealAction(
   return { errors: [], values };
 }
 
-// A slot can only be changed to a Food Category that is not Archived.
+// A slot can only be changed to a Food Category that is not Archived. Every
+// slot action takes `today`, the viewer's date when they submitted, and
+// changes only the slots of a Planned Meal.
 export async function setMealSlotCategoryAction(
   slotId: string,
+  today: string,
   _state: MealSlotCategoryFormState,
   formData: FormData,
 ): Promise<MealSlotCategoryFormState> {
   const db = getDb();
+  const slot = await getMealSlotContext(db, slotId);
+  if (!slot) throw new Error("Meal Slot not found");
+  if (!canChangeSlots(slot.meal, today)) return { error: "notPlanned" };
   const pickable = new Set((await listActiveCategories(db)).map((category) => category.id));
   const parsed = parseMealSlotCategory(String(formData.get("slotCategoryId") ?? ""), pickable);
   if (!parsed.ok) return { error: parsed.error };
@@ -115,12 +131,14 @@ export async function setMealSlotCategoryAction(
 // allows them.
 export async function fillMealSlotAction(
   slotId: string,
+  today: string,
   _state: MealSlotFillFormState,
   formData: FormData,
 ): Promise<MealSlotFillFormState> {
   const db = getDb();
   const slot = await getMealSlotContext(db, slotId);
   if (!slot) throw new Error("Meal Slot not found");
+  if (!canChangeSlots(slot.meal, today)) return { error: "notPlanned" };
   const { recipes, products } = await listFoodsForSlots(db);
   const ids = (foods: { id: string }[]) => new Set(foods.map((food) => food.id));
   const parsed = parseMealSlotFill(
@@ -137,8 +155,52 @@ export async function fillMealSlotAction(
   return { error: null };
 }
 
-export async function emptyMealSlotAction(slotId: string): Promise<void> {
-  await fillMealSlot(getDb(), slotId, { content: "empty" });
+// A slot added by hand is filled with a non-Archived Recipe or Product and
+// takes one of its Roles, else Kinds, as its Slot Category. Blank takes the
+// first in the order the planner's chooser lists them, which it pre-selects.
+export async function addMealSlotAction(
+  mealId: string,
+  today: string,
+  _state: NewMealSlotFormState,
+  formData: FormData,
+): Promise<NewMealSlotFormState> {
+  const db = getDb();
+  const meal = await getMeal(db, mealId);
+  if (!meal) throw new Error("Meal not found");
+  if (!canChangeSlots(meal, today)) return { error: "notPlanned" };
+  const [{ recipes, products }, active] = await Promise.all([listFoodsForSlots(db), listActiveCategories(db)]);
+  const categories = sortCategories(active, foodCategoryLabel);
+  const choices = (foods: { id: string; categoryIds: string[] }[]) =>
+    new Map(foods.map((food) => [food.id, slotCategoryChoices(food.categoryIds, categories).map((c) => c.id)]));
+  const parsed = parseNewMealSlot(
+    {
+      food: String(formData.get("food") ?? ""),
+      amount: String(formData.get("amount") ?? ""),
+      slotCategoryId: String(formData.get("slotCategoryId") ?? ""),
+    },
+    { recipes: choices(recipes), products: choices(products) },
+  );
+  if (!parsed.ok) return { error: parsed.error };
+  await addMealSlot(db, mealId, parsed.slot);
+  refresh();
+  return { error: null };
+}
+
+// The slots after it move up, keeping their order. Nothing changes if the
+// Meal's day has passed; the refresh shows the planner it has.
+export async function removeMealSlotAction(slotId: string, today: string): Promise<void> {
+  const db = getDb();
+  const slot = await getMealSlotContext(db, slotId);
+  if (slot && canChangeSlots(slot.meal, today)) await removeMealSlot(db, slotId);
+  refresh();
+}
+
+// Nothing changes if the Meal's day has passed; the refresh shows the planner
+// it has.
+export async function emptyMealSlotAction(slotId: string, today: string): Promise<void> {
+  const db = getDb();
+  const slot = await getMealSlotContext(db, slotId);
+  if (slot && canChangeSlots(slot.meal, today)) await fillMealSlot(db, slotId, { content: "empty" });
   refresh();
 }
 
