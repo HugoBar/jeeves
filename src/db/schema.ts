@@ -239,3 +239,15 @@ export const layoutSlots = pgTable(
     index("layout_slots_slot_category_id").on(table.slotCategoryId),
   ],
 );
+
+// Household-wide settings: a single row, whose `id` can only be true. The
+// Household Time Zone is an IANA name such as "Europe/Paris", checked by core
+// (spec "Platform").
+export const settings = pgTable(
+  "settings",
+  {
+    id: boolean("id").primaryKey().default(true),
+    householdTimeZone: text("household_time_zone").notNull(),
+  },
+  (table) => [check("settings_single_row", sql`${table.id}`)],
+);

@@ -92,6 +92,13 @@
       "when": 1793132029187,
       "tag": "0012_meal_types_archived_at",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1793198162612,
+      "tag": "0013_settings",
+      "breakpoints": true
     }
   ]
 }
