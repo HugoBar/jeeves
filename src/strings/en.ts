@@ -150,6 +150,9 @@ export const en = {
   "products.error.invalidDensity": "Density must be a number above 0.",
   "products.error.incompletePackSize": "A Pack Size needs both a name and an amount.",
   "products.error.invalidPackSizeAmount": "Pack Size amount must be a number above 0.",
+  "products.error.densityInUse":
+    "{product}'s Density is used by {uses}. Change those Ingredients to {unit} first, or keep the Density.",
+  "products.densityUse": "{recipe} ({quantity})",
   "products.edit": "Edit",
   "products.remove": "Remove",
   "products.removeConfirm": "Remove {name}? If it is in use, such as having Stock Movements, it is Archived instead.",

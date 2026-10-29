@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { editingLabel, foodCategoryLabel, formatDayHeading, formatWeekRange, mealTypeLabel, t } from "./index";
+import { editingLabel, foodCategoryLabel, formatDayHeading, formatList, formatWeekRange, mealTypeLabel, t } from "./index";
 
 describe("t", () => {
   it("returns the UI string for a key", () => {
@@ -58,5 +58,15 @@ describe("editingLabel", () => {
 describe("formatDayHeading", () => {
   it("shows the weekday and day of the month", () => {
     expect(formatDayHeading("2026-11-01")).toBe("Sun 1");
+  });
+});
+
+describe("formatList", () => {
+  it.each([
+    [["Pancakes (1 cup)"], "Pancakes (1 cup)"],
+    [["Pancakes (1 cup)", "Bread (2 cup)"], "Pancakes (1 cup) and Bread (2 cup)"],
+    [["a", "b", "c"], "a, b, and c"],
+  ])("lists %j as %j", (items, expected) => {
+    expect(formatList(items)).toBe(expected);
   });
 });

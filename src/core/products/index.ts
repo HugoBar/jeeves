@@ -1,4 +1,5 @@
 import { AMOUNT_COLUMN, DENSITY_COLUMN, parsePositive } from "@/core/amounts";
+import { convertToDefaultUnit, type DefaultUnit, type Unit } from "@/core/units";
 
 export interface PackSize {
   name: string;
@@ -73,4 +74,23 @@ export function toProductFieldsInput({ name, density, packSize, categoryIds }: P
     packSizeAmount: packSize?.amount.toString() ?? "",
     categoryIds,
   };
+}
+
+// An Ingredient using a Product, named by its Recipe, as the message for a
+// refused Density change lists it.
+export interface IngredientUse {
+  recipeName: string;
+  amount: number;
+  unit: Unit;
+}
+
+// The uses that stop a Product's Density from being cleared: Ingredients
+// written in the other dimension (a volume unit for a g Product, a mass unit
+// for an ml Product), which convert only with it. Recipes are saved only with
+// Ingredients that convert, so this is the one way one could stop converting.
+export function densityBlockers(defaultUnit: DefaultUnit, uses: readonly IngredientUse[]): IngredientUse[] {
+  return uses.filter((use) => {
+    const converted = convertToDefaultUnit(use.amount, use.unit, { defaultUnit, density: null });
+    return !converted.ok && converted.error.code === "noDensity";
+  });
 }

@@ -3,13 +3,16 @@ import { beforeAll, describe, expect, it } from "vitest";
 import type { Ingredient } from "@/core/ingredients";
 import type { RecipeContent, RecipeFields } from "@/core/recipes";
 import type { DefaultUnit } from "@/core/units";
-import { createCategory, getCategory, removeCategory } from "./food-categories";
+import { createCategory, getCategory, listActiveCategories, removeCategory } from "./food-categories";
+import { listActiveMealTypes } from "./meal-types";
+import { addMealSlot, createMeal } from "./meals";
 import { createProduct, getProduct, listActiveProducts, removeProduct, updateProduct } from "./products";
 import {
   createRecipe,
   getRecipe,
   getRecipeFoodCategories,
   listActiveRecipes,
+  listIngredientUses,
   listPickableProducts,
   listRecipeCategoryOverrides,
   listRecipeIngredients,
@@ -492,5 +495,63 @@ describe("ingredients table", () => {
     await expect(
       db.insert(ingredients).values({ recipeId: recipe.id, productId: product.id, amount: 0, unit: "g", position: 0 }),
     ).rejects.toThrow();
+  });
+});
+
+describe("listIngredientUses", () => {
+  // Flour in g with a Density, written in several units by several Recipes.
+  it("lists the Ingredients using a Product in Recipes that can still be cooked, by Recipe name", async () => {
+    const flour = await aProduct("Density Flour", { density: 0.53 });
+    const egg = await aProduct("Density Egg", { defaultUnit: "pc" });
+    const recipe = (name: string, flourIngredients: Ingredient[]) =>
+      createRecipe(db, {
+        ...lasagne,
+        name,
+        ingredients: [{ productId: egg.id, amount: 2, unit: "pc", minor: false }, ...flourIngredients],
+        categoryOverrides: [],
+      });
+    const flourIn = (amount: number, unit: Ingredient["unit"]): Ingredient => ({
+      productId: flour.id,
+      amount,
+      unit,
+      minor: false,
+    });
+
+    await recipe("Pancakes", [flourIn(1, "cup")]);
+    await recipe("Bread", [flourIn(500, "g"), flourIn(2, "tbsp")]);
+    // Archived, but a Meal not yet Confirmed or Skipped still uses it.
+    const plannedCake = await recipe("Planned Cake", [flourIn(2, "cup")]);
+    const lunch = (await listActiveMealTypes(db)).find((mealType) => mealType.seedKey === "lunch")!;
+    const meal = await createMeal(db, { date: "2026-11-10", hour: "12:00", name: null, mealTypeId: lunch.id });
+    await addMealSlot(db, meal.id, {
+      slotCategoryId: (await listActiveCategories(db))[0]!.id,
+      fill: { content: "recipe", recipeId: plannedCake.id, portions: 4 },
+    });
+    await removeRecipe(db, plannedCake.id);
+    // Archived, and only in a Meal whose day has passed: Unconfirmed, so it can
+    // still be Confirmed.
+    const unconfirmedPie = await recipe("Unconfirmed Pie", [flourIn(1, "tbsp")]);
+    const pastMeal = await createMeal(db, { date: "2026-09-01", hour: "12:00", name: null, mealTypeId: lunch.id });
+    await addMealSlot(db, pastMeal.id, {
+      slotCategoryId: (await listActiveCategories(db))[0]!.id,
+      fill: { content: "recipe", recipeId: unconfirmedPie.id, portions: 4 },
+    });
+    await removeRecipe(db, unconfirmedPie.id);
+    // Archived and used by no Meal: it can never be cooked again.
+    const oldCake = await recipe("Old Cake", [flourIn(3, "cup")]);
+    await db.update(recipes).set({ archivedAt: new Date() }).where(eq(recipes.id, oldCake.id));
+
+    expect(await listIngredientUses(db, flour.id)).toEqual([
+      { recipeName: "Bread", amount: 500, unit: "g" },
+      { recipeName: "Bread", amount: 2, unit: "tbsp" },
+      { recipeName: "Pancakes", amount: 1, unit: "cup" },
+      { recipeName: "Planned Cake", amount: 2, unit: "cup" },
+      { recipeName: "Unconfirmed Pie", amount: 1, unit: "tbsp" },
+    ]);
+  });
+
+  it("lists nothing for a Product no Recipe uses", async () => {
+    const salt = await aProduct("Density Salt");
+    expect(await listIngredientUses(db, salt.id)).toEqual([]);
   });
 });

@@ -34,6 +34,13 @@ export function formatQuantity(amount: number, unit: Unit): string {
   return `${quantityFormat.format(amount)} ${t(`unit.${unit}`)}`;
 }
 
+const listFormat = new Intl.ListFormat("en", { type: "conjunction" });
+
+// Items as a sentence lists them: "a and b", "a, b, and c".
+export function formatList(items: readonly string[]): string {
+  return listFormat.format(items);
+}
+
 // A moment as shown to the user: "Oct 23, 2026, 2:05 PM", in the time zone of
 // whoever runs it.
 export function formatDateTime(value: Date): string {

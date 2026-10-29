@@ -1,17 +1,25 @@
 "use server";
 
 import { redirect } from "next/navigation";
-import { parseProductFields, type ProductFieldError, type ProductFieldsInput } from "@/core/products";
+import {
+  densityBlockers,
+  parseProductFields,
+  type IngredientUse,
+  type ProductFieldError,
+  type ProductFieldsInput,
+} from "@/core/products";
 import { parseDefaultUnit } from "@/core/units";
 import { getDb } from "@/db";
-import { createProduct, removeProduct, updateProduct } from "@/db/products";
+import { createProduct, getProduct, removeProduct, updateProduct } from "@/db/products";
+import { listIngredientUses } from "@/db/recipes";
 
 export type ProductFormValues = ProductFieldsInput & { defaultUnit?: string };
 
-export type ProductFormError = ProductFieldError | "duplicateName";
+export type ProductFormError = ProductFieldError | "duplicateName" | "densityInUse";
 
 // `values` refills the form after a rejected submit, which React resets.
-export type ProductFormState = { errors: ProductFormError[]; values: ProductFormValues };
+// `densityUses` holds the Ingredients that stopped the Density being cleared.
+export type ProductFormState = { errors: ProductFormError[]; values: ProductFormValues; densityUses?: IngredientUse[] };
 
 export async function createProductAction(
   _state: ProductFormState,
@@ -36,7 +44,14 @@ export async function editProductAction(
   const values = valuesFrom(formData);
   const parsed = parseProductFields(values);
   if (!parsed.ok) return { errors: parsed.errors, values };
-  const result = await updateProduct(getDb(), id, parsed.fields);
+  const db = getDb();
+  // Clearing a Density Recipes still convert with would leave them unable to.
+  if (parsed.fields.density === null) {
+    const product = await getProduct(db, id);
+    const densityUses = product ? densityBlockers(product.defaultUnit, await listIngredientUses(db, id)) : [];
+    if (densityUses.length > 0) return { errors: ["densityInUse"], values, densityUses };
+  }
+  const result = await updateProduct(db, id, parsed.fields);
   if (!result.ok) return { errors: [result.error], values };
   redirect(`/products/${id}`);
 }
