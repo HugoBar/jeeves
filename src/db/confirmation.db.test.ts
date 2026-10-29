@@ -1,6 +1,6 @@
 import { beforeAll, describe, expect, it } from "vitest";
 import type { MealSlotFill } from "@/core/meals";
-import { confirmMeal, reopenMeal } from "./confirmation";
+import { confirmMeal, reopenMeal, skipMeal } from "./confirmation";
 import { listActiveCategories } from "./food-categories";
 import { listActiveMealTypes } from "./meal-types";
 import { createMeal, deleteMeal, getMeal, setMealUntracked, updateMeal } from "./meals";
@@ -203,6 +203,67 @@ describe("confirmMeal", () => {
   });
 });
 
+describe("skipMeal", () => {
+  it("marks the Meal Skipped and writes no Stock Movements", async () => {
+    const bagels = await aProduct("Bagels", 4, { defaultUnit: "pc", density: null });
+    const meal = await aMeal("2026-10-27", [{ content: "product", productId: bagels.id, quantity: 2 }]);
+
+    expect(await skipMeal(db, meal.id, TODAY)).toBe(true);
+
+    expect(await listStockMovements(db, bagels.id)).toHaveLength(1);
+    expect(await getProduct(db, bagels.id)).toMatchObject({ stock: 4 });
+    expect(await getMeal(db, meal.id)).toMatchObject({ status: "skipped" });
+  });
+
+  it("refuses a Meal after today, or one already Confirmed or Skipped", async () => {
+    const tomorrow = await aMeal("2026-10-29", []);
+    const confirmed = await aMeal(TODAY, []);
+    const skipped = await aMeal(TODAY, []);
+    await confirmMeal(db, confirmed.id, { untracked: false, today: TODAY });
+    await skipMeal(db, skipped.id, TODAY);
+
+    expect(await skipMeal(db, tomorrow.id, TODAY)).toBe(false);
+    expect(await skipMeal(db, confirmed.id, TODAY)).toBe(false);
+    expect(await skipMeal(db, skipped.id, TODAY)).toBe(false);
+    expect(await getMeal(db, tomorrow.id)).toMatchObject({ status: "planned" });
+    expect(await getMeal(db, confirmed.id)).toMatchObject({ status: "confirmed" });
+  });
+
+  it("refuses Confirming a Skipped Meal", async () => {
+    const meal = await aMeal(TODAY, []);
+    await skipMeal(db, meal.id, TODAY);
+
+    expect(await confirmMeal(db, meal.id, { untracked: false, today: TODAY })).toEqual({
+      ok: false,
+      error: "notConfirmable",
+    });
+  });
+
+  it("leaves a Skipped Meal out of Projected Stock", async () => {
+    const crackers = await aProduct("Crackers", 10, { defaultUnit: "pc", density: null });
+    const meal = await aMeal(TODAY, [{ content: "product", productId: crackers.id, quantity: 4 }]);
+    await skipMeal(db, meal.id, TODAY);
+
+    const { meals } = await loadStockProjection(db, "2026-12-31");
+
+    expect(meals.map((projected) => projected.id)).not.toContain(meal.id);
+    expect(meals.flatMap((projected) => projected.slots)).not.toContainEqual(
+      expect.objectContaining({ productId: crackers.id }),
+    );
+  });
+
+  it("keeps a Skipped Meal read-only: no edits, Untracked toggle or removal", async () => {
+    const meal = await aMeal(TODAY, []);
+    await skipMeal(db, meal.id, TODAY);
+
+    await updateMeal(db, meal.id, { hour: "20:00", name: "Changed" });
+    await setMealUntracked(db, meal.id, true);
+    await deleteMeal(db, meal.id);
+
+    expect(await getMeal(db, meal.id)).toMatchObject({ hour: "12:30", name: null, untracked: false });
+  });
+});
+
 describe("reopenMeal", () => {
   it("adds back exactly what the Confirmation removed, after clamping, linked to the Meal", async () => {
     const pasta = await aProduct("Pasta", 500, { defaultUnit: "g", density: null });
@@ -284,7 +345,34 @@ describe("reopenMeal", () => {
     expect(await getMeal(db, meal.id)).toMatchObject({ status: "planned", untracked: true });
   });
 
-  it("refuses a Meal that is not Confirmed", async () => {
+  it("returns a Skipped Meal to Planned with no Stock change", async () => {
+    const muffins = await aProduct("Muffins", 6, { defaultUnit: "pc", density: null });
+    const meal = await aMeal("2026-10-27", [{ content: "product", productId: muffins.id, quantity: 2 }]);
+    await skipMeal(db, meal.id, TODAY);
+
+    expect(await reopenMeal(db, meal.id)).toBe(true);
+
+    expect(await listStockMovements(db, muffins.id)).toHaveLength(1);
+    expect(await getProduct(db, muffins.id)).toMatchObject({ stock: 6 });
+    // Its day has passed: Planned again, so Unconfirmed.
+    expect(await getMeal(db, meal.id)).toMatchObject({ status: "planned" });
+  });
+
+  // A Confirmation already Reopened is not reversed twice.
+  it("writes nothing for a Meal Skipped after a Confirmation was Reopened", async () => {
+    const scones = await aProduct("Scones", 6, { defaultUnit: "pc", density: null });
+    const meal = await aMeal(TODAY, [{ content: "product", productId: scones.id, quantity: 2 }]);
+    await confirmMeal(db, meal.id, { untracked: false, today: TODAY });
+    await reopenMeal(db, meal.id);
+    await skipMeal(db, meal.id, TODAY);
+
+    await reopenMeal(db, meal.id);
+
+    expect(await movements(scones.id, "reopen")).toHaveLength(1);
+    expect(await getProduct(db, scones.id)).toMatchObject({ stock: 6 });
+  });
+
+  it("refuses a Meal that is not Confirmed or Skipped", async () => {
     const meal = await aMeal(TODAY, []);
     expect(await reopenMeal(db, meal.id)).toBe(false);
   });
