@@ -9,6 +9,8 @@
   /* Next week in the planner, so it never passes for this week. */
   --color-accent-next: #9a4d22;
   --color-error: #b3261e;
+  /* Shortfall warnings for Meals more than 1 day away. */
+  --color-warning: #8a5300;
   --space: 16px;
   --header-height: 56px;
   color-scheme: light dark;
@@ -24,6 +26,7 @@
     --color-on-accent: #151a18;
     --color-accent-next: #e0a279;
     --color-error: #f2b8b5;
+    --color-warning: #f0c674;
   }
 }
 
@@ -315,6 +318,23 @@ body {
   align-items: center;
   gap: calc(var(--space) / 2);
   padding: calc(var(--space) / 4) 0;
+}
+
+/* A slot's Shortfalls, under its food. Never blocks anything. */
+.slot-warnings {
+  display: flex;
+  flex-basis: 100%;
+  flex-direction: column;
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+
+.slot-warnings-urgent {
+  color: var(--color-error);
+}
+
+.slot-warnings-upcoming {
+  color: var(--color-warning);
 }
 
 .planner-amount {

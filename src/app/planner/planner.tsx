@@ -13,6 +13,7 @@ import {
 } from "@/core/meals";
 import type { CategoryKind } from "@/core/food-categories";
 import { localDate, plannerWeeks } from "@/core/planner";
+import { shortfallUrgency } from "@/core/projected-stock";
 import type { DefaultUnit } from "@/core/units";
 import { editingLabel, formatDayHeading, formatQuantity, formatWeekRange, t } from "@/strings";
 import { RemoveButton } from "../remove-button";
@@ -60,6 +61,16 @@ export interface PlannerMealSlot {
   slotCategoryLabel: string;
   slotCategoryArchived: boolean;
   food: PlannerSlotFood;
+  // Null when the slot has nothing to warn about, or its Meal is Untracked.
+  warnings: SlotWarnings | null;
+}
+
+// What a slot's warnings show: each Product it is short of by its name, with
+// the amount short in its Default Unit, and the names of Products whose
+// Ingredient cannot be converted, so their Stock cannot be projected.
+export interface SlotWarnings {
+  shortfalls: { name: string; amount: number; defaultUnit: DefaultUnit }[];
+  unprojectable: string[];
 }
 
 // What a Meal Slot holds, as its card shows it. Its Recipe or Product may be
@@ -377,6 +388,7 @@ function MealCard({
                   <SlotFoodLabel food={slot.food} />
                 </>
               )}
+              {slot.warnings && <SlotWarningList warnings={slot.warnings} mealDate={meal.date} today={today} />}
             </li>
           ))}
         </ol>
@@ -397,6 +409,30 @@ function MealCard({
           </span>
         ))}
     </div>
+  );
+}
+
+// "Short: Rice 300 g, Eggs 2 pc" and "Can't project Milk", red when the Meal
+// is 1 day away or less, amber otherwise. They never block saving.
+function SlotWarningList({ warnings, mealDate, today }: { warnings: SlotWarnings; mealDate: string; today: string }) {
+  const className = `slot-warnings slot-warnings-${shortfallUrgency(mealDate, today)}`;
+  return (
+    <span className={className} role="status">
+      {warnings.shortfalls.length > 0 && (
+        <span>
+          {t("planner.shortfall", {
+            items: warnings.shortfalls
+              .map(({ name, amount, defaultUnit }) =>
+                t("planner.shortfallItem", { name, quantity: formatQuantity(amount, defaultUnit) }),
+              )
+              .join(", "),
+          })}
+        </span>
+      )}
+      {warnings.unprojectable.map((name) => (
+        <span key={name}>{t("planner.cannotProject", { name })}</span>
+      ))}
+    </span>
   );
 }
 
