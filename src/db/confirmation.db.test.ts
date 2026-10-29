@@ -1,6 +1,6 @@
 import { beforeAll, describe, expect, it } from "vitest";
 import type { MealSlotFill } from "@/core/meals";
-import { confirmMeal, reopenMeal, skipMeal } from "./confirmation";
+import { confirmMeal, confirmMealsAsPlanned, reopenMeal, skipMeal } from "./confirmation";
 import { listActiveCategories } from "./food-categories";
 import { listActiveMealTypes } from "./meal-types";
 import { createMeal, deleteMeal, getMeal, setMealUntracked, updateMeal } from "./meals";
@@ -200,6 +200,39 @@ describe("confirmMeal", () => {
     await deleteMeal(db, meal.id);
 
     expect(await getMeal(db, meal.id)).toMatchObject({ hour: "12:30", name: null, untracked: false });
+  });
+});
+
+describe("confirmMealsAsPlanned", () => {
+  it("Confirms each Meal as planned, refusing only the ones that cannot be, which write nothing", async () => {
+    const beans = await aProduct("Beans", 500, { defaultUnit: "g", density: null });
+    const sugar = await aProduct("Sugar", 500, { defaultUnit: "g", density: null });
+    const recipe = await createRecipe(db, {
+      name: "Fudge",
+      portions: 4,
+      steps: "Boil",
+      prepTimeMinutes: 30,
+      sourceUrl: null,
+      ingredients: [{ productId: sugar.id, amount: 1, unit: "cup", minor: false }],
+      categoryOverrides: [],
+    });
+    const planned = await aMeal("2026-10-26", [{ content: "product", productId: beans.id, quantity: 200 }]);
+    const untracked = await aMeal("2026-10-26", [{ content: "product", productId: beans.id, quantity: 100 }]);
+    await setMealUntracked(db, untracked.id, true);
+    const unconvertible = await aMeal("2026-10-27", [{ content: "recipe", recipeId: recipe.id, portions: 4 }]);
+    const tomorrow = await aMeal("2026-10-29", []);
+
+    const refused = await confirmMealsAsPlanned(db, [planned.id, untracked.id, unconvertible.id, tomorrow.id], TODAY);
+
+    expect(refused).toEqual([
+      { mealId: unconvertible.id, refusal: expect.objectContaining({ error: "unconvertible", code: "noDensity" }) },
+      { mealId: tomorrow.id, refusal: { ok: false, error: "notConfirmable" } },
+    ]);
+    expect(await getProduct(db, beans.id)).toMatchObject({ stock: 300 });
+    expect(await getMeal(db, planned.id)).toMatchObject({ status: "confirmed", untracked: false });
+    expect(await getMeal(db, untracked.id)).toMatchObject({ status: "confirmed", untracked: true });
+    expect(await getMeal(db, unconvertible.id)).toMatchObject({ status: "planned" });
+    expect(await getProduct(db, sugar.id)).toMatchObject({ stock: 500 });
   });
 });
 

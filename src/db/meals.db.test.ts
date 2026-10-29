@@ -4,6 +4,7 @@ import type { MealTypeSeedKey } from "@/core/meal-types";
 import type { CategorySeedKey } from "@/core/food-categories";
 import type { CategoryOverride } from "@/core/recipes";
 import { createCategory, getCategory, listActiveCategories, removeCategory } from "./food-categories";
+import { confirmMeal, skipMeal } from "./confirmation";
 import { createMealTemplate, deleteMealTemplate, updateMealTemplate } from "./meal-templates";
 import { createMealType, getMealType, listActiveMealTypes, removeMealType } from "./meal-types";
 import {
@@ -16,6 +17,7 @@ import {
   getMealSlotContext,
   listFoodsForSlots,
   listMeals,
+  listPlannedMealsBefore,
   removeMealSlot,
   setMealSlotCategory,
   setMealUntracked,
@@ -641,6 +643,34 @@ describe("listMeals", () => {
     expect(ids).toEqual(expect.arrayContaining([first.id, last.id]));
     expect(ids).not.toContain(before.id);
     expect(ids).not.toContain(after.id);
+  });
+});
+
+describe("listPlannedMealsBefore", () => {
+  it("lists the Planned or Unconfirmed Meals before the given day, with their slots", async () => {
+    const dinnerId = await seededMealTypeId("dinner");
+    const unconfirmed = await createMeal(db, { date: "2025-03-03", hour: "19:00", name: null, mealTypeId: dinnerId });
+    const categoryId = await seededCategoryId("red_meat");
+    await addMealSlot(db, unconfirmed.id, {
+      slotCategoryId: categoryId,
+      fill: { content: "product", productId: (await aProduct("Swede", [categoryId])).id, quantity: 300 },
+    });
+    const confirmed = await createMeal(db, { date: "2025-03-03", hour: "12:00", name: null, mealTypeId: dinnerId });
+    await confirmMeal(db, confirmed.id, { untracked: true, today: "2025-03-04" });
+    const skipped = await createMeal(db, { date: "2025-03-03", hour: "08:00", name: null, mealTypeId: dinnerId });
+    await skipMeal(db, skipped.id, "2025-03-04");
+    const onTheDay = await createMeal(db, { date: "2025-03-04", hour: "19:00", name: null, mealTypeId: dinnerId });
+
+    const listed = await listPlannedMealsBefore(db, "2025-03-04");
+
+    expect(listed.find((meal) => meal.id === unconfirmed.id)).toMatchObject({
+      status: "planned",
+      slots: [{ content: "product", quantity: 300 }],
+    });
+    const ids = listed.map((meal) => meal.id);
+    expect(ids).not.toContain(confirmed.id);
+    expect(ids).not.toContain(skipped.id);
+    expect(ids).not.toContain(onTheDay.id);
   });
 });
 

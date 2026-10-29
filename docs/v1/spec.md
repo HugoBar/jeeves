@@ -63,7 +63,7 @@ I want one place that knows what food is in my Pantry, what I can cook from it, 
 - A Confirmed or Skipped Meal can be Reopened: opposite Stock Movements, linked to the Meal, add back exactly what its Confirmation removed.
 
 ### Unconfirmed Meals
-See [#1](https://github.com/HugoBar/jeeves/issues/1). Daily 07:00 in-app badge + "Needs confirmation" list; Saturday "Close this week" banner; Monday non-dismissable resolution screen for the previous week. Unconfirmed Meals count as eaten for projections and as history for variety.
+See [#1](https://github.com/HugoBar/jeeves/issues/1). Daily 03:00 in-app badge + "Needs confirmation" list; Saturday "Close this week" banner; from 03:00 Monday, a non-dismissable resolution screen for any earlier week's Unconfirmed Meals. Unconfirmed Meals count as eaten for projections and as history for variety.
 
 ### Suggestions
 - One Suggestion plus 2 alternatives per empty Meal Slot. Candidates: non-Archived Recipes and Products carrying the Slot Category.
@@ -80,7 +80,7 @@ See [#1](https://github.com/HugoBar/jeeves/issues/1). Daily 07:00 in-app badge +
 
 ### Platform
 - One Next.js + TypeScript app; all domain logic in a framework-free `core` module (ADR 0001). Drizzle + Postgres (ADR 0002). Self-hosted as a Docker container.
-- "Today" (Unconfirmed, week boundaries, 07:00 badge, days-until-Meal, Meal Series) is the date in the viewer's browser time zone. Meal dates and hours are plain values and never change with it.
+- "Today" (Unconfirmed, week boundaries, 03:00 badge and resolution screen, days-until-Meal, Meal Series) is the date in the viewer's browser time zone. Meal dates and hours are plain values and never change with it.
 - Mobile-first, responsive, installable PWA. English UI, i18n-ready: every user-facing string comes from the centralised UI strings file, including seeded data (Food Categories, Meal Types), which is stored by stable key. Only text the user types (names, steps, renames of seeded items) is stored as-is.
 - No authentication in V1 (LAN only).
 

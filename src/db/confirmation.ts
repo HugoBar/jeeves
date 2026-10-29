@@ -24,6 +24,12 @@ export type ConfirmMealResult =
       code: ConversionError["code"];
     };
 
+// A Meal "Confirm all as planned" could not Confirm, and why.
+export interface RefusedMeal {
+  mealId: string;
+  refusal: Exclude<ConfirmMealResult, { ok: true }>;
+}
+
 // Confirms the Meal (spec "Confirmation"): one Confirmation movement per
 // Product, linked to it, deducting what its slots used, each clamping at 0
 // and flagging the Stock as a Discard does. An Untracked Meal, or one
@@ -60,6 +66,23 @@ export async function confirmMeal(
     await tx.update(meals).set({ status: "confirmed", untracked: marksUntracked }).where(eq(meals.id, id));
     return { ok: true };
   });
+}
+
+// "Confirm all as planned" (#1): Confirms each Meal in turn, as planned and
+// each on its own, so one that is refused leaves the others Confirmed. An
+// Untracked Meal stays Untracked and deducts nothing. Returns the refused
+// ones, in the order given, each with nothing written.
+export async function confirmMealsAsPlanned(
+  db: Db,
+  ids: readonly string[],
+  today: string,
+): Promise<RefusedMeal[]> {
+  const refused: RefusedMeal[] = [];
+  for (const mealId of ids) {
+    const result = await confirmMeal(db, mealId, { untracked: false, today });
+    if (!result.ok) refused.push({ mealId, refusal: result });
+  }
+  return refused;
 }
 
 // Skips the Meal (spec "Confirmation"): it was not eaten, so it writes no

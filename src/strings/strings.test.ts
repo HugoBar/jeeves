@@ -53,6 +53,11 @@ describe("editingLabel", () => {
   it("says next for a day of next week", () => {
     expect(editingLabel("2026-10-27", "next")).toBe("Editing: next Tuesday");
   });
+
+  // Off the planner, a weekday alone could be any week.
+  it("names the date when no week is given", () => {
+    expect(editingLabel("2026-10-12", null)).toBe("Editing: Mon 12 Oct");
+  });
 });
 
 describe("formatDayHeading", () => {
