@@ -20,7 +20,14 @@ import {
   type NewMealSlotError,
 } from "@/core/meals";
 import { getDb } from "@/db";
-import { confirmMeal, reopenMeal, skipMeal, type ConfirmMealResult } from "@/db/confirmation";
+import {
+  confirmMeal,
+  confirmMealsAsPlanned,
+  reopenMeal,
+  skipMeal,
+  type ConfirmMealResult,
+  type RefusedMeal,
+} from "@/db/confirmation";
 import { listActiveCategories } from "@/db/food-categories";
 import { listMealTemplates } from "@/db/meal-templates";
 import { listActiveMealTypes } from "@/db/meal-types";
@@ -52,6 +59,7 @@ export type MealSlotCategoryFormState = { error: MealSlotCategoryError | "notCha
 export type MealSlotFillFormState = { error: MealSlotFillError | "notChangeable" | null };
 export type NewMealSlotFormState = { error: NewMealSlotError | "notChangeable" | null };
 export type ConfirmMealError = Exclude<ConfirmMealResult, { ok: true }>;
+export type { RefusedMeal };
 // The Meal is gone, already Confirmed or Skipped, or after the viewer's date.
 export type SkipMealError = { error: "notSkippable" };
 
@@ -216,6 +224,18 @@ export async function confirmMealAction(
   if (!result.ok) return result;
   refresh();
   return null;
+}
+
+// "Confirm all as planned" on the Meals the viewer was shown, each on its own.
+// `today` is the viewer's date when they submitted. The ones refused, with
+// why, and nothing written for them.
+export async function confirmMealsAsPlannedAction(
+  ids: string[],
+  today: string,
+): Promise<RefusedMeal[]> {
+  const refused = await confirmMealsAsPlanned(getDb(), ids, today);
+  refresh();
+  return refused;
 }
 
 // `today` is the viewer's date when they submitted. Null once Skipped;

@@ -76,6 +76,15 @@ body {
   margin-left: auto;
 }
 
+/* How many Unconfirmed Meals need confirmation, opening their list. */
+.app-header a.app-badge {
+  padding: 0 calc(var(--space) / 2);
+  border-radius: 999px;
+  background: var(--color-on-accent);
+  color: var(--color-accent);
+  font-weight: 600;
+}
+
 .item-list {
   list-style: none;
   margin: 0;
@@ -231,6 +240,29 @@ body {
   margin-bottom: calc(var(--space) * 1.5);
   border-left: 4px solid var(--week-accent);
   padding-left: calc(var(--space) / 2);
+}
+
+/* Meals listed off the planner, as "Needs confirmation" does. */
+.needs-confirmation {
+  --week-accent: var(--color-accent);
+}
+
+/* "Close this week": this week's Unconfirmed Meals, from Saturday. */
+.planner-banner {
+  margin-bottom: var(--space);
+  padding: calc(var(--space) / 2) var(--space);
+  border-left: 4px solid var(--color-warning);
+  background: color-mix(in srgb, var(--color-warning) 12%, var(--color-surface));
+}
+
+.planner-banner h2 {
+  margin: 0 0 calc(var(--space) / 4);
+  font-size: 1rem;
+}
+
+.planner-banner p,
+.planner-banner ul {
+  margin: 0 0 calc(var(--space) / 4);
 }
 
 .planner-week-next {

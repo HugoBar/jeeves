@@ -1,8 +1,13 @@
 import type { Metadata, Viewport } from "next";
 import Link from "next/link";
+import { connection } from "next/server";
+import { unconfirmedBefore } from "@/core/planner";
+import { getDb } from "@/db";
+import { listPlannedMealsBefore } from "@/db/meals";
 import { t } from "@/strings";
 import { ServiceWorkerRegistration } from "./service-worker-registration";
 import { theme } from "./theme";
+import { NeedsConfirmationBadge, ResolutionGate, type UnconfirmedCandidate } from "./unconfirmed-alerts";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -19,7 +24,16 @@ export const viewport: Viewport = {
   themeColor: theme.accent,
 };
 
-export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
+export default async function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
+  // Read from the database on every request, never at build time.
+  await connection();
+  // Which Meals are Unconfirmed depends on the viewer's date, known only in
+  // the browser. A layout is not rendered again on navigation, but every Meal
+  // action refreshes it.
+  const utcToday = new Date().toISOString().slice(0, 10);
+  const candidates: UnconfirmedCandidate[] = (await listPlannedMealsBefore(getDb(), unconfirmedBefore(utcToday))).map(
+    ({ status, date }) => ({ status, date }),
+  );
   return (
     <html lang="en">
       <body>
@@ -34,9 +48,12 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
             <Link href="/categories">{t("nav.categories")}</Link>
             <Link href="/meal-types">{t("nav.mealTypes")}</Link>
             <Link href="/meal-templates">{t("nav.mealTemplates")}</Link>
+            <NeedsConfirmationBadge meals={candidates} />
           </nav>
         </header>
-        <main className="app-main">{children}</main>
+        <main className="app-main">
+          <ResolutionGate meals={candidates}>{children}</ResolutionGate>
+        </main>
         <ServiceWorkerRegistration />
       </body>
     </html>
