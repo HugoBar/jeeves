@@ -52,7 +52,7 @@ A recorded change to a Product's Stock, caused by a Restock, Discard, Correction
 _Avoid_: Transaction, log entry
 
 **Projected Stock**:
-What a Product's Stock is expected to be at a given Meal, after deducting every Planned or Unconfirmed, non-Untracked Meal that is served before it (by day, then Meal Priority, then hour) from current Stock.
+What a Product's Stock is expected to be at a given Meal, after deducting every Planned or Unconfirmed, non-Untracked Meal that is served before it (by day, then Meal Priority, then hour) from current Stock. It never goes below 0: a Meal needing more than is left leaves none, so a later Meal's Shortfall is only its own. A Meal's Meal Slots take from it in their order. It is only worked out, never stored, and never changes Stock.
 _Avoid_: Future stock, forecast
 
 **Shortfall**:
