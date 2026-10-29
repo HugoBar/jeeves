@@ -271,3 +271,29 @@ export function isPlanned(meal: { status: MealStatus; date: string }, today: str
 export function canChangeSlots(meal: { status: MealStatus; date: string }, today: string): boolean {
   return isDate(today) && isPlanned(meal, today);
 }
+
+// Only a Planned or Unconfirmed Meal can be edited, marked Untracked or
+// removed, or have its slots changed (spec "Confirmation": before confirming,
+// slots can be edited). A Confirmed or Skipped one is read-only until it is
+// Reopened.
+export function canChangeMeal(meal: { status: MealStatus }): boolean {
+  return meal.status === "planned";
+}
+
+// A Meal can be Confirmed once its day has come: a Planned or Unconfirmed
+// Meal dated today or earlier (spec "Confirmation"). `today` is the viewer's
+// date, sent with the Confirmation; without a real date the Meal's day cannot
+// be checked.
+export function canConfirm(meal: { status: MealStatus; date: string }, today: string): boolean {
+  return isDate(today) && canChangeMeal(meal) && meal.date <= today;
+}
+
+// A Meal later today may not have happened yet, so Confirming it asks first.
+// `now` is the viewer's date and "HH:MM" time; "HH:MM" text sorts as time
+// does.
+export function confirmAsksFirst(
+  meal: { date: string; hour: string },
+  now: { date: string; hour: string },
+): boolean {
+  return meal.date === now.date && meal.hour > now.hour;
+}

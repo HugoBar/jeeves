@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
+  canChangeMeal,
   canChangeSlots,
+  canConfirm,
+  confirmAsksFirst,
   isPlanned,
   parseMealChanges,
   parseMealSlotCategory,
@@ -393,5 +396,53 @@ describe("canChangeSlots", () => {
   // A crafted request: without a real date the Meal's day cannot be checked.
   it.each([[""], ["tomorrow"], ["2026-13-01"]])("refuses them when today is not a date (%j)", (today) => {
     expect(canChangeSlots({ status: "planned", date: "2026-10-28" }, today)).toBe(false);
+  });
+});
+
+describe("canConfirm", () => {
+  it("allows Confirming a Meal today or on a day that has passed", () => {
+    expect(canConfirm({ status: "planned", date: "2026-10-28" }, "2026-10-28")).toBe(true);
+    expect(canConfirm({ status: "planned", date: "2026-10-20" }, "2026-10-28")).toBe(true);
+  });
+
+  it("refuses a Meal on a later day", () => {
+    expect(canConfirm({ status: "planned", date: "2026-10-29" }, "2026-10-28")).toBe(false);
+  });
+
+  it("refuses a Meal already Confirmed or Skipped", () => {
+    expect(canConfirm({ status: "confirmed", date: "2026-10-27" }, "2026-10-28")).toBe(false);
+    expect(canConfirm({ status: "skipped", date: "2026-10-27" }, "2026-10-28")).toBe(false);
+  });
+
+  // A crafted request: without a real date the Meal's day cannot be checked.
+  it.each([[""], ["tomorrow"], ["2026-13-01"]])("refuses when today is not a date (%j)", (today) => {
+    expect(canConfirm({ status: "planned", date: "2026-10-20" }, today)).toBe(false);
+  });
+});
+
+describe("confirmAsksFirst", () => {
+  const now = { date: "2026-10-28", hour: "13:00" };
+
+  // It may not have happened yet.
+  it("asks before Confirming a Meal later today", () => {
+    expect(confirmAsksFirst({ date: "2026-10-28", hour: "19:30" }, now)).toBe(true);
+  });
+
+  it("does not ask for a Meal earlier today, at this hour, or on a day that has passed", () => {
+    expect(confirmAsksFirst({ date: "2026-10-28", hour: "12:30" }, now)).toBe(false);
+    expect(confirmAsksFirst({ date: "2026-10-28", hour: "13:00" }, now)).toBe(false);
+    expect(confirmAsksFirst({ date: "2026-10-27", hour: "19:30" }, now)).toBe(false);
+  });
+});
+
+describe("canChangeMeal", () => {
+  it("allows changing a Planned or Unconfirmed Meal", () => {
+    expect(canChangeMeal({ status: "planned" })).toBe(true);
+  });
+
+  // Read-only until Reopened.
+  it("refuses a Confirmed or Skipped Meal", () => {
+    expect(canChangeMeal({ status: "confirmed" })).toBe(false);
+    expect(canChangeMeal({ status: "skipped" })).toBe(false);
   });
 });
