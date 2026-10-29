@@ -2,9 +2,8 @@ import { AMOUNT_COLUMN, parsePositive, parseWholeAboveZero } from "@/core/amount
 import type { CategoryKind } from "@/core/food-categories";
 import { isDate } from "@/core/planner";
 
-// A Meal's stored status (data-model Q3). Only Planned exists until
-// Confirmation and Skipping do; Unconfirmed is never stored.
-export const MEAL_STATUSES = ["planned"] as const;
+// A Meal's stored status (data-model Q3). Unconfirmed is never stored.
+export const MEAL_STATUSES = ["planned", "confirmed", "skipped"] as const;
 
 export type MealStatus = (typeof MEAL_STATUSES)[number];
 

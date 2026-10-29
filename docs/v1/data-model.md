@@ -19,7 +19,7 @@ Started 2026-10-20 with `/grill-with-docs`. Resume by re-running it and pointing
 - **Q9b Time zone**: resolved in [#15](https://github.com/HugoBar/jeeves/issues/15). One Household Time Zone (HTZ), stored in `settings`; default from the first browser, editable. Later parked in [#61](https://github.com/HugoBar/jeeves/issues/61): "today" is the date in the viewer's browser time zone, and V1 has no `settings` table.
 - **Q11b Ticking**: ticking only marks an item as in the cart (untickable, no Stock change); a "Restock ticked items" action asks for quantities (pre-filled with the pack-rounded amount), performs one Restock each and removes those items. Spec, glossary and #14 updated.
 - **Q11c Regenerating**: keeps manual items and items already on the list with their tick (only matters for ticked-but-not-yet-restocked items).
-- **Q12 Reopen**: reopening writes opposite Stock Movements that add back exactly what the Confirmation removed (respecting clamping); Meal-caused movements link to their Meal. Glossary entry **Reopen** added; Stock Movement causes now include Reopen. Spec and #10 updated.
+- **Q12 Reopen**: reopening writes opposite Stock Movements that add back exactly what the Confirmation removed (respecting clamping); Meal-caused movements link to their Meal. Glossary entry **Reopen** added; Stock Movement causes now include Reopen. Spec and #10 updated. The "stock was probably wrong" flag clears on Reopen only if that Confirmation's clamp was all that set it since the last Correction; each movement stores `clamped` so this can be told ([#70](https://github.com/HugoBar/jeeves/issues/70)).
 
 - **Q5 Meals, Meal Templates, Meal Series** (re-evaluated in a dedicated session, 2026-10-21):
   - A Meal Template is only a prefill shortcut. A Meal can be created from scratch (Meal Type + hour, no slots). Creating from a template copies name, Meal Type, hour and empty slots; `meals` has **no** template link.
@@ -53,7 +53,7 @@ Every table: `id uuid`, `created_at timestamptz`. `?` = nullable.
 - `food_categories(seed_key?, name?, kind, archived_at?)`
 - `products(name, default_unit, density?, pack_size_name?, pack_size_amount?, stock, stock_suspect, archived_at?)`
 - `product_food_categories(product_id, category_id)`
-- `stock_movements(product_id, type, delta, resulting_quantity, meal_id?)`
+- `stock_movements(product_id, type, delta, resulting_quantity, meal_id?, clamped)`
 - `shopping_list_items(product_id unique, quantity?, source, ticked)`
 - `recipes(name, portions, steps, prep_time_minutes, source_url?, archived_at?)`
 - `ingredients(recipe_id, product_id, amount, unit, minor, position)`
