@@ -3,7 +3,8 @@
 import Link from "next/link";
 import { useActionState } from "react";
 import { DEFAULT_UNITS, type DefaultUnit } from "@/core/units";
-import { t } from "@/strings";
+import type { IngredientUse } from "@/core/products";
+import { formatList, formatQuantity, t } from "@/strings";
 import { groupCategoriesByKind } from "../categories/category-groups";
 import type { CategoryOption } from "../categories/category-options";
 import type { ProductFormState, ProductFormValues } from "./actions";
@@ -86,7 +87,9 @@ export function ProductForm({
       </fieldset>
       {state.errors.map((error) => (
         <p key={error} className="form-error">
-          {t(`products.error.${error}`)}
+          {error === "densityInUse"
+            ? densityInUseMessage(values.name, state.densityUses ?? [], fixedUnit!)
+            : t(`products.error.${error}`)}
         </p>
       ))}
       <div className="product-form-actions">
@@ -97,4 +100,18 @@ export function ProductForm({
       </div>
     </form>
   );
+}
+
+// "Flour's Density is used by Pancakes (1 cup) and Bread (2 cup). ..." Only
+// editing raises it, and editing always fixes the Default Unit.
+function densityInUseMessage(product: string, uses: IngredientUse[], unit: DefaultUnit): string {
+  return t("products.error.densityInUse", {
+    product,
+    uses: formatList(
+      uses.map(({ recipeName, amount, unit }) =>
+        t("products.densityUse", { recipe: recipeName, quantity: formatQuantity(amount, unit) }),
+      ),
+    ),
+    unit: t(`unit.${unit}`),
+  });
 }

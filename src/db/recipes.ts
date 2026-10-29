@@ -1,6 +1,7 @@
 import "server-only";
-import { and, asc, eq, inArray, isNull, or, sql } from "drizzle-orm";
+import { and, asc, eq, exists, inArray, isNull, or, sql } from "drizzle-orm";
 import type { Ingredient, PickableProduct } from "@/core/ingredients";
+import type { IngredientUse } from "@/core/products";
 import {
   applyCategoryOverrides,
   deriveFoodCategoryIds,
@@ -17,7 +18,7 @@ import {
   type FoodCategory,
 } from "./food-categories";
 import type { Db } from "./index";
-import { foodCategories, ingredients, products, recipeCategoryOverrides, recipes } from "./schema";
+import { foodCategories, ingredients, mealSlots, meals, products, recipeCategoryOverrides, recipes } from "./schema";
 
 export interface Recipe extends RecipeFields {
   id: string;
@@ -233,4 +234,22 @@ export async function listPickableProducts(db: Db, recipeId?: string): Promise<P
 // Category overrides must cascade so they never block deletion.
 export function removeRecipe(db: Db, id: string): Promise<RemoveOutcome> {
   return deleteOrArchive(db, recipes, id);
+}
+
+// Every Ingredient using the Product, in Recipes that can still be cooked:
+// non-Archived ones, and Archived ones a Meal not yet Confirmed or Skipped
+// (Planned or Unconfirmed) still uses. By Recipe name, then in the order
+// entered.
+export async function listIngredientUses(db: Db, productId: string): Promise<IngredientUse[]> {
+  const usedByMeal = db
+    .select({ recipeId: mealSlots.recipeId })
+    .from(mealSlots)
+    .innerJoin(meals, eq(mealSlots.mealId, meals.id))
+    .where(and(eq(mealSlots.recipeId, recipes.id), eq(meals.status, "planned")));
+  return db
+    .select({ recipeName: recipes.name, amount: ingredients.amount, unit: ingredients.unit })
+    .from(ingredients)
+    .innerJoin(recipes, eq(ingredients.recipeId, recipes.id))
+    .where(and(eq(ingredients.productId, productId), or(isNull(recipes.archivedAt), exists(usedByMeal))))
+    .orderBy(asc(recipes.name), asc(ingredients.position));
 }

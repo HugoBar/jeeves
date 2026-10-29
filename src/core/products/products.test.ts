@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseProductFields, toProductFieldsInput } from "./index";
+import { densityBlockers, parseProductFields, toProductFieldsInput } from "./index";
 
 const filled = {
   name: " Rice ",
@@ -96,5 +96,35 @@ describe("toProductFieldsInput", () => {
       packSizeAmount: "",
       categoryIds: [],
     });
+  });
+});
+
+// Recipes are saved only with Ingredients that convert, so clearing a
+// Density they convert with would leave them unconvertible (#69).
+describe("densityBlockers", () => {
+  const pancakes = { recipeName: "Pancakes", amount: 1, unit: "cup" as const };
+  const bread = { recipeName: "Bread", amount: 500, unit: "g" as const };
+
+  it("finds the Ingredients of a g Product written in a volume unit", () => {
+    expect(densityBlockers("g", [pancakes, bread])).toEqual([pancakes]);
+  });
+
+  it("finds the Ingredients of an ml Product written in a mass unit", () => {
+    const sauce = { recipeName: "Sauce", amount: 0.2, unit: "kg" as const };
+    const soup = { recipeName: "Soup", amount: 1, unit: "l" as const };
+    expect(densityBlockers("ml", [sauce, soup])).toEqual([sauce]);
+  });
+
+  it.each([["tsp"], ["tbsp"], ["ml"], ["l"]] as const)("counts %s as a volume unit", (unit) => {
+    expect(densityBlockers("g", [{ recipeName: "Cake", amount: 1, unit }])).toHaveLength(1);
+  });
+
+  it("finds none when every Ingredient is in the Product's own dimension", () => {
+    expect(densityBlockers("g", [bread, { recipeName: "Rolls", amount: 1, unit: "kg" }])).toEqual([]);
+  });
+
+  // Pieces never convert, so a pc Product's Density is never used.
+  it("finds none for a pc Product", () => {
+    expect(densityBlockers("pc", [{ recipeName: "Omelette", amount: 3, unit: "pc" }])).toEqual([]);
   });
 });
