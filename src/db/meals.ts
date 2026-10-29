@@ -1,5 +1,5 @@
 import "server-only";
-import { and, asc, eq, gt, gte, inArray, lte, max, sql } from "drizzle-orm";
+import { and, asc, eq, gt, gte, inArray, lt, lte, max, sql } from "drizzle-orm";
 import {
   slotKeepsFood,
   type MealChanges,
@@ -153,6 +153,13 @@ async function toMeals(db: Db, rows: Omit<Meal, "slots">[]): Promise<Meal[]> {
 // Every Meal from `from` to `to`, both included, in no order.
 export async function listMeals(db: Db, from: string, to: string): Promise<Meal[]> {
   return toMeals(db, await selectMeals(db).where(and(gte(meals.date, from), lte(meals.date, to))));
+}
+
+// Every Meal stored as "planned" dated before `before`, in no order: the
+// Unconfirmed Meals of any viewer whose date is `before` or earlier (spec
+// "Platform").
+export async function listPlannedMealsBefore(db: Db, before: string): Promise<Meal[]> {
+  return toMeals(db, await selectMeals(db).where(and(eq(meals.status, "planned"), lt(meals.date, before))));
 }
 
 export async function getMeal(db: Db, id: string): Promise<Meal | undefined> {
