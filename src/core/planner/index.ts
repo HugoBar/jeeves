@@ -21,7 +21,7 @@ export function addDays(date: string, days: number): string {
 }
 
 // The Monday of the week holding `date` (weeks run Monday to Sunday).
-function mondayOf(date: string): string {
+export function mondayOf(date: string): string {
   const weekday = new Date(toTime(date)).getUTCDay(); // 0 = Sunday
   return addDays(date, -((weekday + 6) % 7));
 }
@@ -44,6 +44,13 @@ export function plannerRange(utcToday: string): { from: string; to: string } {
     from: plannerWeeks(addDays(utcToday, -1)).thisWeek[0]!,
     to: plannerWeeks(addDays(utcToday, 1)).nextWeek[6]!,
   };
+}
+
+// Meals dated before this day are the Unconfirmed ones of any viewer: every
+// time zone's date is within a day of the UTC one, `utcToday` (spec
+// "Platform").
+export function unconfirmedBefore(utcToday: string): string {
+  return addDays(utcToday, 1);
 }
 
 // The time of day of `moment`, "HH:MM", in the time zone of whoever runs it.

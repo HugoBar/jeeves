@@ -1,6 +1,6 @@
 import { AMOUNT_COLUMN, parsePositive, parseWholeAboveZero } from "@/core/amounts";
 import type { CategoryKind } from "@/core/food-categories";
-import { isDate } from "@/core/planner";
+import { addDays, isDate, mondayOf } from "@/core/planner";
 
 // A Meal's stored status (data-model Q3). Unconfirmed is never stored.
 export const MEAL_STATUSES = ["planned", "confirmed", "skipped"] as const;
@@ -257,6 +257,11 @@ export function sortMeals<T extends { hour: string; createdAt: Date }>(meals: re
   return [...meals].sort((a, b) => a.hour.localeCompare(b.hour) || a.createdAt.getTime() - b.createdAt.getTime());
 }
 
+// Meals from several days: earlier days first, each day's as sortMeals.
+export function sortMealsByDay<T extends { date: string; hour: string; createdAt: Date }>(meals: readonly T[]): T[] {
+  return sortMeals(meals).sort((a, b) => a.date.localeCompare(b.date));
+}
+
 // Only a Planned or Unconfirmed Meal can be edited, marked Untracked or
 // removed, or have its slots changed (spec "Confirmation": before confirming,
 // slots can be edited). A Confirmed or Skipped one is read-only until it is
@@ -286,4 +291,53 @@ export function confirmOrSkipAsksFirst(
 // A Confirmed or Skipped Meal can be Reopened, back to Planned or Unconfirmed.
 export function canReopen(meal: { status: MealStatus }): boolean {
   return meal.status === "confirmed" || meal.status === "skipped";
+}
+
+// Unconfirmed is never stored: a Meal is Unconfirmed while it is still
+// "planned" and its day is before `today`, the viewer's date (spec
+// "Platform").
+export function isUnconfirmed(meal: { status: MealStatus; date: string }, today: string): boolean {
+  return meal.status === "planned" && meal.date < today;
+}
+
+// The hour a day is closed on the day after it: late enough for a late Meal
+// still going past midnight, early enough to come before the next day's
+// first.
+const DAY_CLOSE_HOUR = "03:00";
+
+// The viewer's day as far as closing Meals goes: until 03:00 it is still
+// yesterday. `now` is the viewer's date and "HH:MM" time.
+function openDay(now: { date: string; hour: string }): string {
+  return now.hour >= DAY_CLOSE_HOUR ? now.date : addDays(now.date, -1);
+}
+
+// The Unconfirmed Meals the in-app badge counts and the "Needs confirmation"
+// list shows: yesterday's only from 03:00, any earlier day's always (#1).
+// `now` is the viewer's date and "HH:MM" time.
+export function needingConfirmation<T extends { status: MealStatus; date: string }>(
+  meals: readonly T[],
+  now: { date: string; hour: string },
+): T[] {
+  return meals.filter((meal) => isUnconfirmed(meal, openDay(now)));
+}
+
+// What the planner's "Close this week" banner lists: from Saturday, this
+// week's Unconfirmed Meals (#1). `today` is the viewer's date.
+export function weekToClose<T extends { status: MealStatus; date: string }>(meals: readonly T[], today: string): T[] {
+  const monday = mondayOf(today);
+  const saturday = addDays(monday, 5);
+  if (today < saturday) return [];
+  return meals.filter((meal) => meal.date >= monday && isUnconfirmed(meal, today));
+}
+
+// What the non-dismissable resolution screen asks for: every Unconfirmed Meal
+// from a week before this one, so no week stays open once the next has
+// started (#1). Until 03:00 on Monday, Sunday's week is still this one. `now`
+// is the viewer's date and "HH:MM" time.
+export function mustResolve<T extends { status: MealStatus; date: string }>(
+  meals: readonly T[],
+  now: { date: string; hour: string },
+): T[] {
+  const monday = mondayOf(openDay(now));
+  return meals.filter((meal) => isUnconfirmed(meal, monday));
 }

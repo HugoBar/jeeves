@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { localDate, plannerRange, plannerWeeks } from "./index";
+import { localDate, mondayOf, plannerRange, plannerWeeks, unconfirmedBefore } from "./index";
 
 describe("plannerWeeks", () => {
   it("is this week and next week, Monday to Sunday", () => {
@@ -49,6 +49,21 @@ describe("plannerRange", () => {
     expect(plannerRange("2026-10-25")).toEqual({ from: "2026-10-19", to: "2026-11-08" });
     // Midweek: both neighbours share its weeks.
     expect(plannerRange("2026-10-22")).toEqual({ from: "2026-10-19", to: "2026-11-01" });
+  });
+});
+
+describe("mondayOf", () => {
+  it("is the Monday starting the week of a date", () => {
+    expect(mondayOf("2026-11-01")).toBe("2026-10-26");
+    expect(mondayOf("2026-10-26")).toBe("2026-10-26");
+  });
+});
+
+describe("unconfirmedBefore", () => {
+  // No viewer's date is past tomorrow in UTC, so no Meal on or after it can
+  // be Unconfirmed for anyone.
+  it("is the day after the UTC date", () => {
+    expect(unconfirmedBefore("2026-10-31")).toBe("2026-11-01");
   });
 });
 

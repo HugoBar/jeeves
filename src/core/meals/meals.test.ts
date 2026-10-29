@@ -2,6 +2,10 @@ import { describe, expect, it } from "vitest";
 import {
   canChangeMeal,
   canReopen,
+  isUnconfirmed,
+  needingConfirmation,
+  weekToClose,
+  mustResolve,
   canConfirmOrSkip,
   parseMealChanges,
   parseMealSlotCategory,
@@ -15,6 +19,7 @@ import {
   slotFoodValue,
   slotKeepsFood,
   sortMeals,
+  sortMealsByDay,
 } from "./index";
 
 // The Meal Types a new Meal can have in these tests.
@@ -367,6 +372,17 @@ describe("sortMeals", () => {
 
     expect(sortMeals(meals).map((meal) => meal.id)).toEqual(["breakfast", "first-lunch", "second-lunch", "dinner"]);
   });
+
+  // As lists of Meals across days, such as "Needs confirmation", show them.
+  it("lists earlier days first", () => {
+    const createdAt = new Date("2026-10-20T08:00:00Z");
+    const meals = [
+      { id: "tuesday-breakfast", date: "2026-10-20", hour: "08:00", createdAt },
+      { id: "monday-dinner", date: "2026-10-19", hour: "19:30", createdAt },
+    ];
+
+    expect(sortMealsByDay(meals).map((meal) => meal.id)).toEqual(["monday-dinner", "tuesday-breakfast"]);
+  });
 });
 
 describe("canConfirmOrSkip", () => {
@@ -425,5 +441,82 @@ describe("canChangeMeal", () => {
   it("refuses a Confirmed or Skipped Meal", () => {
     expect(canChangeMeal({ status: "confirmed" })).toBe(false);
     expect(canChangeMeal({ status: "skipped" })).toBe(false);
+  });
+});
+
+describe("isUnconfirmed", () => {
+  it("is a Planned Meal whose day has passed", () => {
+    expect(isUnconfirmed({ status: "planned", date: "2026-10-27" }, "2026-10-28")).toBe(true);
+  });
+
+  it("is not a Meal today or later", () => {
+    expect(isUnconfirmed({ status: "planned", date: "2026-10-28" }, "2026-10-28")).toBe(false);
+    expect(isUnconfirmed({ status: "planned", date: "2026-10-29" }, "2026-10-28")).toBe(false);
+  });
+
+  it("is not a Confirmed or Skipped Meal", () => {
+    expect(isUnconfirmed({ status: "confirmed", date: "2026-10-27" }, "2026-10-28")).toBe(false);
+    expect(isUnconfirmed({ status: "skipped", date: "2026-10-27" }, "2026-10-28")).toBe(false);
+  });
+});
+
+describe("needingConfirmation", () => {
+  const yesterday = { id: "yesterday", status: "planned", date: "2026-10-27" } as const;
+  const earlier = { id: "earlier", status: "planned", date: "2026-10-25" } as const;
+  const confirmed = { id: "confirmed", status: "confirmed", date: "2026-10-25" } as const;
+  const today = { id: "today", status: "planned", date: "2026-10-28" } as const;
+  const meals = [yesterday, earlier, confirmed, today];
+
+  it("is every Unconfirmed Meal from 03:00", () => {
+    expect(needingConfirmation(meals, { date: "2026-10-28", hour: "03:00" })).toEqual([yesterday, earlier]);
+    expect(needingConfirmation(meals, { date: "2026-10-28", hour: "23:59" })).toEqual([yesterday, earlier]);
+  });
+
+  // A late Meal may still be on the table after midnight.
+  it("leaves out yesterday's Meals before 03:00", () => {
+    expect(needingConfirmation(meals, { date: "2026-10-28", hour: "02:59" })).toEqual([earlier]);
+    expect(needingConfirmation(meals, { date: "2026-10-28", hour: "00:00" })).toEqual([earlier]);
+  });
+});
+
+describe("weekToClose", () => {
+  // The week of Monday 2026-10-26 to Sunday 2026-11-01.
+  const lastWeek = { id: "last-week", status: "planned", date: "2026-10-25" } as const;
+  const monday = { id: "monday", status: "planned", date: "2026-10-26" } as const;
+  const friday = { id: "friday", status: "planned", date: "2026-10-30" } as const;
+  const skipped = { id: "skipped", status: "skipped", date: "2026-10-27" } as const;
+  const saturday = { id: "saturday", status: "planned", date: "2026-10-31" } as const;
+  const meals = [lastWeek, monday, friday, skipped, saturday];
+
+  it("is this week's Unconfirmed Meals from Saturday", () => {
+    expect(weekToClose(meals, "2026-10-31")).toEqual([monday, friday]);
+    expect(weekToClose(meals, "2026-11-01")).toEqual([monday, friday, saturday]);
+  });
+
+  it("is nothing before Saturday", () => {
+    expect(weekToClose(meals, "2026-10-30")).toEqual([]);
+  });
+});
+
+describe("mustResolve", () => {
+  const twoWeeksAgo = { id: "two-weeks-ago", status: "planned", date: "2026-10-14" } as const;
+  const lastSunday = { id: "last-sunday", status: "planned", date: "2026-10-25" } as const;
+  const lastConfirmed = { id: "last-confirmed", status: "confirmed", date: "2026-10-24" } as const;
+  const thisMonday = { id: "this-monday", status: "planned", date: "2026-10-26" } as const;
+  const meals = [twoWeeksAgo, lastSunday, lastConfirmed, thisMonday];
+
+  // Monday 2026-10-26 starts a new week.
+  it("is every Unconfirmed Meal from a week before this one, from 03:00 on Monday", () => {
+    expect(mustResolve(meals, { date: "2026-10-26", hour: "03:00" })).toEqual([twoWeeksAgo, lastSunday]);
+    expect(mustResolve(meals, { date: "2026-10-29", hour: "00:00" })).toEqual([twoWeeksAgo, lastSunday]);
+  });
+
+  // A late Sunday Meal is not cut off, nor is an early Monday's viewer.
+  it("still counts Sunday as this week before 03:00 on Monday", () => {
+    expect(mustResolve(meals, { date: "2026-10-26", hour: "02:59" })).toEqual([twoWeeksAgo]);
+  });
+
+  it("is nothing while every earlier week is closed", () => {
+    expect(mustResolve([lastConfirmed, thisMonday], { date: "2026-10-29", hour: "12:00" })).toEqual([]);
   });
 });
