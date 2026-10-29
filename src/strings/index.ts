@@ -73,9 +73,15 @@ export function formatDayHeading(date: string): string {
   return `${dayPart(date, { weekday: "short" })} ${dayPart(date, { day: "numeric" })}`;
 }
 
+// A Meal's date off the planner: "Mon 12 Oct".
+export function formatMealDate(date: string): string {
+  return `${formatDayHeading(date)} ${dayPart(date, { month: "short" })}`;
+}
+
 // Which day a Meal form edits, saying "next" for a day of next week (spec
-// "Planning").
-export function editingLabel(date: string, week: "this" | "next"): string {
+// "Planning"). With no week, as off the planner, it names the date.
+export function editingLabel(date: string, week: "this" | "next" | null): string {
+  if (week === null) return t("planner.editing", { day: formatMealDate(date) });
   const day = dayPart(date, { weekday: "long" });
   return t(week === "next" ? "planner.editingNext" : "planner.editing", { day });
 }
