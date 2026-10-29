@@ -187,9 +187,13 @@ export async function createMealFromTemplate(
   });
 }
 
-// Its Meal Type never changes.
+// The Meal, if it can still change: core's canChangeMeal, checked in the
+// write itself so a Meal Confirmed meanwhile is left alone.
+const changeable = (id: string) => and(eq(meals.id, id), eq(meals.status, "planned"));
+
+// Its Meal Type never changes. Nothing if the Meal is Confirmed or Skipped.
 export async function updateMeal(db: Db, id: string, changes: MealChanges): Promise<void> {
-  await db.update(meals).set(changes).where(eq(meals.id, id));
+  await db.update(meals).set(changes).where(changeable(id));
 }
 
 // Every food column of a slot cleared, as an empty slot has them.
@@ -313,12 +317,14 @@ export async function listFoodsForSlots(db: Db): Promise<{ recipes: SlotRecipe[]
   };
 }
 
+// Nothing if the Meal is Confirmed or Skipped.
 export async function setMealUntracked(db: Db, id: string, untracked: boolean): Promise<void> {
-  await db.update(meals).set({ untracked }).where(eq(meals.id, id));
+  await db.update(meals).set({ untracked }).where(changeable(id));
 }
 
-// Nothing refers to a Meal yet, so it is a plain hard delete. Its own slots
-// cascade.
+// A hard delete; its own slots cascade. Nothing if the Meal is Confirmed or
+// Skipped: it must be Reopened first. A Reopened Meal's Stock Movements stay
+// in the Products' history, no longer linked to it.
 export async function deleteMeal(db: Db, id: string): Promise<void> {
-  await db.delete(meals).where(eq(meals.id, id));
+  await db.delete(meals).where(changeable(id));
 }

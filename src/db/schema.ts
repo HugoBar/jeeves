@@ -95,7 +95,11 @@ export const productFoodCategories = pgTable(
 export const stockMovementType = pgEnum("stock_movement_type", STOCK_MOVEMENT_TYPES);
 
 // Every change to a Product's Stock, the true record of it (ADR 0003). A
-// Product with movements can never be hard deleted, only Archived.
+// Product with movements can never be hard deleted, only Archived. A
+// Confirmation or Reopen links to its Meal (data-model T6, Q12); removing a
+// Reopened Meal keeps its movements in the Product's history, unlinked.
+// `clamped` records a deduction that clamped at 0, setting the flag, so a
+// Reopen can tell whether its Confirmation was what set it.
 export const stockMovements = pgTable(
   "stock_movements",
   {
@@ -107,8 +111,13 @@ export const stockMovements = pgTable(
     type: stockMovementType("type").notNull(),
     delta: amount("delta").notNull(),
     resultingQuantity: amount("resulting_quantity").notNull(),
+    mealId: uuid("meal_id").references(() => meals.id, { onDelete: "set null" }),
+    clamped: boolean("clamped").notNull().default(false),
   },
-  (table) => [index("stock_movements_product_id_created_at").on(table.productId, table.createdAt)],
+  (table) => [
+    index("stock_movements_product_id_created_at").on(table.productId, table.createdAt),
+    index("stock_movements_meal_id").on(table.mealId),
+  ],
 );
 
 // Portions are whole numbers (data-model T4), and so is prep time, in
@@ -249,7 +258,8 @@ export const mealStatus = pgEnum("meal_status", MEAL_STATUSES);
 // values with no time zone (Q9). Its Meal Type never changes; one a Meal uses
 // cannot be deleted, so removing it Archives it and the Meal keeps it. A day
 // can have several Meals of one Meal Type, so there is no unique
-// (date, meal_type_id). The Meal Series link comes with Meal Series (#16).
+// (date, meal_type_id). The Meal Series link comes with Meal Series (#16). A
+// Confirmed Meal cannot be removed: it must be Reopened first.
 export const meals = pgTable(
   "meals",
   {

@@ -311,6 +311,14 @@ body {
   gap: calc(var(--space) / 2);
 }
 
+/* Confirm and Confirm as Untracked, on their own row under the slots. */
+.planner-confirm {
+  display: flex;
+  flex-basis: 100%;
+  flex-wrap: wrap;
+  gap: calc(var(--space) / 2);
+}
+
 /* A Meal Slot's Slot Category, then its food and buttons, wrapping as needed. */
 .slot-row {
   display: flex;

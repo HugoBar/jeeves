@@ -13,11 +13,13 @@ export interface StockState {
 }
 
 // What a Stock Movement does to Stock: the change applied and the Stock it
-// leaves, plus the flag afterwards.
+// leaves, plus the flag afterwards and whether it clamped at 0, which Reopen
+// reads back to tell why the flag is on.
 export interface StockChange {
   delta: number;
   resultingQuantity: number;
   stockSuspect: boolean;
+  clamped: boolean;
 }
 
 // Food was bought. The flag stays: adding to a wrong Stock leaves it wrong.
@@ -31,7 +33,7 @@ export function restock(current: StockState, quantity: number): StockChange {
 export function deduct(current: StockState, quantity: number): StockChange {
   const unclamped = roundForColumn(current.stock - quantity, AMOUNT_COLUMN);
   const clamped = unclamped < 0;
-  return towards(current, clamped ? 0 : unclamped, clamped || current.stockSuspect);
+  return { ...towards(current, clamped ? 0 : unclamped, clamped || current.stockSuspect), clamped };
 }
 
 // Stock was counted: it becomes the quantity actually on hand. The only
@@ -40,13 +42,22 @@ export function correct(current: StockState, quantity: number): StockChange {
   return towards(current, quantity, false);
 }
 
-// The change that takes Stock to `resultingQuantity`. Subtracting (rather
-// than negating) keeps a zero delta from being -0.
+// A Reopen: the opposite of a Confirmation movement, adding back exactly
+// the `delta` it recorded, which is what it removed after clamping. The flag
+// stays on only if `staysSuspect`: something other than that Confirmation
+// set it (core's staysSuspectAfterReopen).
+export function reverse(current: StockState, delta: number, staysSuspect: boolean): StockChange {
+  return towards(current, roundForColumn(current.stock - delta, AMOUNT_COLUMN), current.stockSuspect && staysSuspect);
+}
+
+// The change that takes Stock to `resultingQuantity`, without clamping.
+// Subtracting (rather than negating) keeps a zero delta from being -0.
 function towards(current: StockState, resultingQuantity: number, stockSuspect: boolean): StockChange {
   return {
     delta: roundForColumn(resultingQuantity - current.stock, AMOUNT_COLUMN),
     resultingQuantity,
     stockSuspect,
+    clamped: false,
   };
 }
 

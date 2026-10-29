@@ -1,7 +1,13 @@
 import { AMOUNT_COLUMN, roundForColumn } from "@/core/amounts";
 import type { MealStatus } from "@/core/meals";
 import { addDays } from "@/core/planner";
-import { convertToDefaultUnit, type DefaultUnit, type Unit } from "@/core/units";
+import {
+  convertToDefaultUnit,
+  type ConversionError,
+  type ConvertibleProduct,
+  type DefaultUnit,
+  type Unit,
+} from "@/core/units";
 
 // What projecting needs of a Product: its Stock, in its Default Unit, and
 // what converting an Ingredient to that unit needs.
@@ -64,27 +70,36 @@ function servedBefore(a: ProjectedMeal, b: ProjectedMeal): number {
   );
 }
 
-// What one slot takes from Stock, by Product, in Default Units, and the
-// Products whose need cannot be worked out. A Recipe scales by the slot's
-// Portions over its own.
-function slotNeeds(
+// An Ingredient that cannot be converted to its Product's Default Unit, as
+// written in its Recipe.
+export interface UnconvertibleIngredient {
+  productId: string;
+  amount: number;
+  unit: Unit;
+  error: ConversionError;
+}
+
+// What one slot takes from Stock, by Product, in Default Units, unrounded,
+// and the Ingredients whose need cannot be worked out. A Recipe scales by the
+// slot's Portions over its own. Confirmation deducts the same needs.
+export function slotNeeds(
   slot: ProjectedSlot,
-  products: ReadonlyMap<string, ProjectedProduct>,
-): { needs: Map<string, number>; unprojectable: Set<string> } {
+  products: ReadonlyMap<string, ConvertibleProduct>,
+): { needs: Map<string, number>; unconvertible: UnconvertibleIngredient[] } {
   const needs = new Map<string, number>();
-  const unprojectable = new Set<string>();
+  const unconvertible: UnconvertibleIngredient[] = [];
   if (slot.content === "product") needs.set(slot.productId, slot.quantity);
   if (slot.content === "recipe") {
     const scale = slot.portions / slot.recipe.portions;
     for (const { productId, amount, unit } of slot.recipe.ingredients) {
       const converted = convertToDefaultUnit(amount, unit, products.get(productId)!);
       if (converted.ok) needs.set(productId, (needs.get(productId) ?? 0) + converted.amount * scale);
-      else unprojectable.add(productId);
+      else unconvertible.push({ productId, amount, unit, error: converted.error });
     }
   }
-  // Part of what such a Product needs is unknown, so none of it is projected.
-  for (const productId of unprojectable) needs.delete(productId);
-  return { needs, unprojectable };
+  // Part of what such a Product needs is unknown, so none of it is counted.
+  for (const { productId } of unconvertible) needs.delete(productId);
+  return { needs, unconvertible };
 }
 
 // Each slot's Shortfalls, by slot id, from every Planned or Unconfirmed,
@@ -104,7 +119,7 @@ export function projectStock(
   const projected = meals.filter((meal) => meal.status === "planned" && !meal.untracked);
   for (const meal of projected.toSorted(servedBefore)) {
     for (const slot of meal.slots) {
-      const { needs, unprojectable } = slotNeeds(slot, products);
+      const { needs, unconvertible } = slotNeeds(slot, products);
       const shortfalls: Shortfall[] = [];
       for (const [productId, need] of needs) {
         const onHand = stock.get(productId)!;
@@ -112,7 +127,8 @@ export function projectStock(
         if (short > 0) shortfalls.push({ productId, amount: short });
         stock.set(productId, Math.max(0, onHand - need));
       }
-      bySlot.set(slot.id, { shortfalls, unprojectable: [...unprojectable] });
+      const unprojectable = [...new Set(unconvertible.map((ingredient) => ingredient.productId))];
+      bySlot.set(slot.id, { shortfalls, unprojectable });
     }
   }
   return bySlot;

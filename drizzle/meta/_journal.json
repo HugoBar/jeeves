@@ -113,6 +113,20 @@
       "when": 1793205629897,
       "tag": "0015_meal_slot_food",
       "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "7",
+      "when": 1793270380979,
+      "tag": "0016_confirm_meals",
+      "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1793278445642,
+      "tag": "0017_stock_movements_clamped",
+      "breakpoints": true
     }
   ]
 }

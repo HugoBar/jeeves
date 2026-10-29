@@ -14,7 +14,6 @@ export interface ProjectedProductWithName extends ProjectedProduct {
 // eaten as far as Stock knows (Planned or Unconfirmed, both stored as
 // "planned"), tracked, on or before `to`. Earlier days count however far
 // back, as an Unconfirmed Meal still takes Stock from the ones after it.
-// Recipes and Products are loaded even when Archived: a slot keeps them.
 // Products come with their names, which the warnings show.
 export async function loadStockProjection(
   db: Db,
@@ -33,8 +32,22 @@ export async function loadStockProjection(
     .from(meals)
     .innerJoin(mealTypes, eq(meals.mealTypeId, mealTypes.id))
     .where(and(eq(meals.status, "planned"), eq(meals.untracked, false), lte(meals.date, to)));
-  const mealIds = mealRows.map((meal) => meal.id);
+  const { slotsByMeal, products } = await loadMealSlots(db, mealRows.map((meal) => meal.id));
+  return {
+    // Postgres reads a `time` back as "HH:MM:SS"; core works in "HH:MM".
+    meals: mealRows.map((meal) => ({ ...meal, hour: meal.hour.slice(0, 5), slots: slotsByMeal.get(meal.id)! })),
+    products,
+  };
+}
 
+// Each Meal's slots in order, as working out what they need takes them, by
+// Meal id, and every Product they use. Recipes and Products are loaded even
+// when Archived: a slot keeps them. Products come with their names, which
+// warnings and refusals show.
+export async function loadMealSlots(
+  db: Db,
+  mealIds: string[],
+): Promise<{ slotsByMeal: Map<string, ProjectedSlot[]>; products: Map<string, ProjectedProductWithName> }> {
   const slotRows =
     mealIds.length === 0
       ? []
@@ -62,12 +75,7 @@ export async function loadStockProjection(
 
   const slotsByMeal = new Map<string, ProjectedSlot[]>(mealIds.map((id) => [id, []]));
   for (const { mealId, ...slot } of slotRows) slotsByMeal.get(mealId)!.push(toSlot(slot, recipesById));
-
-  return {
-    // Postgres reads a `time` back as "HH:MM:SS"; core works in "HH:MM".
-    meals: mealRows.map((meal) => ({ ...meal, hour: meal.hour.slice(0, 5), slots: slotsByMeal.get(meal.id)! })),
-    products: await productsFor(db, [...productIds]),
-  };
+  return { slotsByMeal, products: await productsFor(db, [...productIds]) };
 }
 
 // The CHECKs on meal_slots guarantee the columns of the slot's content are

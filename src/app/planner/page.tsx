@@ -90,7 +90,7 @@ export default async function PlannerPage() {
 }
 
 // A slot's Shortfalls and unprojectable Products, by Product name; null when
-// there are none, or its Meal is Untracked and has no projection.
+// there are none, or its Meal is Untracked or Confirmed and has no projection.
 function toSlotWarnings(
   slot: SlotProjection | undefined,
   products: ReadonlyMap<string, ProjectedProductWithName>,

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { correct, deduct, parsePositiveQuantity, parseQuantityOnHand, restock } from "./index";
+import { correct, deduct, parsePositiveQuantity, parseQuantityOnHand, restock, reverse } from "./index";
 
 describe("restock", () => {
   it("adds the quantity bought to Stock", () => {
@@ -7,6 +7,7 @@ describe("restock", () => {
       delta: 500,
       resultingQuantity: 1750,
       stockSuspect: false,
+      clamped: false,
     });
   });
 
@@ -42,6 +43,7 @@ describe("deduct", () => {
       delta: -250,
       resultingQuantity: 750,
       stockSuspect: false,
+      clamped: false,
     });
   });
 
@@ -51,6 +53,7 @@ describe("deduct", () => {
       delta: -200,
       resultingQuantity: 0,
       stockSuspect: true,
+      clamped: true,
     });
   });
 
@@ -58,6 +61,7 @@ describe("deduct", () => {
     const change = deduct({ stock: 0, stockSuspect: false }, 2);
     expect(change.delta).toBe(0);
     expect(change.stockSuspect).toBe(true);
+    expect(change.clamped).toBe(true);
   });
 
   it("does not flag a deduction that leaves exactly 0", () => {
@@ -65,6 +69,7 @@ describe("deduct", () => {
       delta: -6,
       resultingQuantity: 0,
       stockSuspect: false,
+      clamped: false,
     });
   });
 
@@ -79,6 +84,7 @@ describe("correct", () => {
       delta: -200,
       resultingQuantity: 800,
       stockSuspect: false,
+      clamped: false,
     });
     expect(correct({ stock: 2, stockSuspect: false }, 5).delta).toBe(3);
   });
@@ -88,6 +94,7 @@ describe("correct", () => {
       delta: 0,
       resultingQuantity: 0,
       stockSuspect: false,
+      clamped: false,
     });
   });
 });
@@ -104,4 +111,30 @@ describe("parseQuantityOnHand", () => {
       expect(parseQuantityOnHand(text)).toEqual({ ok: false, error: "notZeroOrMore" });
     },
   );
+});
+
+describe("reverse", () => {
+  it("adds back what the movement removed", () => {
+    expect(reverse({ stock: 50, stockSuspect: false }, -200, false)).toEqual({
+      delta: 200,
+      resultingQuantity: 250,
+      stockSuspect: false,
+      clamped: false,
+    });
+  });
+
+  // The flag stays only while something else explains it (core's
+  // staysSuspectAfterReopen).
+  it('clears the "stock was probably wrong" flag unless it stays suspect', () => {
+    expect(reverse({ stock: 0, stockSuspect: true }, -120, false).stockSuspect).toBe(false);
+    expect(reverse({ stock: 0, stockSuspect: true }, -120, true).stockSuspect).toBe(true);
+  });
+
+  it("never sets the flag", () => {
+    expect(reverse({ stock: 0, stockSuspect: false }, -120, true).stockSuspect).toBe(false);
+  });
+
+  it("reverses a movement that removed nothing with a zero delta", () => {
+    expect(reverse({ stock: 0, stockSuspect: true }, 0, true).delta).toBe(0);
+  });
 });

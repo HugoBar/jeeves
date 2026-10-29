@@ -17,15 +17,20 @@ export interface StockMovement {
   type: StockMovementType;
   delta: number;
   resultingQuantity: number;
+  // The Meal a Confirmation or Reopen came from; null for other movements,
+  // and once that Meal is removed.
+  mealId: string | null;
 }
 
 // Writes a Stock Movement and the Stock column it leaves in one transaction,
-// never one without the other (ADR 0003).
-async function applyMovement(
+// never one without the other (ADR 0003). Inside a caller's transaction it
+// is part of that one.
+export async function applyMovement(
   db: Db,
   productId: string,
   type: StockMovementType,
   change: (current: StockState) => StockChange,
+  mealId: string | null = null,
 ): Promise<void> {
   await db.transaction(async (tx) => {
     // Locked so a concurrent movement cannot apply to the same starting Stock.
@@ -41,6 +46,8 @@ async function applyMovement(
       type,
       delta: applied.delta,
       resultingQuantity: applied.resultingQuantity,
+      clamped: applied.clamped,
+      mealId,
     });
     await tx
       .update(products)
@@ -73,6 +80,7 @@ export async function listStockMovements(db: Db, productId: string): Promise<Sto
       type: stockMovements.type,
       delta: stockMovements.delta,
       resultingQuantity: stockMovements.resultingQuantity,
+      mealId: stockMovements.mealId,
     })
     .from(stockMovements)
     .where(eq(stockMovements.productId, productId))
