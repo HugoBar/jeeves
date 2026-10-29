@@ -2,9 +2,10 @@
 
 import { Fragment, useActionState, useState, useSyncExternalStore } from "react";
 import {
-  canConfirm,
-  confirmAsksFirst,
   canChangeMeal,
+  canReopen,
+  canConfirmOrSkip,
+  confirmOrSkipAsksFirst,
   pickableForSlot,
   slotCategoryChoices,
   slotFoodValue,
@@ -32,6 +33,7 @@ import {
   reopenMealAction,
   setMealSlotCategoryAction,
   setMealUntrackedAction,
+  skipMealAction,
   type ConfirmMealError,
   type MealChangesFormState,
   type MealFromTemplateFormState,
@@ -39,6 +41,7 @@ import {
   type MealSlotFillFormState,
   type NewMealFormState,
   type NewMealSlotFormState,
+  type SkipMealError,
 } from "./actions";
 
 // A Meal with what its card shows. Its Meal Type may be Archived: the Meal
@@ -66,8 +69,8 @@ export interface PlannerMealSlot {
   slotCategoryLabel: string;
   slotCategoryArchived: boolean;
   food: PlannerSlotFood;
-  // Null when the slot has nothing to warn about, or its Meal is Untracked or
-  // Confirmed.
+  // Null when the slot has nothing to warn about, or its Meal is Untracked,
+  // Confirmed or Skipped.
   warnings: SlotWarnings | null;
 }
 
@@ -333,7 +336,7 @@ function AddMealFromTemplateForm({
 }
 
 // A Meal on its day, edited in place. Its Meal Type is shown but never changes.
-// A Confirmed Meal is read-only: it can only be Reopened.
+// A Confirmed or Skipped Meal is read-only: it can only be Reopened.
 function MealCard({
   meal,
   week,
@@ -359,6 +362,7 @@ function MealCard({
         {label}
         {meal.mealTypeArchived && <span className="planner-tag">{t("planner.mealTypeArchived")}</span>}
         {meal.status === "confirmed" && <span className="planner-tag">{t("planner.confirmed")}</span>}
+        {meal.status === "skipped" && <span className="planner-tag">{t("planner.skipped")}</span>}
         {meal.untracked && <span className="planner-tag">{t("planner.untracked")}</span>}
       </span>
       <span className="planner-meal-actions">
@@ -377,7 +381,7 @@ function MealCard({
             />
           </>
         ) : (
-          meal.status === "confirmed" && (
+          canReopen(meal) && (
             <form action={reopenMealAction.bind(null, meal.id)}>
               <button type="submit">{t("planner.reopen")}</button>
             </form>
@@ -426,19 +430,27 @@ function MealCard({
             </button>
           </span>
         ))}
-      {canConfirm(meal, today) && <ConfirmMeal meal={meal} />}
+      {canConfirmOrSkip(meal, today) && <ConfirmOrSkipMeal meal={meal} />}
     </div>
   );
 }
 
-// Confirm and Confirm as Untracked, for a Meal dated today or earlier. A Meal
-// later today may not have happened yet, so it asks first; cancelling sends
-// nothing. An Untracked Meal deducts
-// nothing either way. A refusal shows here, with nothing written.
-function ConfirmMeal({ meal }: { meal: PlannerMeal }) {
+type ConfirmOrSkipError = ConfirmMealError | SkipMealError;
+
+// What each of the form's buttons sends as "outcome".
+const OUTCOME = { confirm: "confirm", confirmUntracked: "confirmUntracked", skip: "skip" } as const;
+
+// Confirm, Confirm as Untracked and Skip, for a Meal dated today or earlier.
+// A Meal later today may not have happened yet, so each asks first;
+// cancelling sends nothing. An Untracked Meal deducts nothing either way. A
+// refusal shows here, with nothing written.
+function ConfirmOrSkipMeal({ meal }: { meal: PlannerMeal }) {
   const [error, action, pending] = useActionState(
-    (_previous: ConfirmMealError | null, formData: FormData) =>
-      confirmMealAction(meal.id, formData.get("untracked") === "true", viewerToday()),
+    (_previous: ConfirmOrSkipError | null, formData: FormData): Promise<ConfirmOrSkipError | null> => {
+      const outcome = formData.get("outcome");
+      if (outcome === OUTCOME.skip) return skipMealAction(meal.id, viewerToday());
+      return confirmMealAction(meal.id, outcome === OUTCOME.confirmUntracked, viewerToday());
+    },
     null,
   );
   return (
@@ -447,24 +459,30 @@ function ConfirmMeal({ meal }: { meal: PlannerMeal }) {
       className="planner-confirm"
       onSubmit={(event) => {
         const now = new Date();
-        const asks = confirmAsksFirst(meal, { date: localDate(now), hour: localHour(now) });
-        if (asks && !confirm(t("planner.confirmToday"))) event.preventDefault();
+        if (!confirmOrSkipAsksFirst(meal, { date: localDate(now), hour: localHour(now) })) return;
+        const submitter = (event.nativeEvent as SubmitEvent).submitter as HTMLButtonElement | null;
+        const question = submitter?.value === OUTCOME.skip ? "planner.skipToday" : "planner.confirmToday";
+        if (!confirm(t(question))) event.preventDefault();
       }}
     >
-      <button type="submit" name="untracked" value="false" disabled={pending}>
+      <button type="submit" name="outcome" value={OUTCOME.confirm} disabled={pending}>
         {t("planner.confirm")}
       </button>
-      <button type="submit" name="untracked" value="true" disabled={pending}>
+      <button type="submit" name="outcome" value={OUTCOME.confirmUntracked} disabled={pending}>
         {t("planner.confirmUntracked")}
       </button>
-      {error && <p className="form-error">{confirmErrorMessage(error)}</p>}
+      <button type="submit" name="outcome" value={OUTCOME.skip} disabled={pending}>
+        {t("planner.skip")}
+      </button>
+      {error && <p className="form-error">{confirmOrSkipErrorMessage(error)}</p>}
     </form>
   );
 }
 
 // "Can't confirm: Flour has no Density, so 1 cup can't be converted to g. ..."
-function confirmErrorMessage(error: ConfirmMealError): string {
+function confirmOrSkipErrorMessage(error: ConfirmOrSkipError): string {
   if (error.error === "notConfirmable") return t("planner.error.notConfirmable");
+  if (error.error === "notSkippable") return t("planner.error.notSkippable");
   return t(`planner.error.${error.code}`, {
     product: error.product.name,
     quantity: formatQuantity(error.amount, error.unit),
@@ -496,8 +514,8 @@ function SlotWarningList({ warnings, mealDate, today }: { warnings: SlotWarnings
   );
 }
 
-// A slot's Slot Category, saved as soon as one is picked; a Confirmed Meal's
-// slots only show theirs as it was. The picker offers only
+// A slot's Slot Category, saved as soon as one is picked; a Confirmed or
+// Skipped Meal's slots only show theirs as it was. The picker offers only
 // non-Archived Food Categories, plus the slot's own if it is Archived, which
 // it warns about until it is changed.
 function SlotCategoryPicker({ slot, slotCategories }: { slot: PlannerMealSlot; slotCategories: SlotCategoryOption[] }) {
@@ -528,8 +546,8 @@ function SlotCategoryPicker({ slot, slotCategories }: { slot: PlannerMealSlot; s
   );
 }
 
-// A slot's food, before its Meal is Confirmed: what it holds, with buttons to
-// fill, change or empty it.
+// A slot's food, before its Meal is Confirmed or Skipped: what it holds, with
+// buttons to fill, change or empty it.
 function SlotFood({ slot, allowsLeftovers, foods }: { slot: PlannerMealSlot; allowsLeftovers: boolean; foods: SlotFoods }) {
   const [filling, setFilling] = useState(false);
   if (filling) {

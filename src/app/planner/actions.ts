@@ -20,7 +20,7 @@ import {
   type NewMealSlotError,
 } from "@/core/meals";
 import { getDb } from "@/db";
-import { confirmMeal, reopenMeal, type ConfirmMealResult } from "@/db/confirmation";
+import { confirmMeal, reopenMeal, skipMeal, type ConfirmMealResult } from "@/db/confirmation";
 import { listActiveCategories } from "@/db/food-categories";
 import { listMealTemplates } from "@/db/meal-templates";
 import { listActiveMealTypes } from "@/db/meal-types";
@@ -52,6 +52,8 @@ export type MealSlotCategoryFormState = { error: MealSlotCategoryError | "notCha
 export type MealSlotFillFormState = { error: MealSlotFillError | "notChangeable" | null };
 export type NewMealSlotFormState = { error: NewMealSlotError | "notChangeable" | null };
 export type ConfirmMealError = Exclude<ConfirmMealResult, { ok: true }>;
+// The Meal is gone, already Confirmed or Skipped, or after the viewer's date.
+export type SkipMealError = { error: "notSkippable" };
 
 // `date` is the planner day the form was opened on.
 export async function createMealAction(
@@ -216,8 +218,16 @@ export async function confirmMealAction(
   return null;
 }
 
-// Nothing changes if the Meal is no longer Confirmed; the refresh shows the
-// planner it is not.
+// `today` is the viewer's date when they submitted. Null once Skipped;
+// otherwise why it was refused, with nothing written.
+export async function skipMealAction(id: string, today: string): Promise<SkipMealError | null> {
+  if (!(await skipMeal(getDb(), id, today))) return { error: "notSkippable" };
+  refresh();
+  return null;
+}
+
+// Nothing changes if the Meal is no longer Confirmed or Skipped; the refresh
+// shows the planner it is not.
 export async function reopenMealAction(id: string): Promise<void> {
   await reopenMeal(getDb(), id);
   refresh();

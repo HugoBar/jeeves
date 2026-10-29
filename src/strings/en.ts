@@ -71,6 +71,9 @@ export const en = {
   "planner.confirm": "Confirm",
   "planner.confirmUntracked": "Confirm as Untracked",
   "planner.confirmToday": "This Meal hasn't happened yet. Confirm it anyway?",
+  "planner.skipped": "Skipped",
+  "planner.skip": "Skip",
+  "planner.skipToday": "This Meal hasn't happened yet. Skip it anyway?",
   "planner.reopen": "Reopen",
   "planner.error.invalidDate": "That is not a day. Reload the planner and try again.",
   "planner.error.invalidHour": "Enter an hour.",
@@ -85,11 +88,12 @@ export const en = {
   "planner.error.invalidPortions": "Enter Portions as a whole number above 0.",
   "planner.error.invalidQuantity": "Enter a quantity above 0.",
   "planner.error.notConfirmable": "This Meal can no longer be Confirmed. Reload the planner and try again.",
+  "planner.error.notSkippable": "This Meal can no longer be Skipped. Reload the planner and try again.",
   "planner.error.noDensity":
     "Can't confirm: {product} has no Density, so {quantity} can't be converted to {defaultUnit}. Add its Density or change the Ingredient's unit.",
   "planner.error.countMismatch":
     "Can't confirm: {quantity} of {product} can't be converted to {defaultUnit}, since a count can't convert to a mass or volume. Change the Ingredient's unit.",
-  "planner.error.notChangeable": "This Meal was Confirmed, so its slots can no longer change. Reopen it first.",
+  "planner.error.notChangeable": "This Meal was Confirmed or Skipped, so its slots can no longer change. Reopen it first.",
   "planner.error.uncategorisedFood": "That has no Food Category, or only Archived ones, so it cannot be added as a slot. Give it one first.",
   "planner.fillSlot": "Fill",
   "planner.changeSlot": "Change",
