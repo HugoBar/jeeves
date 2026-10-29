@@ -257,21 +257,6 @@ export function sortMeals<T extends { hour: string; createdAt: Date }>(meals: re
   return [...meals].sort((a, b) => a.hour.localeCompare(b.hour) || a.createdAt.getTime() - b.createdAt.getTime());
 }
 
-// Planned: a Meal not Confirmed or Skipped whose day has not passed. Once it
-// has, the Meal is Unconfirmed, which is never stored (data-model Q3).
-// `today` is the viewer's date (spec "Platform").
-export function isPlanned(meal: { status: MealStatus; date: string }, today: string): boolean {
-  return meal.status === "planned" && meal.date >= today;
-}
-
-// A Meal's slots can be added, removed, filled or changed only while it is
-// Planned. `today` is the viewer's date, sent with each change, so a planner
-// left open past midnight cannot change a Meal whose day has since passed.
-// Without a real date the Meal's day cannot be checked, so nothing changes.
-export function canChangeSlots(meal: { status: MealStatus; date: string }, today: string): boolean {
-  return isDate(today) && isPlanned(meal, today);
-}
-
 // Only a Planned or Unconfirmed Meal can be edited, marked Untracked or
 // removed, or have its slots changed (spec "Confirmation": before confirming,
 // slots can be edited). A Confirmed or Skipped one is read-only until it is

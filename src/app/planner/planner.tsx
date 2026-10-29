@@ -2,7 +2,9 @@
 
 import { Fragment, useActionState, useState, useSyncExternalStore } from "react";
 import {
-  isPlanned,
+  canConfirm,
+  confirmAsksFirst,
+  canChangeMeal,
   pickableForSlot,
   slotCategoryChoices,
   slotFoodValue,
@@ -12,13 +14,14 @@ import {
   type MealStatus,
 } from "@/core/meals";
 import type { CategoryKind } from "@/core/food-categories";
-import { localDate, plannerWeeks } from "@/core/planner";
+import { localDate, localHour, plannerWeeks } from "@/core/planner";
 import { shortfallUrgency } from "@/core/projected-stock";
 import type { DefaultUnit } from "@/core/units";
 import { editingLabel, formatDayHeading, formatQuantity, formatWeekRange, t } from "@/strings";
 import { RemoveButton } from "../remove-button";
 import {
   addMealSlotAction,
+  confirmMealAction,
   createMealAction,
   createMealFromTemplateAction,
   editMealAction,
@@ -26,8 +29,10 @@ import {
   fillMealSlotAction,
   removeMealAction,
   removeMealSlotAction,
+  reopenMealAction,
   setMealSlotCategoryAction,
   setMealUntrackedAction,
+  type ConfirmMealError,
   type MealChangesFormState,
   type MealFromTemplateFormState,
   type MealSlotCategoryFormState,
@@ -61,7 +66,8 @@ export interface PlannerMealSlot {
   slotCategoryLabel: string;
   slotCategoryArchived: boolean;
   food: PlannerSlotFood;
-  // Null when the slot has nothing to warn about, or its Meal is Untracked.
+  // Null when the slot has nothing to warn about, or its Meal is Untracked or
+  // Confirmed.
   warnings: SlotWarnings | null;
 }
 
@@ -118,7 +124,7 @@ type Submitted<State> = State & { submits: number };
 
 const subscribe = () => () => {};
 
-// The viewer's date as they submit, which slot actions check the Meal's day
+// The viewer's date as they submit, which Confirmation checks the Meal's day
 // against: a planner left open past midnight still shows yesterday as today.
 const viewerToday = () => localDate(new Date());
 
@@ -327,6 +333,7 @@ function AddMealFromTemplateForm({
 }
 
 // A Meal on its day, edited in place. Its Meal Type is shown but never changes.
+// A Confirmed Meal is read-only: it can only be Reopened.
 function MealCard({
   meal,
   week,
@@ -341,7 +348,7 @@ function MealCard({
   const [editing, setEditing] = useState(false);
   const [addingSlot, setAddingSlot] = useState(false);
   const label = meal.name ?? meal.mealTypeLabel;
-  const planned = isPlanned(meal, today);
+  const changeable = canChangeMeal(meal);
 
   if (editing) return <EditMealForm meal={meal} week={week} onDone={() => setEditing(false)} />;
 
@@ -351,20 +358,31 @@ function MealCard({
       <span className="planner-meal-label">
         {label}
         {meal.mealTypeArchived && <span className="planner-tag">{t("planner.mealTypeArchived")}</span>}
+        {meal.status === "confirmed" && <span className="planner-tag">{t("planner.confirmed")}</span>}
         {meal.untracked && <span className="planner-tag">{t("planner.untracked")}</span>}
       </span>
       <span className="planner-meal-actions">
-        <button type="button" onClick={() => setEditing(true)}>
-          {t("planner.edit")}
-        </button>
-        <form action={setMealUntrackedAction.bind(null, meal.id, !meal.untracked)}>
-          <button type="submit">{t(meal.untracked ? "planner.unmarkUntracked" : "planner.markUntracked")}</button>
-        </form>
-        <RemoveButton
-          action={removeMealAction.bind(null, meal.id)}
-          label={t("planner.remove")}
-          confirmMessage={t("planner.removeConfirm", { name: label })}
-        />
+        {changeable ? (
+          <>
+            <button type="button" onClick={() => setEditing(true)}>
+              {t("planner.edit")}
+            </button>
+            <form action={setMealUntrackedAction.bind(null, meal.id, !meal.untracked)}>
+              <button type="submit">{t(meal.untracked ? "planner.unmarkUntracked" : "planner.markUntracked")}</button>
+            </form>
+            <RemoveButton
+              action={removeMealAction.bind(null, meal.id)}
+              label={t("planner.remove")}
+              confirmMessage={t("planner.removeConfirm", { name: label })}
+            />
+          </>
+        ) : (
+          meal.status === "confirmed" && (
+            <form action={reopenMealAction.bind(null, meal.id)}>
+              <button type="submit">{t("planner.reopen")}</button>
+            </form>
+          )
+        )}
       </span>
       {meal.slots.length > 0 && (
         <ol className="slot-list" aria-label={t("planner.slots")}>
@@ -372,12 +390,12 @@ function MealCard({
             // A new key once a Slot Category change is saved, so the picker
             // mounts with it.
             <li key={`${slot.id}:${slot.slotCategoryId}`} className="slot-row">
-              {planned ? (
+              {changeable ? (
                 <>
                   <SlotCategoryPicker slot={slot} slotCategories={pickers.slotCategories} />
                   <SlotFood slot={slot} allowsLeftovers={meal.allowsLeftovers} foods={pickers.slotFoods} />
                   <RemoveButton
-                    action={() => removeMealSlotAction(slot.id, viewerToday())}
+                    action={() => removeMealSlotAction(slot.id)}
                     label={t("planner.removeSlot")}
                     confirmMessage={t("planner.removeSlotConfirm", { category: slot.slotCategoryLabel })}
                   />
@@ -393,7 +411,7 @@ function MealCard({
           ))}
         </ol>
       )}
-      {planned &&
+      {changeable &&
         (addingSlot ? (
           <AddSlotForm
             mealId={meal.id}
@@ -408,8 +426,50 @@ function MealCard({
             </button>
           </span>
         ))}
+      {canConfirm(meal, today) && <ConfirmMeal meal={meal} />}
     </div>
   );
+}
+
+// Confirm and Confirm as Untracked, for a Meal dated today or earlier. A Meal
+// later today may not have happened yet, so it asks first; cancelling sends
+// nothing. An Untracked Meal deducts
+// nothing either way. A refusal shows here, with nothing written.
+function ConfirmMeal({ meal }: { meal: PlannerMeal }) {
+  const [error, action, pending] = useActionState(
+    (_previous: ConfirmMealError | null, formData: FormData) =>
+      confirmMealAction(meal.id, formData.get("untracked") === "true", viewerToday()),
+    null,
+  );
+  return (
+    <form
+      action={action}
+      className="planner-confirm"
+      onSubmit={(event) => {
+        const now = new Date();
+        const asks = confirmAsksFirst(meal, { date: localDate(now), hour: localHour(now) });
+        if (asks && !confirm(t("planner.confirmToday"))) event.preventDefault();
+      }}
+    >
+      <button type="submit" name="untracked" value="false" disabled={pending}>
+        {t("planner.confirm")}
+      </button>
+      <button type="submit" name="untracked" value="true" disabled={pending}>
+        {t("planner.confirmUntracked")}
+      </button>
+      {error && <p className="form-error">{confirmErrorMessage(error)}</p>}
+    </form>
+  );
+}
+
+// "Can't confirm: Flour has no Density, so 1 cup can't be converted to g. ..."
+function confirmErrorMessage(error: ConfirmMealError): string {
+  if (error.error === "notConfirmable") return t("planner.error.notConfirmable");
+  return t(`planner.error.${error.code}`, {
+    product: error.product.name,
+    quantity: formatQuantity(error.amount, error.unit),
+    defaultUnit: t(`unit.${error.product.defaultUnit}`),
+  });
 }
 
 // "Short: Rice 300 g, Eggs 2 pc" and "Can't project Milk", red when the Meal
@@ -436,14 +496,14 @@ function SlotWarningList({ warnings, mealDate, today }: { warnings: SlotWarnings
   );
 }
 
-// A Planned slot's Slot Category, saved as soon as one is picked; a past
-// Meal's slots only show theirs as it was. The picker offers only
+// A slot's Slot Category, saved as soon as one is picked; a Confirmed Meal's
+// slots only show theirs as it was. The picker offers only
 // non-Archived Food Categories, plus the slot's own if it is Archived, which
 // it warns about until it is changed.
 function SlotCategoryPicker({ slot, slotCategories }: { slot: PlannerMealSlot; slotCategories: SlotCategoryOption[] }) {
   const [state, action, pending] = useActionState(
     (previous: MealSlotCategoryFormState, formData: FormData) =>
-      setMealSlotCategoryAction(slot.id, viewerToday(), previous, formData),
+      setMealSlotCategoryAction(slot.id, previous, formData),
     { error: null },
   );
   return (
@@ -468,8 +528,8 @@ function SlotCategoryPicker({ slot, slotCategories }: { slot: PlannerMealSlot; s
   );
 }
 
-// A Planned slot's food: what it holds, with buttons to fill, change or empty
-// it.
+// A slot's food, before its Meal is Confirmed: what it holds, with buttons to
+// fill, change or empty it.
 function SlotFood({ slot, allowsLeftovers, foods }: { slot: PlannerMealSlot; allowsLeftovers: boolean; foods: SlotFoods }) {
   const [filling, setFilling] = useState(false);
   if (filling) {
@@ -488,7 +548,7 @@ function SlotFood({ slot, allowsLeftovers, foods }: { slot: PlannerMealSlot; all
       <button type="button" onClick={() => setFilling(true)}>
         {t("planner.changeSlot")}
       </button>
-      <form action={() => emptyMealSlotAction(slot.id, viewerToday())}>
+      <form action={() => emptyMealSlotAction(slot.id)}>
         <button type="submit">{t("planner.emptySlot")}</button>
       </form>
     </>
@@ -621,7 +681,7 @@ function SlotFillForm({
   // Controlled, so a rejected submit keeps what was picked and typed.
   const [values, setValues] = useState(() => pickedFood(slot.food, offered));
   const [state, action, pending] = useActionState(async (previous: MealSlotFillFormState, formData: FormData) => {
-    const next = await fillMealSlotAction(slot.id, viewerToday(), previous, formData);
+    const next = await fillMealSlotAction(slot.id, previous, formData);
     if (!next.error) onDone();
     return next;
   }, { error: null });
@@ -667,7 +727,7 @@ function AddSlotForm({
   const [values, setValues] = useState<FoodValues>({ food: "", amount: "" });
   const [slotCategoryId, setSlotCategoryId] = useState("");
   const [state, action, pending] = useActionState(async (previous: NewMealSlotFormState, formData: FormData) => {
-    const next = await addMealSlotAction(mealId, viewerToday(), previous, formData);
+    const next = await addMealSlotAction(mealId, previous, formData);
     if (!next.error) onDone();
     return next;
   }, { error: null });

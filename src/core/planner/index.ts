@@ -46,6 +46,12 @@ export function plannerRange(utcToday: string): { from: string; to: string } {
   };
 }
 
+// The time of day of `moment`, "HH:MM", in the time zone of whoever runs it.
+export function localHour(moment: Date): string {
+  const pad = (value: number) => String(value).padStart(2, "0");
+  return `${pad(moment.getHours())}:${pad(moment.getMinutes())}`;
+}
+
 // The date of `moment` in the time zone of whoever runs it.
 export function localDate(moment: Date): string {
   const pad = (value: number) => String(value).padStart(2, "0");

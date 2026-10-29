@@ -1,10 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
   canChangeMeal,
-  canChangeSlots,
   canConfirm,
   confirmAsksFirst,
-  isPlanned,
   parseMealChanges,
   parseMealSlotCategory,
   parseNewMeal,
@@ -367,35 +365,6 @@ describe("sortMeals", () => {
     ];
 
     expect(sortMeals(meals).map((meal) => meal.id)).toEqual(["breakfast", "first-lunch", "second-lunch", "dinner"]);
-  });
-});
-
-describe("isPlanned", () => {
-  it("is true for a Planned Meal today or on a later day", () => {
-    expect(isPlanned({ status: "planned", date: "2026-10-28" }, "2026-10-28")).toBe(true);
-    expect(isPlanned({ status: "planned", date: "2026-11-02" }, "2026-10-28")).toBe(true);
-  });
-
-  // Unconfirmed: never stored, only Planned with a day that has passed
-  // (data-model Q3).
-  it("is false once the Meal's day has passed", () => {
-    expect(isPlanned({ status: "planned", date: "2026-10-27" }, "2026-10-28")).toBe(false);
-  });
-});
-
-describe("canChangeSlots", () => {
-  it("allows slot changes on a Planned Meal", () => {
-    expect(canChangeSlots({ status: "planned", date: "2026-10-28" }, "2026-10-28")).toBe(true);
-  });
-
-  // The planner was left open past midnight, so it still offers the buttons.
-  it("refuses them once the Meal's day has passed", () => {
-    expect(canChangeSlots({ status: "planned", date: "2026-10-27" }, "2026-10-28")).toBe(false);
-  });
-
-  // A crafted request: without a real date the Meal's day cannot be checked.
-  it.each([[""], ["tomorrow"], ["2026-13-01"]])("refuses them when today is not a date (%j)", (today) => {
-    expect(canChangeSlots({ status: "planned", date: "2026-10-28" }, today)).toBe(false);
   });
 });
 
