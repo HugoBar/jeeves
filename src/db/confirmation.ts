@@ -1,7 +1,7 @@
 import "server-only";
 import { asc, eq } from "drizzle-orm";
 import { confirmationDeductions, confirmationsToReverse, staysSuspectAfterReopen } from "@/core/confirmation";
-import { canConfirm } from "@/core/meals";
+import { canReopen, canConfirmOrSkip } from "@/core/meals";
 import { deduct, reverse } from "@/core/stock";
 import type { ConversionError, DefaultUnit, Unit } from "@/core/units";
 import type { Db } from "./index";
@@ -42,7 +42,7 @@ export async function confirmMeal(
       .from(meals)
       .where(eq(meals.id, id))
       .for("update");
-    if (!meal || !canConfirm(meal, today)) return { ok: false, error: "notConfirmable" };
+    if (!meal || !canConfirmOrSkip(meal, today)) return { ok: false, error: "notConfirmable" };
 
     const marksUntracked = untracked || meal.untracked;
     if (!marksUntracked) {
@@ -62,17 +62,35 @@ export async function confirmMeal(
   });
 }
 
-// Reopens a Confirmed Meal: one Reopen movement, linked to it, for each
-// Confirmation movement not yet reversed, adding back exactly what that one
-// removed (data-model Q12). A Product's "stock was probably wrong" flag
-// clears only if that Confirmation was what set it. The Meal returns to
-// Planned, so Unconfirmed if its day has passed, and keeps its Untracked
-// mark. False if it is gone or not Confirmed.
+// Skips the Meal (spec "Confirmation"): it was not eaten, so it writes no
+// Stock Movements and keeps its Untracked mark. `today` is the viewer's date.
+// False if the Meal is gone, already Confirmed or Skipped, or after `today`.
+export async function skipMeal(db: Db, id: string, today: string): Promise<boolean> {
+  return db.transaction(async (tx) => {
+    // Locked so it cannot be Confirmed meanwhile.
+    const [meal] = await tx
+      .select({ status: meals.status, date: meals.date })
+      .from(meals)
+      .where(eq(meals.id, id))
+      .for("update");
+    if (!meal || !canConfirmOrSkip(meal, today)) return false;
+    await tx.update(meals).set({ status: "skipped" }).where(eq(meals.id, id));
+    return true;
+  });
+}
+
+// Reopens a Confirmed or Skipped Meal: one Reopen movement, linked to it, for
+// each Confirmation movement not yet reversed, adding back exactly what that
+// one removed (data-model Q12). A Skipped Meal has none left, so it writes
+// nothing. A Product's "stock was probably wrong" flag clears only if that
+// Confirmation was what set it. The Meal returns to Planned, so Unconfirmed
+// if its day has passed, and keeps its Untracked mark. False if it is gone or
+// neither Confirmed nor Skipped.
 export async function reopenMeal(db: Db, id: string): Promise<boolean> {
   return db.transaction(async (tx) => {
     // Locked so it cannot be Reopened twice at once.
     const [meal] = await tx.select({ status: meals.status }).from(meals).where(eq(meals.id, id)).for("update");
-    if (meal?.status !== "confirmed") return false;
+    if (!meal || !canReopen(meal)) return false;
 
     const linked = await tx
       .select({ productId: stockMovements.productId, type: stockMovements.type, delta: stockMovements.delta })
