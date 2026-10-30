@@ -1,5 +1,14 @@
 import { describe, expect, it } from "vitest";
-import { editingLabel, foodCategoryLabel, formatDayHeading, formatList, formatWeekRange, mealTypeLabel, t } from "./index";
+import {
+  editingLabel,
+  foodCategoryLabel,
+  formatDateTime,
+  formatDayHeading,
+  formatList,
+  formatWeekRange,
+  mealTypeLabel,
+  t,
+} from "./index";
 
 describe("t", () => {
   it("returns the UI string for a key", () => {
@@ -32,6 +41,16 @@ describe("mealTypeLabel", () => {
 
   it("shows the typed name of a renamed seeded Meal Type", () => {
     expect(mealTypeLabel({ seedKey: "snack", name: "Afternoon Bite" })).toBe("Afternoon Bite");
+  });
+});
+
+describe("formatDateTime", () => {
+  it("shows the afternoon on a 24-hour clock", () => {
+    expect(formatDateTime(new Date(2026, 9, 28, 14, 59))).toBe("28 Oct 2026, 14:59");
+  });
+
+  it("shows just after midnight as 00, not 12", () => {
+    expect(formatDateTime(new Date(2026, 9, 28, 0, 5))).toBe("28 Oct 2026, 00:05");
   });
 });
 

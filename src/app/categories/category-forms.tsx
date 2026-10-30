@@ -3,7 +3,9 @@
 import { useActionState, useState } from "react";
 import type { CategoryKind } from "@/core/food-categories";
 import { t } from "@/strings";
+import { FoodCategoryPill } from "../food-category-pill";
 import { useFieldErrors } from "../form-error";
+import { EditableRow } from "../list-row";
 import { RemoveButton } from "../remove-button";
 import {
   createCategoryAction,
@@ -52,32 +54,33 @@ export function CategoryRow({ id, label, kind }: { id: string; label: string; ki
 
   if (editing) {
     return (
-      <form action={action} className="item-form open-row">
-        <input name="name" aria-label={t("categories.name")} defaultValue={label} autoFocus {...invalid("name")} />
-        <KindSelect defaultValue={kind} />
-        <button type="submit" className="button-primary" disabled={pending}>
-          {t("categories.save")}
-        </button>
-        <button type="button" onClick={() => setEditing(false)}>
-          {t("categories.cancel")}
-        </button>
-        {allMessages()}
-      </form>
+      <div className="list-row-open open-row">
+        <form action={action} className="item-form">
+          <input name="name" aria-label={t("categories.name")} defaultValue={label} autoFocus {...invalid("name")} />
+          <KindSelect defaultValue={kind} />
+          <button type="submit" className="button-primary" disabled={pending}>
+            {t("categories.save")}
+          </button>
+          <button type="button" onClick={() => setEditing(false)}>
+            {t("categories.cancel")}
+          </button>
+          {allMessages()}
+        </form>
+        <RemoveButton
+          action={removeCategoryAction.bind(null, id)}
+          label={t("categories.remove")}
+          confirmMessage={t("categories.removeConfirm", { name: label })}
+        />
+      </div>
     );
   }
 
   return (
-    <div className="item-row">
-      <span>{label}</span>
-      <button type="button" onClick={() => setEditing(true)}>
-        {t("categories.edit")}
-      </button>
-      <RemoveButton
-        action={removeCategoryAction.bind(null, id)}
-        label={t("categories.remove")}
-        confirmMessage={t("categories.removeConfirm", { name: label })}
-      />
-    </div>
+    <EditableRow editLabel={t("categories.edit")} onOpen={() => setEditing(true)}>
+      <span className="list-row-text">
+        <FoodCategoryPill label={label} />
+      </span>
+    </EditableRow>
   );
 }
 

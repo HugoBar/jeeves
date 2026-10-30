@@ -29,6 +29,10 @@ describe("button styles", () => {
     expect(baseSelector).not.toMatch(/a\.button/);
   });
 
+  it("leaves a list row out of the hover tint every other button gets", () => {
+    expect(css).toMatch(/button:hover:not\(:disabled, \.list-row\)/);
+  });
+
   it("only uses styles that are defined", () => {
     const used = componentFiles(appDir).flatMap((path) =>
       [...readFileSync(path, "utf8").matchAll(/\bbutton(-[a-z-]+)?(?=[" ])/g)]
@@ -47,12 +51,17 @@ describe("on phone", () => {
     expect(heights.filter((height) => height < 44)).toEqual([]);
   });
 
-  it("gives the list rows that are links 44 px too", () => {
-    expect(/\.stock-list a {[^}]*min-height: 44px/.test(phoneCss)).toBe(true);
+  it("gives list rows 44 px too, on links and buttons alike", () => {
+    const row = /\.list-row,\s*a\.list-row {[^}]*min-height: (\d+)px/.exec(phoneCss);
+    expect(Number(row?.[1])).toBeGreaterThanOrEqual(44);
   });
 });
 
 describe("form fields", () => {
+  it("gives a field in an open row its own line, so its text stays readable on phone", () => {
+    expect(phoneCss).toMatch(/\.list-row-open \.item-form > input {[^}]*flex-basis: 100%/);
+  });
+
   it("gives a field with an error the red border", () => {
     expect(css).toMatch(/\[aria-invalid="true"\][^{]*{[^}]*border: 1\.5px solid var\(--color-danger\)/);
   });

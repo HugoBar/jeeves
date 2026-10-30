@@ -4,6 +4,7 @@ import { useActionState, useState } from "react";
 import { t } from "@/strings";
 import { MEAL_TYPE_ERROR_FIELDS } from "../field-errors";
 import { useFieldErrors, type InvalidProps } from "../form-error";
+import { EditableRow } from "../list-row";
 import { RemoveButton } from "../remove-button";
 import {
   createMealTypeAction,
@@ -62,38 +63,40 @@ export function MealTypeRow({
 
   if (editing) {
     return (
-      <form action={action} className="item-form open-row">
-        <input name="name" aria-label={t("mealTypes.name")} defaultValue={label} autoFocus {...invalid("name")} />
-        <MealTypeFields
-          priority={String(priority)}
-          allowsLeftovers={allowsLeftovers}
-          priorityInvalidProps={invalid("priority")}
+      <div className="list-row-open open-row">
+        <form action={action} className="item-form">
+          <input name="name" aria-label={t("mealTypes.name")} defaultValue={label} autoFocus {...invalid("name")} />
+          <MealTypeFields
+            priority={String(priority)}
+            allowsLeftovers={allowsLeftovers}
+            priorityInvalidProps={invalid("priority")}
+          />
+          <button type="submit" className="button-primary" disabled={pending}>
+            {t("mealTypes.save")}
+          </button>
+          <button type="button" onClick={() => setEditing(false)}>
+            {t("mealTypes.cancel")}
+          </button>
+          {allMessages()}
+        </form>
+        <RemoveButton
+          action={removeMealTypeAction.bind(null, id)}
+          label={t("mealTypes.remove")}
+          confirmMessage={t("mealTypes.removeConfirm", { name: label })}
         />
-        <button type="submit" className="button-primary" disabled={pending}>
-          {t("mealTypes.save")}
-        </button>
-        <button type="button" onClick={() => setEditing(false)}>
-          {t("mealTypes.cancel")}
-        </button>
-        {allMessages()}
-      </form>
+      </div>
     );
   }
 
   return (
-    <div className="item-row">
-      <span>{label}</span>
-      <span>{t("mealTypes.priorityTag", { priority })}</span>
-      {allowsLeftovers && <span>{t("mealTypes.leftoversTag")}</span>}
-      <button type="button" onClick={() => setEditing(true)}>
-        {t("mealTypes.edit")}
-      </button>
-      <RemoveButton
-        action={removeMealTypeAction.bind(null, id)}
-        label={t("mealTypes.remove")}
-        confirmMessage={t("mealTypes.removeConfirm", { name: label })}
-      />
-    </div>
+    <EditableRow editLabel={t("mealTypes.edit")} onOpen={() => setEditing(true)}>
+      <span className="list-row-text">
+        <span className="list-row-title">{label}</span>
+        <span className="list-row-meta">
+          {t(allowsLeftovers ? "mealTypes.priorityLeftoversTag" : "mealTypes.priorityTag", { priority })}
+        </span>
+      </span>
+    </EditableRow>
   );
 }
 

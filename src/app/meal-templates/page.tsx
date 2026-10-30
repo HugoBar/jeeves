@@ -46,7 +46,7 @@ export default async function MealTemplatesPage() {
       {templates.length === 0 ? (
         <p>{t("mealTemplates.empty")}</p>
       ) : (
-        <ul className="item-list">
+        <ul className="list">
           {sortMealTemplates(templates).map((template) => (
             <li key={template.id}>
               <MealTemplateRow {...template} mealTypes={mealTypeOptions} slotCategories={slotCategoryOptions} />

@@ -1,8 +1,27 @@
+import { readFileSync } from "node:fs";
+import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { t } from "@/strings";
 import { activeMenuHref, bottomMenu, moreLinks, topMenu } from "./menu-items";
+import MorePage from "./more/page";
 
 const labels = (items: typeof topMenu) => items.map((item) => t(item.label));
+
+describe("the More page", () => {
+  const rows = renderToStaticMarkup(MorePage()).split("<li").slice(1);
+
+  it("keeps Recipes for phone only, as desktop has it in the top menu", () => {
+    expect(rows.filter((row) => row.includes('class="more-phone-only"')).map((row) => /href="([^"]+)"/.exec(row)?.[1])).toEqual([
+      "/recipes",
+    ]);
+  });
+
+  it("hides that row on desktop, with no line left above the next one", () => {
+    const css = readFileSync(new URL("globals.css", import.meta.url), "utf8");
+    expect(css).toMatch(/@media \(min-width: 768px\) {\s*\.more-phone-only {\s*display: none;/);
+    expect(css).toMatch(/\.list > \.more-phone-only \+ li {\s*border-top: 0;/);
+  });
+});
 
 describe("menus", () => {
   it("shows Planner, Stock, Recipes and More on desktop", () => {

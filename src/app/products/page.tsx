@@ -4,6 +4,7 @@ import { sortByName } from "@/core/names";
 import { getDb } from "@/db";
 import { listActiveProducts } from "@/db/products";
 import { formatQuantity, t } from "@/strings";
+import { LinkRow } from "../list-row";
 
 // The Stock list.
 export default async function StockPage() {
@@ -22,16 +23,16 @@ export default async function StockPage() {
       {products.length === 0 ? (
         <p>{t("stock.empty")}</p>
       ) : (
-        <ul className="stock-list">
+        <ul className="list">
           {products.map((product) => (
             <li key={product.id}>
-              <Link href={`/products/${product.id}`}>
-                <span>{product.name}</span>
-                <span>
-                  {product.stockSuspect && <span className="stock-suspect">{t("stock.suspect")} </span>}
-                  {formatQuantity(product.stock, product.defaultUnit)}
+              <LinkRow href={`/products/${product.id}`}>
+                <span className="list-row-text">
+                  <span className="list-row-title">{product.name}</span>
+                  {product.stockSuspect && <span className="flag">{t("stock.suspect")}</span>}
                 </span>
-              </Link>
+                <span className="list-row-value">{formatQuantity(product.stock, product.defaultUnit)}</span>
+              </LinkRow>
             </li>
           ))}
         </ul>

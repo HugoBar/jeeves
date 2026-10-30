@@ -35,7 +35,14 @@ export default async function ProductPage({ params }: { params: Promise<{ id: st
         confirmMessage={t("products.removeConfirm", { name: product.name })}
       />
       <p>{t("products.stock", { quantity: formatQuantity(product.stock, product.defaultUnit) })}</p>
-      {product.stockSuspect && <p className="stock-suspect">{t("products.stockSuspect")}</p>}
+      {product.stockSuspect && (
+        <>
+          <p>
+            <span className="flag">{t("stock.suspect")}</span>
+          </p>
+          <p>{t("products.stockSuspect")}</p>
+        </>
+      )}
       <StockForm kind="restock" action={restockAction.bind(null, product.id)} unit={product.defaultUnit} />
       <StockForm kind="discard" action={discardAction.bind(null, product.id)} unit={product.defaultUnit} />
       <StockForm kind="correction" action={correctAction.bind(null, product.id)} unit={product.defaultUnit} />
@@ -43,13 +50,17 @@ export default async function ProductPage({ params }: { params: Promise<{ id: st
       {movements.length === 0 ? (
         <p>{t("products.historyEmpty")}</p>
       ) : (
-        <ul className="movement-list">
+        <ul className="list">
           {movements.map((movement) => (
-            <li key={movement.id} className="stock-movement">
-              <span>
-                {t(`stockMovement.${movement.type}`)} <LocalDateTime value={movement.createdAt} />
+            <li key={movement.id} className="list-row">
+              <span className={`list-row-tile list-row-tile-${movement.type}`} />
+              <span className="list-row-text">
+                <span className="list-row-title">{t(`stockMovement.${movement.type}`)}</span>
+                <span className="list-row-meta">
+                  <LocalDateTime value={movement.createdAt} />
+                </span>
               </span>
-              <span>
+              <span className="list-row-meta">
                 {t("stockMovement.change", {
                   delta: formatDelta(movement.delta, product.defaultUnit),
                   quantity: formatQuantity(movement.resultingQuantity, product.defaultUnit),

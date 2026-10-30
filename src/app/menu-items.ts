@@ -29,6 +29,11 @@ export const moreLinks: MoreLink[] = [
   { href: "/meal-templates", label: "nav.mealTemplates", description: "more.mealTemplates" },
 ];
 
+// A link already in the top menu, so desktop's More page leaves it out.
+export function inTopMenu(href: string): boolean {
+  return topMenu.some((item) => item.href === href);
+}
+
 function isWithin(pathname: string, href: string): boolean {
   return pathname === href || pathname.startsWith(`${href}/`);
 }
