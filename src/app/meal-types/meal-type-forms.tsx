@@ -82,7 +82,8 @@ export function MealTypeRow({
         <RemoveButton
           action={removeMealTypeAction.bind(null, id)}
           label={t("mealTypes.remove")}
-          confirmMessage={t("mealTypes.removeConfirm", { name: label })}
+          title={t("mealTypes.removeConfirm", { name: label })}
+          body={t("mealTypes.removeConfirmBody")}
         />
       </div>
     );

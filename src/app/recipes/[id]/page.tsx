@@ -32,7 +32,8 @@ export default async function RecipePage({ params }: { params: Promise<{ id: str
       <RemoveButton
         action={removeRecipeAction.bind(null, recipe.id)}
         label={t("recipes.remove")}
-        confirmMessage={t("recipes.removeConfirm", { name: recipe.name })}
+        title={t("recipes.removeConfirm", { name: recipe.name })}
+        body={t("recipes.removeConfirmBody")}
       />
       <p>{t("recipes.portionsCount", { portions: recipe.portions })}</p>
       <p>{t("recipes.prepTimeMinutes", { minutes: recipe.prepTimeMinutes })}</p>

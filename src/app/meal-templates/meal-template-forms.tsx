@@ -107,7 +107,8 @@ export function MealTemplateRow({
         <RemoveButton
           action={removeMealTemplateAction.bind(null, id)}
           label={t("mealTemplates.remove")}
-          confirmMessage={t("mealTemplates.removeConfirm", { name })}
+          title={t("mealTemplates.removeConfirm", { name })}
+          body={t("mealTemplates.removeConfirmBody")}
         />
       </div>
     );

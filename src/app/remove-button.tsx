@@ -1,25 +1,39 @@
 "use client";
 
-// A Remove button that asks before submitting `action`, already bound to its id.
+import { useState } from "react";
+import { t } from "@/strings";
+import { ConfirmSheet } from "./sheet";
+
+// A Remove button that asks in a sheet before running `action`, already bound
+// to its id.
 export function RemoveButton({
   action,
   label,
-  confirmMessage,
+  title,
+  body,
 }: {
   action: () => Promise<void>;
   label: string;
-  confirmMessage: string;
+  title: string;
+  body?: string;
 }) {
+  const [asking, setAsking] = useState(false);
   return (
-    <form
-      action={action}
-      onSubmit={(event) => {
-        if (!confirm(confirmMessage)) event.preventDefault();
-      }}
-    >
-      <button type="submit" className="button-danger">
+    <>
+      <button type="button" className="button-danger" onClick={() => setAsking(true)}>
         {label}
       </button>
-    </form>
+      {asking && (
+        <ConfirmSheet
+          eyebrow={t("sheet.remove")}
+          title={title}
+          body={body}
+          confirmLabel={label}
+          destructive
+          onConfirm={action}
+          onClose={() => setAsking(false)}
+        />
+      )}
+    </>
   );
 }

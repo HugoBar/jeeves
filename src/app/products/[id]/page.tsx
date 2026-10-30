@@ -32,7 +32,8 @@ export default async function ProductPage({ params }: { params: Promise<{ id: st
       <RemoveButton
         action={removeProductAction.bind(null, product.id)}
         label={t("products.remove")}
-        confirmMessage={t("products.removeConfirm", { name: product.name })}
+        title={t("products.removeConfirm", { name: product.name })}
+        body={t("products.removeConfirmBody")}
       />
       <p>{t("products.stock", { quantity: formatQuantity(product.stock, product.defaultUnit) })}</p>
       {product.stockSuspect && (

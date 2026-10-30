@@ -22,6 +22,7 @@ import { MEAL_ERROR_FIELDS, MEAL_SLOT_ERROR_FIELDS } from "../field-errors";
 import { FoodCategoryPill } from "../food-category-pill";
 import { FormError, useFieldErrors, type InvalidProps } from "../form-error";
 import { RemoveButton } from "../remove-button";
+import { ConfirmSheet } from "../sheet";
 import { viewerToday } from "../viewer-clock";
 import {
   addMealSlotAction,
@@ -173,7 +174,7 @@ export function MealCard({
             <RemoveButton
               action={removeMealAction.bind(null, meal.id)}
               label={t("planner.remove")}
-              confirmMessage={t("planner.removeConfirm", { name: label })}
+              title={t("planner.removeConfirm", { name: label })}
             />
           </>
         ) : (
@@ -197,7 +198,7 @@ export function MealCard({
                   <RemoveButton
                     action={() => removeMealSlotAction(slot.id)}
                     label={t("planner.removeSlot")}
-                    confirmMessage={t("planner.removeSlotConfirm", { category: slot.slotCategoryLabel })}
+                    title={t("planner.removeSlotConfirm", { category: slot.slotCategoryLabel })}
                   />
                 </>
               ) : (
@@ -237,10 +238,12 @@ type ConfirmOrSkipError = ConfirmMealError | SkipMealError;
 const OUTCOME = { confirm: "confirm", confirmUntracked: "confirmUntracked", skip: "skip" } as const;
 
 // Confirm, Confirm as Untracked and Skip, for a Meal dated today or earlier.
-// A Meal later today may not have happened yet, so each asks first;
-// cancelling sends nothing. An Untracked Meal deducts nothing either way. A
-// refusal shows here, with nothing written.
+// A Meal later today may not have happened yet, so each asks first in a sheet,
+// holding what was submitted until it is answered; cancelling sends nothing.
+// An Untracked Meal deducts nothing either way. A refusal shows here, with
+// nothing written.
 function ConfirmOrSkipMeal({ meal }: { meal: PlannerMeal }) {
+  const [asking, setAsking] = useState<FormData | null>(null);
   const [error, action, pending] = useActionState(
     (_previous: ConfirmOrSkipError | null, formData: FormData): Promise<ConfirmOrSkipError | null> => {
       const outcome = formData.get("outcome");
@@ -249,29 +252,42 @@ function ConfirmOrSkipMeal({ meal }: { meal: PlannerMeal }) {
     },
     null,
   );
+  const skipping = asking?.get("outcome") === OUTCOME.skip;
+  const name = meal.name ?? meal.mealTypeLabel;
   return (
-    <form
-      action={action}
-      className="planner-confirm"
-      onSubmit={(event) => {
-        const now = new Date();
-        if (!confirmOrSkipAsksFirst(meal, { date: localDate(now), hour: localHour(now) })) return;
-        const submitter = (event.nativeEvent as SubmitEvent).submitter as HTMLButtonElement | null;
-        const question = submitter?.value === OUTCOME.skip ? "planner.skipToday" : "planner.confirmToday";
-        if (!confirm(t(question))) event.preventDefault();
-      }}
-    >
-      <button type="submit" name="outcome" value={OUTCOME.confirm} className="button-primary" disabled={pending}>
-        {t("planner.confirm")}
-      </button>
-      <button type="submit" name="outcome" value={OUTCOME.confirmUntracked} disabled={pending}>
-        {t("planner.confirmUntracked")}
-      </button>
-      <button type="submit" name="outcome" value={OUTCOME.skip} disabled={pending}>
-        {t("planner.skip")}
-      </button>
-      {error && <FormError>{confirmOrSkipErrorMessage(error)}</FormError>}
-    </form>
+    <>
+      <form
+        action={action}
+        className="planner-confirm"
+        onSubmit={(event) => {
+          const now = new Date();
+          if (!confirmOrSkipAsksFirst(meal, { date: localDate(now), hour: localHour(now) })) return;
+          event.preventDefault();
+          setAsking(new FormData(event.currentTarget, (event.nativeEvent as SubmitEvent).submitter));
+        }}
+      >
+        <button type="submit" name="outcome" value={OUTCOME.confirm} className="button-primary" disabled={pending}>
+          {t("planner.confirm")}
+        </button>
+        <button type="submit" name="outcome" value={OUTCOME.confirmUntracked} disabled={pending}>
+          {t("planner.confirmUntracked")}
+        </button>
+        <button type="submit" name="outcome" value={OUTCOME.skip} disabled={pending}>
+          {t("planner.skip")}
+        </button>
+        {error && <FormError>{confirmOrSkipErrorMessage(error)}</FormError>}
+      </form>
+      {asking && (
+        <ConfirmSheet
+          title={t(skipping ? "planner.skipTodayTitle" : "planner.confirmTodayTitle", { name })}
+          confirmLabel={t(skipping ? "planner.skipAnyway" : "planner.confirmAnyway")}
+          onConfirm={() => action(asking)}
+          onClose={() => setAsking(null)}
+        >
+          <p className="banner">{t(skipping ? "planner.skipToday" : "planner.confirmToday")}</p>
+        </ConfirmSheet>
+      )}
+    </>
   );
 }
 
