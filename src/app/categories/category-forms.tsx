@@ -69,7 +69,8 @@ export function CategoryRow({ id, label, kind }: { id: string; label: string; ki
         <RemoveButton
           action={removeCategoryAction.bind(null, id)}
           label={t("categories.remove")}
-          confirmMessage={t("categories.removeConfirm", { name: label })}
+          title={t("categories.removeConfirm", { name: label })}
+          body={t("categories.removeConfirmBody")}
         />
       </div>
     );

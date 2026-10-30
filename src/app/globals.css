@@ -72,6 +72,10 @@
   --color-teal-ink: #145E5A;
   --color-sand: #F1EADF;
   --color-sand-ink: #6A4E2A;
+  /* Behind and under sheets */
+  --color-scrim: color-mix(in srgb, var(--color-ink) 42%, transparent);
+  --color-sheet-shadow: color-mix(in srgb, var(--color-ink) 12%, transparent);
+  --color-dialog-shadow: color-mix(in srgb, var(--color-ink) 18%, transparent);
   /* Tweak options */
   --color-tweak-violet: #7B4FD8;
   --color-tweak-orange: #D2601A;
@@ -210,6 +214,12 @@ a.button:focus-visible {
 .button-danger {
   --button-line: var(--color-danger-outline);
   --button-ink: var(--color-danger);
+}
+
+.button-delete {
+  --button-bg: var(--color-danger);
+  --button-line: transparent;
+  --button-ink: var(--color-on-accent);
 }
 
 .button-soft {
@@ -702,6 +712,188 @@ a.list-row:focus-visible {
 
 .list-row-open .item-form > input {
   flex-basis: 100%;
+}
+
+/* Sheets: at the foot of the screen on phone, from 768px a centered dialog
+   with a Close button. */
+html:has(.sheet[open]) {
+  overflow: hidden;
+}
+
+.sheet {
+  top: auto;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  width: 100%;
+  max-width: 100%;
+  max-height: calc(100dvh - 40px);
+  margin: 0;
+  padding: 10px var(--space) calc(28px + env(safe-area-inset-bottom));
+  border: 0;
+  border-radius: 24px 24px 0 0;
+  background: var(--color-surface);
+  box-shadow: 0 -8px 32px var(--color-sheet-shadow);
+  color: var(--color-ink);
+}
+
+.sheet[open] {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space);
+}
+
+.sheet::backdrop {
+  background: var(--color-scrim);
+}
+
+.sheet-handle {
+  flex: none;
+  align-self: center;
+  width: 40px;
+  height: 4px;
+  border-radius: 999px;
+  background: var(--color-line-field);
+}
+
+.sheet-header {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.sheet-heading {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+
+.sheet-heading h2 {
+  margin: 0;
+  font-size: 22px;
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+}
+
+.sheet-eyebrow {
+  color: var(--color-ink-muted);
+  font-size: var(--text-label);
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.sheet-close {
+  display: none;
+}
+
+.sheet-body {
+  margin: 0;
+  color: var(--color-ink-soft);
+}
+
+.sheet .banner {
+  flex: none;
+  margin: 0;
+}
+
+.sheet-effects {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.sheet-effects li {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.sheet-effects li::before {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 999px;
+  font-size: var(--text-meta);
+  font-weight: 700;
+}
+
+.sheet-effect-gone::before {
+  content: "×" / "";
+  background: var(--color-danger-soft);
+  color: var(--color-danger);
+}
+
+.sheet-effect-kept::before {
+  content: "✓" / "";
+  background: var(--color-accent-soft);
+  color: var(--color-accent-ink);
+}
+
+.sheet-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.sheet-actions button {
+  flex: 1;
+  min-height: 48px;
+  font-size: var(--text-item);
+}
+
+.sheet-actions button:last-child {
+  flex: 1.4;
+}
+
+/* Sheet on desktop */
+@media (min-width: 768px) {
+  .sheet {
+    top: 0;
+    width: calc(100% - 48px);
+    max-width: 460px;
+    height: fit-content;
+    max-height: calc(100dvh - 48px);
+    margin: auto;
+    padding: 26px;
+    border-radius: 24px;
+    box-shadow: 0 24px 64px var(--color-dialog-shadow);
+  }
+
+  .sheet-handle {
+    display: none;
+  }
+
+  .sheet-close {
+    --button-bg: var(--color-ground);
+    --button-line: transparent;
+    --button-ink: var(--color-ink-soft);
+    display: flex;
+    flex: none;
+    width: 40px;
+    min-height: 40px;
+    padding: 0;
+  }
+
+  .sheet-actions {
+    justify-content: flex-end;
+    padding-top: 4px;
+  }
+
+  .sheet-actions button,
+  .sheet-actions button:last-child {
+    flex: none;
+    min-height: 44px;
+    padding: 0 22px;
+    font-size: var(--text-body);
+  }
 }
 
 /* Food Category pills: outlined, on white wherever they sit. */
