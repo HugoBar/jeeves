@@ -21,7 +21,7 @@ export function NeedsConfirmationBadge({ meals }: { meals: UnconfirmedCandidate[
   if (count === 0) return null;
   return (
     <Link href={NEEDS_CONFIRMATION_PATH} className="app-badge">
-      {t("nav.needsConfirmation", { count })}
+      <span className="app-badge-count">{count}</span> {t("nav.toConfirm")}
     </Link>
   );
 }
