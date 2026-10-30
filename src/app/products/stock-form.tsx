@@ -4,6 +4,7 @@ import { useActionState } from "react";
 import type { StockMovementType } from "@/core/stock";
 import type { DefaultUnit } from "@/core/units";
 import { t } from "@/strings";
+import { useFieldErrors } from "../form-error";
 import type { StockFormState } from "./stock-actions";
 
 const initialState: StockFormState = { error: null, value: "" };
@@ -20,13 +21,26 @@ export function StockForm({
 }) {
   const [state, formAction, pending] = useActionState(action, initialState);
   const label = t(`${kind}.quantity`, { unit: t(`unit.${unit}`) });
+  const { invalid, allMessages } = useFieldErrors(
+    state.error ? [state.error] : [],
+    () => "quantity",
+    (error) => t(`quantity.error.${error}`),
+  );
   return (
     <form action={formAction} className="stock-form">
-      <input name="quantity" inputMode="decimal" aria-label={label} placeholder={label} defaultValue={state.value} required />
-      <button type="submit" disabled={pending}>
+      <input
+        name="quantity"
+        inputMode="decimal"
+        aria-label={label}
+        placeholder={label}
+        defaultValue={state.value}
+        required
+        {...invalid("quantity")}
+      />
+      <button type="submit" className="button-primary" disabled={pending}>
         {t(`${kind}.submit`)}
       </button>
-      {state.error && <p className="form-error">{t(`quantity.error.${state.error}`)}</p>}
+      {allMessages()}
     </form>
   );
 }

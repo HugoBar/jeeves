@@ -25,7 +25,9 @@ export default async function RecipePage({ params }: { params: Promise<{ id: str
     <section>
       <h1>{recipe.name}</h1>
       <p>
-        <Link href={`/recipes/${recipe.id}/edit`}>{t("recipes.edit")}</Link>
+        <Link href={`/recipes/${recipe.id}/edit`} className="button">
+          {t("recipes.edit")}
+        </Link>
       </p>
       <RemoveButton
         action={removeRecipeAction.bind(null, recipe.id)}
@@ -36,7 +38,7 @@ export default async function RecipePage({ params }: { params: Promise<{ id: str
       <p>{t("recipes.prepTimeMinutes", { minutes: recipe.prepTimeMinutes })}</p>
       {recipe.sourceUrl !== null && (
         <p>
-          <a href={recipe.sourceUrl} target="_blank" rel="noopener noreferrer">
+          <a href={recipe.sourceUrl} target="_blank" rel="noopener noreferrer" className="button button-quiet">
             {t("recipes.source")}
           </a>
         </p>
@@ -67,7 +69,9 @@ export default async function RecipePage({ params }: { params: Promise<{ id: str
         <p>{t("recipes.stepsEmpty")}</p>
       ) : (
         // react-markdown escapes raw HTML and drops unsafe link URLs.
-        <Markdown>{recipe.steps}</Markdown>
+        <div className="recipe-steps">
+          <Markdown>{recipe.steps}</Markdown>
+        </div>
       )}
     </section>
   );

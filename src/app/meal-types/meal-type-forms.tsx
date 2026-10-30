@@ -2,6 +2,8 @@
 
 import { useActionState, useState } from "react";
 import { t } from "@/strings";
+import { MEAL_TYPE_ERROR_FIELDS } from "../field-errors";
+import { useFieldErrors, type InvalidProps } from "../form-error";
 import { RemoveButton } from "../remove-button";
 import {
   createMealTypeAction,
@@ -12,16 +14,25 @@ import {
 
 const initialState: MealTypeFormState = { errors: [] };
 
+function useMealTypeErrors(state: MealTypeFormState) {
+  return useFieldErrors(
+    state.errors,
+    (error) => MEAL_TYPE_ERROR_FIELDS[error],
+    (error) => t(`mealTypes.error.${error}`),
+  );
+}
+
 export function CreateMealTypeForm() {
   const [state, action, pending] = useActionState(createMealTypeAction, initialState);
+  const { invalid, allMessages } = useMealTypeErrors(state);
   return (
     <form action={action} className="item-form">
-      <input name="name" aria-label={t("mealTypes.name")} placeholder={t("mealTypes.name")} />
-      <MealTypeFields priority="" allowsLeftovers={false} />
-      <button type="submit" disabled={pending}>
+      <input name="name" aria-label={t("mealTypes.name")} placeholder={t("mealTypes.name")} {...invalid("name")} />
+      <MealTypeFields priority="" allowsLeftovers={false} priorityInvalidProps={invalid("priority")} />
+      <button type="submit" className="button-primary" disabled={pending}>
         {t("mealTypes.add")}
       </button>
-      <FormErrors state={state} />
+      {allMessages()}
     </form>
   );
 }
@@ -47,19 +58,24 @@ export function MealTypeRow({
     },
     initialState,
   );
+  const { invalid, allMessages } = useMealTypeErrors(state);
 
   if (editing) {
     return (
-      <form action={action} className="item-form">
-        <input name="name" aria-label={t("mealTypes.name")} defaultValue={label} autoFocus />
-        <MealTypeFields priority={String(priority)} allowsLeftovers={allowsLeftovers} />
-        <button type="submit" disabled={pending}>
+      <form action={action} className="item-form open-row">
+        <input name="name" aria-label={t("mealTypes.name")} defaultValue={label} autoFocus {...invalid("name")} />
+        <MealTypeFields
+          priority={String(priority)}
+          allowsLeftovers={allowsLeftovers}
+          priorityInvalidProps={invalid("priority")}
+        />
+        <button type="submit" className="button-primary" disabled={pending}>
           {t("mealTypes.save")}
         </button>
         <button type="button" onClick={() => setEditing(false)}>
           {t("mealTypes.cancel")}
         </button>
-        <FormErrors state={state} />
+        {allMessages()}
       </form>
     );
   }
@@ -82,12 +98,20 @@ export function MealTypeRow({
 }
 
 // Meal Priority and "allows Leftovers", shared by both forms.
-function MealTypeFields({ priority, allowsLeftovers }: { priority: string; allowsLeftovers: boolean }) {
+function MealTypeFields({
+  priority,
+  allowsLeftovers,
+  priorityInvalidProps,
+}: {
+  priority: string;
+  allowsLeftovers: boolean;
+  priorityInvalidProps: InvalidProps;
+}) {
   return (
     <>
       <label>
         {t("mealTypes.priority")}
-        <input name="priority" inputMode="numeric" defaultValue={priority} />
+        <input name="priority" inputMode="numeric" defaultValue={priority} {...priorityInvalidProps} />
       </label>
       <label>
         <input type="checkbox" name="allowsLeftovers" defaultChecked={allowsLeftovers} />
@@ -95,12 +119,4 @@ function MealTypeFields({ priority, allowsLeftovers }: { priority: string; allow
       </label>
     </>
   );
-}
-
-function FormErrors({ state }: { state: MealTypeFormState }) {
-  return state.errors.map((error) => (
-    <p key={error} className="form-error">
-      {t(`mealTypes.error.${error}`)}
-    </p>
-  ));
 }

@@ -15,7 +15,9 @@ export default async function StockPage() {
     <section>
       <h1>{t("stock.title")}</h1>
       <p>
-        <Link href="/products/new">{t("products.add")}</Link>
+        <Link href="/products/new" className="button button-primary">
+          {t("products.add")}
+        </Link>
       </p>
       {products.length === 0 ? (
         <p>{t("stock.empty")}</p>

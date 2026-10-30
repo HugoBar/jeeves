@@ -5,6 +5,8 @@ import { moveSlot, type MealTemplateContent } from "@/core/meal-templates";
 import { t } from "@/strings";
 import { groupCategoriesByKind } from "../categories/category-groups";
 import type { CategoryOption } from "../categories/category-options";
+import { MEAL_TEMPLATE_ERROR_FIELDS, templateSlotErrorField } from "../field-errors";
+import { useFieldErrors, type InvalidProps } from "../form-error";
 import { RemoveButton } from "../remove-button";
 import {
   createMealTemplateAction,
@@ -40,17 +42,26 @@ export function CreateMealTemplateForm({
     slotErrors: [],
     slotCategoryIds: [],
   });
+  const { invalid, allMessages } = useTemplateErrors(state);
   return (
     <form action={action} className="item-form">
-      <input name="name" aria-label={t("mealTemplates.name")} placeholder={t("mealTemplates.name")} />
-      <input type="time" name="hour" aria-label={t("mealTemplates.hour")} />
-      <MealTypeSelect mealTypes={mealTypes} defaultValue="" />
+      <input name="name" aria-label={t("mealTemplates.name")} placeholder={t("mealTemplates.name")} {...invalid("name")} />
+      <input type="time" name="hour" aria-label={t("mealTemplates.hour")} {...invalid("hour")} />
+      <MealTypeSelect mealTypes={mealTypes} defaultValue="" invalidProps={invalid("mealType")} />
       <SlotRows state={state} slotCategories={slotCategories} />
-      <button type="submit" disabled={pending}>
+      <button type="submit" className="button-primary" disabled={pending}>
         {t("mealTemplates.add")}
       </button>
-      <FormErrors state={state} />
+      {allMessages()}
     </form>
+  );
+}
+
+function useTemplateErrors(state: MealTemplateFormState) {
+  return useFieldErrors(
+    state.errors,
+    (error) => MEAL_TEMPLATE_ERROR_FIELDS[error],
+    (error) => t(`mealTemplates.error.${error}`),
   );
 }
 
@@ -73,21 +84,22 @@ export function MealTemplateRow({
     },
     { errors: [], slotErrors: [], slotCategoryIds },
   );
+  const { invalid, allMessages } = useTemplateErrors(state);
 
   if (editing) {
     return (
-      <form action={action} className="item-form">
-        <input name="name" aria-label={t("mealTemplates.name")} defaultValue={name} autoFocus />
-        <input type="time" name="hour" aria-label={t("mealTemplates.hour")} defaultValue={hour} />
-        <MealTypeSelect mealTypes={mealTypes} defaultValue={mealTypeId} />
+      <form action={action} className="item-form open-row">
+        <input name="name" aria-label={t("mealTemplates.name")} defaultValue={name} autoFocus {...invalid("name")} />
+        <input type="time" name="hour" aria-label={t("mealTemplates.hour")} defaultValue={hour} {...invalid("hour")} />
+        <MealTypeSelect mealTypes={mealTypes} defaultValue={mealTypeId} invalidProps={invalid("mealType")} />
         <SlotRows state={state} slotCategories={slotCategories} />
-        <button type="submit" disabled={pending}>
+        <button type="submit" className="button-primary" disabled={pending}>
           {t("mealTemplates.save")}
         </button>
         <button type="button" onClick={() => setEditing(false)}>
           {t("mealTemplates.cancel")}
         </button>
-        <FormErrors state={state} />
+        {allMessages()}
       </form>
     );
   }
@@ -112,7 +124,7 @@ export function MealTemplateRow({
             return (
               <li key={index}>
                 {category?.label}
-                {category?.archived && <span className="form-error"> {t("mealTemplates.slotArchived")}</span>}
+                {category?.archived && <p className="form-error">{t("mealTemplates.slotArchived")}</p>}
               </li>
             );
           })}
@@ -122,9 +134,17 @@ export function MealTemplateRow({
   );
 }
 
-function MealTypeSelect({ mealTypes, defaultValue }: { mealTypes: MealTypeOption[]; defaultValue: string }) {
+function MealTypeSelect({
+  mealTypes,
+  defaultValue,
+  invalidProps,
+}: {
+  mealTypes: MealTypeOption[];
+  defaultValue: string;
+  invalidProps: InvalidProps;
+}) {
   return (
-    <select name="mealTypeId" aria-label={t("mealTemplates.mealType")} defaultValue={defaultValue}>
+    <select name="mealTypeId" aria-label={t("mealTemplates.mealType")} defaultValue={defaultValue} {...invalidProps}>
       <option value="">{t("mealTemplates.pickMealType")}</option>
       {mealTypes
         .filter((mealType) => !mealType.archived || mealType.id === defaultValue)
@@ -137,14 +157,20 @@ function MealTypeSelect({ mealTypes, defaultValue }: { mealTypes: MealTypeOption
   );
 }
 
-type Slot = { categoryId: string; key: string };
+// `submittedRow` is the slot's number in the last submit, which its errors use,
+// so they stay with it when slots move. Null for a slot added since.
+type Slot = { categoryId: string; key: string; submittedRow: number | null };
 
 // Every slot gets a fresh key from this counter, including those refilled
 // from a submit.
 let nextSlotKey = 0;
 
 function toSlots(slotCategoryIds: string[]): Slot[] {
-  return slotCategoryIds.map((categoryId) => ({ categoryId, key: String(nextSlotKey++) }));
+  return slotCategoryIds.map((categoryId, index) => ({
+    categoryId,
+    key: String(nextSlotKey++),
+    submittedRow: index + 1,
+  }));
 }
 
 // The template's slots, in order, refilled from `state` after each submit.
@@ -162,9 +188,13 @@ function SlotRows({ state, slotCategories }: { state: MealTemplateFormState; slo
 
   const pick = (key: string, categoryId: string) =>
     setSlots((current) => current.map((slot) => (slot.key === key ? { ...slot, categoryId } : slot)));
-  const add = () => setSlots((current) => [...current, ...toSlots([""])]);
+  const add = () =>
+    setSlots((current) => [...current, ...toSlots([""]).map((slot) => ({ ...slot, submittedRow: null }))]);
   const remove = (key: string) => setSlots((current) => current.filter((slot) => slot.key !== key));
   const move = (index: number, offset: -1 | 1) => setSlots((current) => moveSlot(current, index, offset));
+  const { invalid, messages } = useFieldErrors(state.slotErrors, templateSlotErrorField, (error) =>
+    t(`mealTemplates.error.${error.code}`, { row: error.row }),
+  );
 
   return (
     <fieldset className="slot-rows">
@@ -180,6 +210,7 @@ function SlotRows({ state, slotCategories }: { state: MealTemplateFormState; slo
               aria-label={t("mealTemplates.slotCategory")}
               defaultValue={slot.categoryId}
               onChange={(event) => pick(slot.key, event.target.value)}
+              {...invalid(String(slot.submittedRow))}
             >
               <option value="">{t("mealTemplates.pickSlotCategory")}</option>
               {groupCategoriesByKind(offered).map(
@@ -201,33 +232,17 @@ function SlotRows({ state, slotCategories }: { state: MealTemplateFormState; slo
             <button type="button" onClick={() => move(index, 1)} disabled={index === slots.length - 1}>
               {t("mealTemplates.slotDown")}
             </button>
-            <button type="button" onClick={() => remove(slot.key)}>
+            <button type="button" className="button-danger" onClick={() => remove(slot.key)}>
               {t("mealTemplates.slotRemove")}
             </button>
             {picked?.archived && <p className="form-error">{t("mealTemplates.slotArchived")}</p>}
+            {messages(String(slot.submittedRow))}
           </div>
         );
       })}
-      <button type="button" onClick={add}>
+      <button type="button" className="button-list-add" onClick={add}>
         {t("mealTemplates.slotAdd")}
       </button>
     </fieldset>
-  );
-}
-
-function FormErrors({ state }: { state: MealTemplateFormState }) {
-  return (
-    <>
-      {state.errors.map((error) => (
-        <p key={error} className="form-error">
-          {t(`mealTemplates.error.${error}`)}
-        </p>
-      ))}
-      {state.slotErrors.map((error) => (
-        <p key={`${error.row}-${error.code}`} className="form-error">
-          {t(`mealTemplates.error.${error.code}`, { row: error.row })}
-        </p>
-      ))}
-    </>
   );
 }

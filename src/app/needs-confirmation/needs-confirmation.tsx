@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useActionState } from "react";
 import { mustResolve, needingConfirmation, sortMealsByDay } from "@/core/meals";
 import { formatMealDate, t } from "@/strings";
+import { FormError } from "../form-error";
 import { confirmMealsAsPlannedAction, type RefusedMeal } from "../planner/actions";
 import { confirmOrSkipErrorMessage, MealCard, mealOnLabel, type Pickers, type PlannerMeal } from "../planner/meal-card";
 import { useViewerNow, viewerToday } from "../viewer-clock";
@@ -43,7 +44,9 @@ export function NeedsConfirmation({ meals, ...pickers }: { meals: PlannerMeal[] 
       )}
       {!resolving && (
         <p>
-          <Link href="/planner">{t("unconfirmed.dismiss")}</Link>
+          <Link href="/planner" className="button button-quiet">
+            {t("unconfirmed.dismiss")}
+          </Link>
         </p>
       )}
     </section>
@@ -63,13 +66,13 @@ function ConfirmAll({ meals }: { meals: PlannerMeal[] }) {
   };
   return (
     <form action={action} className="planner-confirm">
-      <button type="submit" disabled={pending}>
+      <button type="submit" className="button-primary" disabled={pending}>
         {t("unconfirmed.confirmAll")}
       </button>
       {refused.map(({ mealId, refusal }) => (
-        <p key={mealId} className="form-error">
+        <FormError key={mealId}>
           {t("unconfirmed.confirmAllRefused", { name: nameOf(mealId), reason: confirmOrSkipErrorMessage(refusal) })}
-        </p>
+        </FormError>
       ))}
     </form>
   );
