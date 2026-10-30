@@ -1,6 +1,7 @@
 import { sortCategories } from "@/core/food-categories";
 import type { FoodCategory } from "@/db/food-categories";
 import { foodCategoryLabel, t } from "@/strings";
+import { FoodCategoryPill } from "../food-category-pill";
 
 // A set of a Recipe's Food Categories, with where it comes from: Roles first,
 // then Kinds, each alphabetical.
@@ -20,9 +21,11 @@ export function RecipeFoodCategories({
       {categories.length === 0 ? (
         <p>{t("recipes.foodCategoriesEmpty")}</p>
       ) : (
-        <ul>
+        <ul className="pills">
           {sortCategories(categories, foodCategoryLabel).map((category) => (
-            <li key={category.id}>{foodCategoryLabel(category)}</li>
+            <li key={category.id}>
+              <FoodCategoryPill label={foodCategoryLabel(category)} />
+            </li>
           ))}
         </ul>
       )}

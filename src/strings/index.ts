@@ -41,10 +41,10 @@ export function formatList(items: readonly string[]): string {
   return listFormat.format(items);
 }
 
-// A moment as shown to the user: "Oct 23, 2026, 2:05 PM", in the time zone of
+// A moment as shown to the user: "23 Oct 2026, 14:05", in the time zone of
 // whoever runs it.
 export function formatDateTime(value: Date): string {
-  return value.toLocaleString("en", { dateStyle: "medium", timeStyle: "short" });
+  return value.toLocaleString("en-GB", { dateStyle: "medium", timeStyle: "short" });
 }
 
 // A Stock Movement's delta with its sign: "+500 g", "-1.5 pc".

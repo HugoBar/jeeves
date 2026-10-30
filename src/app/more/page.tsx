@@ -1,23 +1,20 @@
-import Link from "next/link";
 import { t } from "@/strings";
-import { moreLinks } from "../menu-items";
+import { LinkRow } from "../list-row";
+import { inTopMenu, moreLinks } from "../menu-items";
 
 export default function MorePage() {
   return (
     <section>
       <h1 className="more-title">{t("nav.more")}</h1>
-      <ul className="more-list">
+      <ul className="list">
         {moreLinks.map(({ href, label, description }) => (
-          <li key={href}>
-            <Link href={href}>
-              <span className="more-link-text">
-                <strong>{t(label)}</strong>
-                <span>{t(description)}</span>
+          <li key={href} className={inTopMenu(href) ? "more-phone-only" : undefined}>
+            <LinkRow href={href}>
+              <span className="list-row-text">
+                <span className="list-row-title">{t(label)}</span>
+                <span className="list-row-meta">{t(description)}</span>
               </span>
-              <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-                <path d="M9 6l6 6-6 6" />
-              </svg>
-            </Link>
+            </LinkRow>
           </li>
         ))}
       </ul>

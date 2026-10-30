@@ -6,7 +6,9 @@ import { t } from "@/strings";
 import { groupCategoriesByKind } from "../categories/category-groups";
 import type { CategoryOption } from "../categories/category-options";
 import { MEAL_TEMPLATE_ERROR_FIELDS, templateSlotErrorField } from "../field-errors";
+import { FoodCategoryPill } from "../food-category-pill";
 import { useFieldErrors, type InvalidProps } from "../form-error";
+import { EditableRow } from "../list-row";
 import { RemoveButton } from "../remove-button";
 import {
   createMealTemplateAction,
@@ -88,49 +90,48 @@ export function MealTemplateRow({
 
   if (editing) {
     return (
-      <form action={action} className="item-form open-row">
-        <input name="name" aria-label={t("mealTemplates.name")} defaultValue={name} autoFocus {...invalid("name")} />
-        <input type="time" name="hour" aria-label={t("mealTemplates.hour")} defaultValue={hour} {...invalid("hour")} />
-        <MealTypeSelect mealTypes={mealTypes} defaultValue={mealTypeId} invalidProps={invalid("mealType")} />
-        <SlotRows state={state} slotCategories={slotCategories} />
-        <button type="submit" className="button-primary" disabled={pending}>
-          {t("mealTemplates.save")}
-        </button>
-        <button type="button" onClick={() => setEditing(false)}>
-          {t("mealTemplates.cancel")}
-        </button>
-        {allMessages()}
-      </form>
+      <div className="list-row-open open-row">
+        <form action={action} className="item-form">
+          <input name="name" aria-label={t("mealTemplates.name")} defaultValue={name} autoFocus {...invalid("name")} />
+          <input type="time" name="hour" aria-label={t("mealTemplates.hour")} defaultValue={hour} {...invalid("hour")} />
+          <MealTypeSelect mealTypes={mealTypes} defaultValue={mealTypeId} invalidProps={invalid("mealType")} />
+          <SlotRows state={state} slotCategories={slotCategories} />
+          <button type="submit" className="button-primary" disabled={pending}>
+            {t("mealTemplates.save")}
+          </button>
+          <button type="button" onClick={() => setEditing(false)}>
+            {t("mealTemplates.cancel")}
+          </button>
+          {allMessages()}
+        </form>
+        <RemoveButton
+          action={removeMealTemplateAction.bind(null, id)}
+          label={t("mealTemplates.remove")}
+          confirmMessage={t("mealTemplates.removeConfirm", { name })}
+        />
+      </div>
     );
   }
 
+  const categories = slotCategoryIds.flatMap((categoryId) => slotCategories.filter(({ id }) => id === categoryId));
   return (
-    <div className="item-row">
-      <span>{name}</span>
-      <span>{hour}</span>
-      <span>{mealTypes.find((mealType) => mealType.id === mealTypeId)?.label}</span>
-      <button type="button" onClick={() => setEditing(true)}>
-        {t("mealTemplates.edit")}
-      </button>
-      <RemoveButton
-        action={removeMealTemplateAction.bind(null, id)}
-        label={t("mealTemplates.remove")}
-        confirmMessage={t("mealTemplates.removeConfirm", { name })}
-      />
-      {slotCategoryIds.length > 0 && (
-        <ol className="slot-list" aria-label={t("mealTemplates.slots")}>
-          {slotCategoryIds.map((categoryId, index) => {
-            const category = slotCategories.find((option) => option.id === categoryId);
-            return (
-              <li key={index}>
-                {category?.label}
-                {category?.archived && <p className="form-error">{t("mealTemplates.slotArchived")}</p>}
-              </li>
-            );
-          })}
-        </ol>
-      )}
-    </div>
+    <EditableRow editLabel={t("mealTemplates.edit")} onOpen={() => setEditing(true)}>
+      <span className="list-row-text">
+        <span className="list-row-title">{name}</span>
+        <span className="list-row-meta">{mealTypes.find((mealType) => mealType.id === mealTypeId)?.label}</span>
+        {categories.length > 0 && (
+          <span className="pills">
+            {categories.map((category, index) => (
+              <FoodCategoryPill key={index} label={category.label} archived={category.archived} />
+            ))}
+          </span>
+        )}
+        {categories.some((category) => category.archived) && (
+          <span className="banner banner-neutral">{t("mealTemplates.slotArchived")}</span>
+        )}
+      </span>
+      <span className="list-row-meta">{hour}</span>
+    </EditableRow>
   );
 }
 
@@ -235,7 +236,7 @@ function SlotRows({ state, slotCategories }: { state: MealTemplateFormState; slo
             <button type="button" className="button-danger" onClick={() => remove(slot.key)}>
               {t("mealTemplates.slotRemove")}
             </button>
-            {picked?.archived && <p className="form-error">{t("mealTemplates.slotArchived")}</p>}
+            {picked?.archived && <p className="banner banner-neutral">{t("mealTemplates.slotArchived")}</p>}
             {messages(String(slot.submittedRow))}
           </div>
         );

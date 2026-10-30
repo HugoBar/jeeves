@@ -14,7 +14,7 @@ export default async function MealTypesPage() {
     <section>
       <h1>{t("mealTypes.title")}</h1>
       <CreateMealTypeForm />
-      <ul className="item-list">
+      <ul className="list">
         {mealTypes.map((mealType) => (
           <li key={mealType.id}>
             <MealTypeRow

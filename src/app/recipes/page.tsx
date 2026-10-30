@@ -4,6 +4,7 @@ import { sortByName } from "@/core/names";
 import { getDb } from "@/db";
 import { listActiveRecipes } from "@/db/recipes";
 import { t } from "@/strings";
+import { LinkRow } from "../list-row";
 
 // The Recipes list.
 export default async function RecipesPage() {
@@ -22,13 +23,15 @@ export default async function RecipesPage() {
       {recipes.length === 0 ? (
         <p>{t("recipes.empty")}</p>
       ) : (
-        <ul className="stock-list">
+        <ul className="list">
           {recipes.map((recipe) => (
             <li key={recipe.id}>
-              <Link href={`/recipes/${recipe.id}`}>
-                <span>{recipe.name}</span>
-                <span>{t("recipes.portionsCount", { portions: recipe.portions })}</span>
-              </Link>
+              <LinkRow href={`/recipes/${recipe.id}`}>
+                <span className="list-row-text">
+                  <span className="list-row-title">{recipe.name}</span>
+                </span>
+                <span className="list-row-meta">{t("recipes.portionsCount", { portions: recipe.portions })}</span>
+              </LinkRow>
             </li>
           ))}
         </ul>

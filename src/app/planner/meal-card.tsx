@@ -19,6 +19,7 @@ import { shortfallUrgency } from "@/core/projected-stock";
 import type { DefaultUnit } from "@/core/units";
 import { editingLabel, formatMealDate, formatQuantity, t } from "@/strings";
 import { MEAL_ERROR_FIELDS, MEAL_SLOT_ERROR_FIELDS } from "../field-errors";
+import { FoodCategoryPill } from "../food-category-pill";
 import { FormError, useFieldErrors, type InvalidProps } from "../form-error";
 import { RemoveButton } from "../remove-button";
 import { viewerToday } from "../viewer-clock";
@@ -201,7 +202,7 @@ export function MealCard({
                 </>
               ) : (
                 <>
-                  <span>{slot.slotCategoryLabel}</span>
+                  <FoodCategoryPill label={slot.slotCategoryLabel} />
                   <SlotFoodLabel food={slot.food} />
                 </>
               )}
@@ -337,7 +338,7 @@ function SlotCategoryPicker({ slot, slotCategories }: { slot: PlannerMealSlot; s
           </option>
         ))}
       </select>
-      {slot.slotCategoryArchived && <p className="form-error">{t("planner.slotArchived")}</p>}
+      {slot.slotCategoryArchived && <p className="banner banner-neutral">{t("planner.slotArchived")}</p>}
       {allMessages()}
     </form>
   );
