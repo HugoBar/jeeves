@@ -1,33 +1,92 @@
-/* --color-bg and --color-accent (light) are mirrored in src/app/theme.ts. */
+/* Every color lives here, so dark mode can later be a swap of these values.
+   --color-ground and --color-accent are mirrored in src/app/theme.ts. */
 :root {
-  --color-bg: #f4efe6;
-  --color-surface: #ffffff;
-  --color-text: #1f2622;
-  --color-muted: #5c6862;
-  --color-accent: #2f5d50;
-  --color-on-accent: #f4efe6;
-  /* Next week in the planner, so it never passes for this week. */
-  --color-accent-next: #9a4d22;
-  --color-error: #b3261e;
-  /* Shortfall warnings for Meals more than 1 day away. */
-  --color-warning: #8a5300;
+  /* Neutrals */
+  --color-ground: #F2F3EF;
+  --color-surface: #FFFFFF;
+  --color-inset: #F7F8F5;
+  --color-line-soft: #EEF0EC;
+  --color-border: #E4E6E1;
+  --color-track: #E7E9E4;
+  --color-line-field: #D5D9D2;
+  --color-line-disabled: #DCDFD9;
+  --color-line-strong: #C9CDC6;
+  --color-control-off: #B9BEB6;
+  --color-icon-muted: #8A908B;
+  --color-ink-nav: #4F5550;
+  --color-ink-soft: #3F4541;
+  --color-ink-muted: #5C625D;
+  --color-ink: #1A1D1B;
+  /* Accent green */
+  --color-accent: #0D8457;
+  --color-link: #0B7A50;
+  --color-link-hover: #075C3C;
+  --color-confirmed: #0B6B45;
+  --color-accent-ink: #0B5E3E;
+  --color-accent-soft: #EAF5EF;
+  --color-accent-pressed: #D3EBDD;
+  --color-accent-line: #CDE8DA;
+  --color-open-row: #F9FCFA;
+  --color-selected: #F6FBF8;
+  --color-toast-green: #8FD9B3;
+  --color-open-row-border: color-mix(in srgb, var(--color-accent) 40%, var(--color-surface));
+  --color-field-editing: color-mix(in srgb, var(--color-accent) 55%, var(--color-surface));
+  /* Next week blue */
+  --color-next: #2F6FD6;
+  --color-next-ink: #1F4E9C;
+  --color-next-soft: #E6EEFB;
+  --color-next-selected: #F6F9FE;
+  /* Warning amber */
+  --color-warning-ink: #8A4B00;
+  --color-warning-deep: #6B3A00;
+  --color-warning-deeper: #5E3500;
+  --color-warning-bar: #C77A12;
+  --color-warning: #FDEBD3;
+  --color-warning-soft: #FFF6E8;
+  --color-warning-card: #FFFBF4;
+  --color-warning-line: #F6DDB3;
+  --color-warning-line-strong: #F0D3A6;
+  --color-warning-track: #F6E6CC;
+  /* Danger */
+  --color-danger: #B3361A;
+  --color-danger-deep: #6E2508;
+  --color-danger-soft: #FDEDE6;
+  --color-danger-line: #F3CBBC;
+  --color-danger-outline: #F0C9BB;
+  --color-danger-track: #F6D9CF;
+  --color-danger-card: #FFFAF8;
+  /* Food Category hues */
+  --color-amber: #FDF0D2;
+  --color-amber-ink: #7A4F00;
+  --color-blue: #DCEBFD;
+  --color-blue-ink: #1C5590;
+  --color-terracotta: #FDE4D8;
+  --color-terracotta-ink: #96360F;
+  --color-green: #DDF3E6;
+  --color-green-ink: #1B6A43;
+  --color-violet: #EAE5FC;
+  --color-violet-ink: #4F3AA0;
+  --color-pink: #FDE3E6;
+  --color-pink-ink: #9C2440;
+  --color-teal: #D6F1EF;
+  --color-teal-ink: #145E5A;
+  --color-sand: #F1EADF;
+  --color-sand-ink: #6A4E2A;
+  /* Tweak options */
+  --color-tweak-violet: #7B4FD8;
+  --color-tweak-orange: #D2601A;
+  /* Text on accent and next. White in light mode, whatever surface becomes. */
+  --color-on-accent: var(--color-surface);
+  /* Type scale */
+  --text-title: 28px;
+  --text-section: 17px;
+  --text-item: 15px;
+  --text-body: 14px;
+  --text-meta: 13px;
+  --text-label: 11px;
   --space: 16px;
   --header-height: 56px;
-  color-scheme: light dark;
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --color-bg: #151a18;
-    --color-surface: #1e2522;
-    --color-text: #e8ece9;
-    --color-muted: #9aa69f;
-    --color-accent: #6fa58f;
-    --color-on-accent: #151a18;
-    --color-accent-next: #e0a279;
-    --color-error: #f2b8b5;
-    --color-warning: #f0c674;
-  }
+  color-scheme: light;
 }
 
 * {
@@ -41,11 +100,41 @@ body {
 
 body {
   min-height: 100dvh;
-  background: var(--color-bg);
-  color: var(--color-text);
-  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  background: var(--color-ground);
+  color: var(--color-ink);
+  accent-color: var(--color-accent);
+  font-size: var(--text-body);
+  font-variant-numeric: tabular-nums;
   line-height: 1.5;
   -webkit-text-size-adjust: 100%;
+}
+
+h1 {
+  font-size: var(--text-title);
+  font-weight: 700;
+  letter-spacing: -0.025em;
+  line-height: 1.2;
+}
+
+h2,
+h3 {
+  font-size: var(--text-section);
+  font-weight: 700;
+}
+
+a {
+  color: var(--color-link);
+}
+
+a:hover {
+  color: var(--color-link-hover);
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
 }
 
 /* Mobile-first shell: a sticky header and a single content column. */
@@ -61,8 +150,9 @@ body {
 }
 
 .app-title {
-  font-weight: 600;
-  font-size: 1.125rem;
+  font-weight: 700;
+  font-size: var(--text-section);
+  letter-spacing: -0.02em;
 }
 
 .app-header a {
@@ -73,15 +163,19 @@ body {
 .app-nav {
   display: flex;
   gap: var(--space);
+  min-width: 0;
   margin-left: auto;
+  padding-left: var(--space);
+  overflow-x: auto;
+  white-space: nowrap;
 }
 
 /* How many Unconfirmed Meals need confirmation, opening their list. */
 .app-header a.app-badge {
   padding: 0 calc(var(--space) / 2);
   border-radius: 999px;
-  background: var(--color-on-accent);
-  color: var(--color-accent);
+  background: var(--color-warning);
+  color: var(--color-warning-ink);
   font-weight: 600;
 }
 
@@ -92,7 +186,7 @@ body {
 }
 
 .item-list li + li {
-  border-top: 1px solid color-mix(in srgb, var(--color-muted) 30%, transparent);
+  border-top: 1px solid var(--color-border);
 }
 
 .item-row,
@@ -116,13 +210,13 @@ body {
 }
 
 .stock-suspect {
-  color: var(--color-error);
+  color: var(--color-terracotta-ink);
 }
 
 .form-error {
   flex-basis: 100%;
   margin: 0;
-  color: var(--color-error);
+  color: var(--color-danger);
 }
 
 .stock-list,
@@ -134,7 +228,7 @@ body {
 
 .stock-list li + li,
 .movement-list li + li {
-  border-top: 1px solid color-mix(in srgb, var(--color-muted) 30%, transparent);
+  border-top: 1px solid var(--color-border);
 }
 
 .stock-list a {
@@ -168,7 +262,6 @@ body {
 
 .category-picker h2 {
   margin: 0;
-  font-size: 1rem;
 }
 
 .product-form .category-picker label {
@@ -234,30 +327,32 @@ body {
   padding: calc(var(--space) / 2) 0;
 }
 
-/* Planner: each week carries its own accent, set as --week-accent. */
-.planner-week {
+/* Planner: each week carries its own colors, set as --week-*. "Needs
+   confirmation" lists Meals off the planner with the same colors. */
+.planner-week,
+.needs-confirmation {
   --week-accent: var(--color-accent);
+  --week-soft: var(--color-accent-soft);
+  --week-ink: var(--color-accent-ink);
+}
+
+.planner-week {
   margin-bottom: calc(var(--space) * 1.5);
   border-left: 4px solid var(--week-accent);
   padding-left: calc(var(--space) / 2);
-}
-
-/* Meals listed off the planner, as "Needs confirmation" does. */
-.needs-confirmation {
-  --week-accent: var(--color-accent);
 }
 
 /* "Close this week": this week's Unconfirmed Meals, from Saturday. */
 .planner-banner {
   margin-bottom: var(--space);
   padding: calc(var(--space) / 2) var(--space);
-  border-left: 4px solid var(--color-warning);
-  background: color-mix(in srgb, var(--color-warning) 12%, var(--color-surface));
+  border-left: 4px solid var(--color-warning-bar);
+  background: var(--color-warning-soft);
+  color: var(--color-warning-deep);
 }
 
 .planner-banner h2 {
   margin: 0 0 calc(var(--space) / 4);
-  font-size: 1rem;
 }
 
 .planner-banner p,
@@ -266,7 +361,9 @@ body {
 }
 
 .planner-week-next {
-  --week-accent: var(--color-accent-next);
+  --week-accent: var(--color-next);
+  --week-soft: var(--color-next-soft);
+  --week-ink: var(--color-next-ink);
 }
 
 .planner-week-header {
@@ -274,8 +371,10 @@ body {
   padding: calc(var(--space) / 4) calc(var(--space) / 2);
   background: var(--week-accent);
   color: var(--color-on-accent);
-  font-size: 1rem;
-  letter-spacing: 0.04em;
+  font-size: var(--text-label);
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
 }
 
 .planner-day {
@@ -284,11 +383,11 @@ body {
 }
 
 .planner-day + .planner-day {
-  border-top: 1px solid color-mix(in srgb, var(--color-muted) 30%, transparent);
+  border-top: 1px solid var(--color-border);
 }
 
 .planner-day-today {
-  background: color-mix(in srgb, var(--week-accent) 14%, var(--color-surface));
+  background: var(--week-soft);
   outline: 2px solid var(--week-accent);
 }
 
@@ -297,7 +396,6 @@ body {
   align-items: center;
   gap: calc(var(--space) / 2);
   margin: 0 0 calc(var(--space) / 4);
-  font-size: 1rem;
 }
 
 .planner-tag {
@@ -306,13 +404,13 @@ body {
   border-radius: 4px;
   background: var(--week-accent);
   color: var(--color-on-accent);
-  font-size: 0.75rem;
+  font-size: var(--text-label);
   font-weight: 600;
 }
 
 .planner-empty {
   margin: 0;
-  color: var(--color-muted);
+  color: var(--color-ink-muted);
 }
 
 .planner-meals {
@@ -322,7 +420,7 @@ body {
 }
 
 .planner-meals li + li {
-  border-top: 1px solid color-mix(in srgb, var(--color-muted) 30%, transparent);
+  border-top: 1px solid var(--color-border);
 }
 
 /* Outranks .item-row > span:first-child, which would stretch the hour. */
@@ -332,8 +430,10 @@ body {
 }
 
 .planner-meal-label {
-  flex: 1;
+  flex: 1 1 auto;
   min-width: 8em;
+  font-size: var(--text-item);
+  font-weight: 600;
 }
 
 .planner-meal-actions,
@@ -365,16 +465,16 @@ body {
   display: flex;
   flex-basis: 100%;
   flex-direction: column;
-  font-size: 0.875rem;
+  font-size: var(--text-meta);
   font-weight: 600;
 }
 
 .slot-warnings-urgent {
-  color: var(--color-error);
+  color: var(--color-danger);
 }
 
 .slot-warnings-upcoming {
-  color: var(--color-warning);
+  color: var(--color-warning-ink);
 }
 
 .planner-amount {
@@ -390,6 +490,6 @@ body {
 .planner-editing {
   flex-basis: 100%;
   margin: 0;
-  color: var(--week-accent);
+  color: var(--week-ink);
   font-weight: 600;
 }

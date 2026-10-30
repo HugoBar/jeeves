@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from "next";
+import { Plus_Jakarta_Sans } from "next/font/google";
 import Link from "next/link";
 import { connection } from "next/server";
 import { unconfirmedBefore } from "@/core/planner";
@@ -10,11 +11,13 @@ import { theme } from "./theme";
 import { NeedsConfirmationBadge, ResolutionGate, type UnconfirmedCandidate } from "./unconfirmed-alerts";
 import "./globals.css";
 
+const plusJakartaSans = Plus_Jakarta_Sans({ subsets: ["latin"] });
+
 export const metadata: Metadata = {
   title: t("app.name"),
   description: t("app.description"),
   appleWebApp: { capable: true, title: t("app.name") },
-  icons: { apple: "/icons/apple-touch-icon.png" },
+  icons: { icon: "/icons/icon-192.png", apple: "/icons/apple-touch-icon.png" },
 };
 
 export const viewport: Viewport = {
@@ -22,6 +25,7 @@ export const viewport: Viewport = {
   initialScale: 1,
   viewportFit: "cover",
   themeColor: theme.accent,
+  colorScheme: "light",
 };
 
 export default async function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
@@ -35,7 +39,7 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
     ({ status, date }) => ({ status, date }),
   );
   return (
-    <html lang="en">
+    <html lang="en" className={plusJakartaSans.className}>
       <body>
         <header className="app-header">
           <Link href="/" className="app-title">
