@@ -6,6 +6,7 @@ import { unconfirmedBefore } from "@/core/planner";
 import { getDb } from "@/db";
 import { listPlannedMealsBefore } from "@/db/meals";
 import { t } from "@/strings";
+import { BottomMenu, TopMenu } from "./menus";
 import { ServiceWorkerRegistration } from "./service-worker-registration";
 import { theme } from "./theme";
 import { NeedsConfirmationBadge, ResolutionGate, type UnconfirmedCandidate } from "./unconfirmed-alerts";
@@ -42,22 +43,23 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
     <html lang="en" className={plusJakartaSans.className}>
       <body>
         <header className="app-header">
-          <Link href="/" className="app-title">
-            {t("app.name")}
-          </Link>
-          <nav className="app-nav">
-            <Link href="/planner">{t("nav.planner")}</Link>
-            <Link href="/products">{t("nav.stock")}</Link>
-            <Link href="/recipes">{t("nav.recipes")}</Link>
-            <Link href="/categories">{t("nav.categories")}</Link>
-            <Link href="/meal-types">{t("nav.mealTypes")}</Link>
-            <Link href="/meal-templates">{t("nav.mealTemplates")}</Link>
+          <div className="app-header-bar">
+            <Link href="/" className="app-logo" aria-label={t("nav.home")}>
+              <span className="app-logo-mark">
+                <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M4 10h16v9a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2zM3 6h18v4H3z" />
+                </svg>
+              </span>
+              {t("app.name")}
+            </Link>
+            <TopMenu />
             <NeedsConfirmationBadge meals={candidates} />
-          </nav>
+          </div>
         </header>
         <main className="app-main">
           <ResolutionGate meals={candidates}>{children}</ResolutionGate>
         </main>
+        <BottomMenu />
         <ServiceWorkerRegistration />
       </body>
     </html>
