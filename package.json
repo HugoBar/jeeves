@@ -8,6 +8,7 @@
   },
   "scripts": {
     "dev": "next dev",
+    "dev:empty": "node --env-file-if-exists=.env scripts/dev-empty.mjs",
     "build": "next build",
     "start": "next start",
     "lint": "eslint .",

@@ -46,6 +46,14 @@ pnpm db:generate  # write a migration from schema changes
 pnpm db:migrate   # apply pending migrations to DATABASE_URL
 ```
 
+### Empty database
+
+```sh
+pnpm dev:empty    # dev server on a brand-new database, to see empty states
+```
+
+It starts as a fresh install does, with only the seed Food Categories and Meal Types. Its data is thrown away on the next run, and the database at `DATABASE_URL` is never touched. Stop any other dev server first.
+
 ## Container
 
 The image runs the production server and connects to an existing Postgres instance through `DATABASE_URL`.
