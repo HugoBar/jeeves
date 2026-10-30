@@ -15,7 +15,9 @@ export default async function RecipesPage() {
     <section>
       <h1>{t("recipes.title")}</h1>
       <p>
-        <Link href="/recipes/new">{t("recipes.add")}</Link>
+        <Link href="/recipes/new" className="button button-primary">
+          {t("recipes.add")}
+        </Link>
       </p>
       {recipes.length === 0 ? (
         <p>{t("recipes.empty")}</p>

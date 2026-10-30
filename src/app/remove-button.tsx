@@ -17,7 +17,9 @@ export function RemoveButton({
         if (!confirm(confirmMessage)) event.preventDefault();
       }}
     >
-      <button type="submit">{label}</button>
+      <button type="submit" className="button-danger">
+        {label}
+      </button>
     </form>
   );
 }

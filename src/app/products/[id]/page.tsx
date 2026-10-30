@@ -25,7 +25,9 @@ export default async function ProductPage({ params }: { params: Promise<{ id: st
     <section>
       <h1>{product.name}</h1>
       <p>
-        <Link href={`/products/${product.id}/edit`}>{t("products.edit")}</Link>
+        <Link href={`/products/${product.id}/edit`} className="button">
+          {t("products.edit")}
+        </Link>
       </p>
       <RemoveButton
         action={removeProductAction.bind(null, product.id)}

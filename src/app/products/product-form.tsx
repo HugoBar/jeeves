@@ -7,6 +7,8 @@ import type { IngredientUse } from "@/core/products";
 import { formatList, formatQuantity, t } from "@/strings";
 import { groupCategoriesByKind } from "../categories/category-groups";
 import type { CategoryOption } from "../categories/category-options";
+import { productErrorField } from "../field-errors";
+import { useFieldErrors } from "../form-error";
 import type { ProductFormState, ProductFormValues } from "./actions";
 
 // A Product's Default Unit is picked when creating it; once `fixedUnit` is
@@ -31,13 +33,22 @@ export function ProductForm({
     values: initialValues,
   });
   const values = state.values;
+  const { invalid, messages } = useFieldErrors(
+    state.errors,
+    (error) => productErrorField(error, values),
+    (error) =>
+      error === "densityInUse"
+        ? densityInUseMessage(values.name, state.densityUses ?? [], fixedUnit!)
+        : t(`products.error.${error}`),
+  );
 
   return (
     <form action={formAction} className="product-form">
       <label>
         {t("products.name")}
-        <input name="name" defaultValue={values.name} required autoFocus />
+        <input name="name" defaultValue={values.name} required autoFocus {...invalid("name")} />
       </label>
+      {messages("name")}
       {fixedUnit ? (
         <p>{t("products.defaultUnitFixed", { unit: t(`unit.${fixedUnit}`) })}</p>
       ) : (
@@ -54,18 +65,21 @@ export function ProductForm({
       )}
       <label>
         {t("products.density")}
-        <input name="density" inputMode="decimal" defaultValue={values.density} />
+        <input name="density" inputMode="decimal" defaultValue={values.density} {...invalid("density")} />
       </label>
+      {messages("density")}
       <label>
         {t("products.packSizeName")}
-        <input name="packSizeName" defaultValue={values.packSizeName} />
+        <input name="packSizeName" defaultValue={values.packSizeName} {...invalid("packSizeName")} />
       </label>
+      {messages("packSizeName")}
       <label>
         {fixedUnit
           ? t("products.packSizeAmount", { unit: t(`unit.${fixedUnit}`) })
           : t("products.packSizeAmountInDefaultUnit")}
-        <input name="packSizeAmount" inputMode="decimal" defaultValue={values.packSizeAmount} />
+        <input name="packSizeAmount" inputMode="decimal" defaultValue={values.packSizeAmount} {...invalid("packSizeAmount")} />
       </label>
+      {messages("packSizeAmount")}
       <fieldset className="category-picker">
         <legend>{t("products.foodCategories")}</legend>
         {groupCategoriesByKind(categories).map((group) => (
@@ -85,18 +99,13 @@ export function ProductForm({
           </div>
         ))}
       </fieldset>
-      {state.errors.map((error) => (
-        <p key={error} className="form-error">
-          {error === "densityInUse"
-            ? densityInUseMessage(values.name, state.densityUses ?? [], fixedUnit!)
-            : t(`products.error.${error}`)}
-        </p>
-      ))}
       <div className="product-form-actions">
-        <button type="submit" disabled={pending}>
+        <button type="submit" className="button-primary" disabled={pending}>
           {submitLabel}
         </button>
-        <Link href={cancelHref}>{t("products.cancel")}</Link>
+        <Link href={cancelHref} className="button">
+          {t("products.cancel")}
+        </Link>
       </div>
     </form>
   );

@@ -4,12 +4,14 @@ import { Fragment, useActionState, useState } from "react";
 import { sortMeals, sortMealsByDay, weekToClose } from "@/core/meals";
 import { plannerWeeks } from "@/core/planner";
 import { editingLabel, formatDayHeading, formatWeekRange, t } from "@/strings";
+import { MEAL_FROM_TEMPLATE_ERROR_FIELDS } from "../field-errors";
+import { useFieldErrors } from "../form-error";
 import { useViewerNow } from "../viewer-clock";
 import { createMealAction, createMealFromTemplateAction, type MealFromTemplateFormState, type NewMealFormState } from "./actions";
 import {
-  FormErrors,
   MealCard,
   mealOnLabel,
+  useMealErrors,
   type PickerOption,
   type Pickers,
   type PlannerMeal,
@@ -132,18 +134,26 @@ function PlannerDay({
           onDone={() => setAdding(null)}
         />
       )}
-      {adding === null && (
-        <span className="planner-add">
-          <button type="button" onClick={() => setAdding("scratch")}>
-            {t("planner.addMeal")}
+      <span className="planner-add">
+        <button
+          type="button"
+          className="button-soft"
+          aria-pressed={adding === "scratch"}
+          onClick={() => setAdding(adding === "scratch" ? null : "scratch")}
+        >
+          {t("planner.addMeal")}
+        </button>
+        {pickers.templates.length > 0 && (
+          <button
+            type="button"
+            className="button-soft"
+            aria-pressed={adding === "template"}
+            onClick={() => setAdding(adding === "template" ? null : "template")}
+          >
+            {t("planner.addFromTemplate")}
           </button>
-          {pickers.templates.length > 0 && (
-            <button type="button" onClick={() => setAdding("template")}>
-              {t("planner.addFromTemplate")}
-            </button>
-          )}
-        </span>
-      )}
+        )}
+      </span>
     </section>
   );
 }
@@ -168,11 +178,18 @@ function AddMealForm({
     { errors: [], values: { mealTypeId: "", hour: "", name: "" }, submits: 0 },
   );
   const { values } = state;
+  const { invalid, allMessages } = useMealErrors(state.errors);
   return (
-    <form action={action} className="item-form planner-form">
+    <form action={action} className="item-form planner-form open-row">
       <p className="planner-editing">{editingLabel(date, week)}</p>
       <Fragment key={state.submits}>
-        <select name="mealTypeId" aria-label={t("planner.mealType")} defaultValue={values.mealTypeId} autoFocus>
+        <select
+          name="mealTypeId"
+          aria-label={t("planner.mealType")}
+          defaultValue={values.mealTypeId}
+          autoFocus
+          {...invalid("mealType")}
+        >
           <option value="">{t("planner.pickMealType")}</option>
           {mealTypes.map((mealType) => (
             <option key={mealType.id} value={mealType.id}>
@@ -180,16 +197,16 @@ function AddMealForm({
             </option>
           ))}
         </select>
-        <input type="time" name="hour" aria-label={t("planner.hour")} defaultValue={values.hour} />
+        <input type="time" name="hour" aria-label={t("planner.hour")} defaultValue={values.hour} {...invalid("hour")} />
         <input name="name" aria-label={t("planner.name")} placeholder={t("planner.name")} defaultValue={values.name} />
       </Fragment>
-      <button type="submit" disabled={pending}>
+      <button type="submit" className="button-primary" disabled={pending}>
         {t("planner.add")}
       </button>
       <button type="button" onClick={onDone}>
         {t("planner.cancel")}
       </button>
-      <FormErrors state={state} />
+      {allMessages()}
     </form>
   );
 }
@@ -215,8 +232,13 @@ function AddMealFromTemplateForm({
     },
     { errors: [], templateId: "", submits: 0 },
   );
+  const { invalid, allMessages } = useFieldErrors(
+    state.errors,
+    (error) => MEAL_FROM_TEMPLATE_ERROR_FIELDS[error],
+    (error) => t(`planner.error.${error}`),
+  );
   return (
-    <form action={action} className="item-form planner-form">
+    <form action={action} className="item-form planner-form open-row">
       <p className="planner-editing">{editingLabel(date, week)}</p>
       <select
         key={state.submits}
@@ -224,6 +246,7 @@ function AddMealFromTemplateForm({
         aria-label={t("planner.template")}
         defaultValue={state.templateId}
         autoFocus
+        {...invalid("template")}
       >
         <option value="">{t("planner.pickTemplate")}</option>
         {templates.map((template) => (
@@ -232,13 +255,13 @@ function AddMealFromTemplateForm({
           </option>
         ))}
       </select>
-      <button type="submit" disabled={pending}>
+      <button type="submit" className="button-primary" disabled={pending}>
         {t("planner.add")}
       </button>
       <button type="button" onClick={onDone}>
         {t("planner.cancel")}
       </button>
-      <FormErrors state={state} />
+      {allMessages()}
     </form>
   );
 }

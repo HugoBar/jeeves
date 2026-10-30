@@ -11,7 +11,6 @@ import {
   slotCategoryChoices,
   slotFoodValue,
   type MealFieldError,
-  type MealFromTemplateError,
   type MealStatus,
 } from "@/core/meals";
 import type { CategoryKind } from "@/core/food-categories";
@@ -19,6 +18,8 @@ import { localDate, localHour } from "@/core/planner";
 import { shortfallUrgency } from "@/core/projected-stock";
 import type { DefaultUnit } from "@/core/units";
 import { editingLabel, formatMealDate, formatQuantity, t } from "@/strings";
+import { MEAL_ERROR_FIELDS, MEAL_SLOT_ERROR_FIELDS } from "../field-errors";
+import { FormError, useFieldErrors, type InvalidProps } from "../form-error";
 import { RemoveButton } from "../remove-button";
 import { viewerToday } from "../viewer-clock";
 import {
@@ -219,7 +220,7 @@ export function MealCard({
           />
         ) : (
           <span className="planner-add">
-            <button type="button" onClick={() => setAddingSlot(true)}>
+            <button type="button" className="button-list-add" onClick={() => setAddingSlot(true)}>
               {t("planner.addSlot")}
             </button>
           </span>
@@ -259,7 +260,7 @@ function ConfirmOrSkipMeal({ meal }: { meal: PlannerMeal }) {
         if (!confirm(t(question))) event.preventDefault();
       }}
     >
-      <button type="submit" name="outcome" value={OUTCOME.confirm} disabled={pending}>
+      <button type="submit" name="outcome" value={OUTCOME.confirm} className="button-primary" disabled={pending}>
         {t("planner.confirm")}
       </button>
       <button type="submit" name="outcome" value={OUTCOME.confirmUntracked} disabled={pending}>
@@ -268,7 +269,7 @@ function ConfirmOrSkipMeal({ meal }: { meal: PlannerMeal }) {
       <button type="submit" name="outcome" value={OUTCOME.skip} disabled={pending}>
         {t("planner.skip")}
       </button>
-      {error && <p className="form-error">{confirmOrSkipErrorMessage(error)}</p>}
+      {error && <FormError>{confirmOrSkipErrorMessage(error)}</FormError>}
     </form>
   );
 }
@@ -318,6 +319,7 @@ function SlotCategoryPicker({ slot, slotCategories }: { slot: PlannerMealSlot; s
       setMealSlotCategoryAction(slot.id, previous, formData),
     { error: null },
   );
+  const { invalid, allMessages } = useSlotErrors(state.error);
   return (
     <form action={action}>
       <select
@@ -326,6 +328,7 @@ function SlotCategoryPicker({ slot, slotCategories }: { slot: PlannerMealSlot; s
         defaultValue={slot.slotCategoryId}
         disabled={pending}
         onChange={(event) => event.currentTarget.form?.requestSubmit()}
+        {...invalid("slotCategory")}
       >
         {slot.slotCategoryArchived && <option value={slot.slotCategoryId}>{slot.slotCategoryLabel}</option>}
         {slotCategories.map((category) => (
@@ -334,8 +337,8 @@ function SlotCategoryPicker({ slot, slotCategories }: { slot: PlannerMealSlot; s
           </option>
         ))}
       </select>
-      {slot.slotCategoryArchived && <span className="form-error"> {t("planner.slotArchived")}</span>}
-      {state.error && <p className="form-error">{t(`planner.error.${state.error}`)}</p>}
+      {slot.slotCategoryArchived && <p className="form-error">{t("planner.slotArchived")}</p>}
+      {allMessages()}
     </form>
   );
 }
@@ -413,6 +416,7 @@ function FoodFields({
   emptyLabel,
   values,
   onChange,
+  invalid,
 }: {
   recipes: SlotFoods["recipes"];
   products: SlotFoods["products"];
@@ -420,6 +424,7 @@ function FoodFields({
   emptyLabel: string;
   values: FoodValues;
   onChange: (values: FoodValues) => void;
+  invalid: (field: "food" | "amount") => InvalidProps;
 }) {
   const recipeFor = (food: string) => recipes.find((option) => slotFoodValue("recipe", option.id) === food);
   const recipe = recipeFor(values.food);
@@ -431,7 +436,14 @@ function FoodFields({
 
   return (
     <>
-      <select name="food" aria-label={t("planner.food")} value={values.food} onChange={(event) => pick(event.target.value)} autoFocus>
+      <select
+        name="food"
+        aria-label={t("planner.food")}
+        value={values.food}
+        onChange={(event) => pick(event.target.value)}
+        autoFocus
+        {...invalid("food")}
+      >
         <option value="">{emptyLabel}</option>
         {recipes.length > 0 && (
           <optgroup label={t("planner.recipes")}>
@@ -461,6 +473,7 @@ function FoodFields({
             value={values.amount}
             onChange={(event) => onChange({ ...values, amount: event.target.value })}
             required
+            {...invalid("amount")}
           />
           {recipe ? t("planner.portions") : t(`unit.${product!.defaultUnit}`)}
         </label>
@@ -497,9 +510,10 @@ function SlotFillForm({
     if (!next.error) onDone();
     return next;
   }, { error: null });
+  const { invalid, allMessages } = useSlotErrors(state.error);
 
   return (
-    <form action={action} className="item-form planner-form">
+    <form action={action} className="item-form planner-form open-row">
       <FoodFields
         recipes={recipes}
         products={products}
@@ -507,14 +521,15 @@ function SlotFillForm({
         emptyLabel={offered.size === 0 ? t("planner.nothingPickable") : t("planner.pickFood")}
         values={values}
         onChange={setValues}
+        invalid={invalid}
       />
-      <button type="submit" disabled={pending}>
+      <button type="submit" className="button-primary" disabled={pending}>
         {t("planner.save")}
       </button>
       <button type="button" onClick={onDone}>
         {t("planner.cancel")}
       </button>
-      {state.error && <p className="form-error">{t(`planner.error.${state.error}`)}</p>}
+      {allMessages()}
     </form>
   );
 }
@@ -554,9 +569,10 @@ function AddSlotForm({
     if (next.food !== values.food) setSlotCategoryId("");
     setValues(next);
   }
+  const { invalid, allMessages } = useSlotErrors(uncategorised ? "uncategorisedFood" : state.error);
 
   return (
-    <form action={action} className="item-form planner-form">
+    <form action={action} className="item-form planner-form open-row">
       <FoodFields
         recipes={foods.recipes}
         products={foods.products}
@@ -564,6 +580,7 @@ function AddSlotForm({
         emptyLabel={t("planner.pickFood")}
         values={values}
         onChange={pick}
+        invalid={invalid}
       />
       {choices.length === 1 && <input type="hidden" name="slotCategoryId" value={choices[0]!.id} />}
       {choices.length > 1 && (
@@ -572,6 +589,7 @@ function AddSlotForm({
           aria-label={t("planner.slotCategory")}
           value={slotCategoryId || choices[0]!.id}
           onChange={(event) => setSlotCategoryId(event.target.value)}
+          {...invalid("slotCategory")}
         >
           {choices.map((category) => (
             <option key={category.id} value={category.id}>
@@ -580,17 +598,13 @@ function AddSlotForm({
           ))}
         </select>
       )}
-      <button type="submit" disabled={pending || uncategorised}>
+      <button type="submit" className="button-primary" disabled={pending || uncategorised}>
         {t("planner.add")}
       </button>
       <button type="button" onClick={onDone}>
         {t("planner.cancel")}
       </button>
-      {uncategorised ? (
-        <p className="form-error">{t("planner.error.uncategorisedFood")}</p>
-      ) : (
-        state.error && <p className="form-error">{t(`planner.error.${state.error}`)}</p>
-      )}
+      {allMessages()}
     </form>
   );
 }
@@ -606,29 +620,40 @@ function EditMealForm({ meal, week, onDone }: { meal: PlannerMeal; week: Week; o
     { errors: [], values: { hour: meal.hour, name: meal.name ?? "" }, submits: 0 },
   );
   const { values } = state;
+  const { invalid, allMessages } = useMealErrors(state.errors);
   return (
-    <form action={action} className="item-form planner-form">
+    <form action={action} className="item-form planner-form open-row">
       <p className="planner-editing">{editingLabel(meal.date, week)}</p>
       <span>{meal.mealTypeLabel}</span>
       <Fragment key={state.submits}>
-        <input type="time" name="hour" aria-label={t("planner.hour")} defaultValue={values.hour} autoFocus />
+        <input type="time" name="hour" aria-label={t("planner.hour")} defaultValue={values.hour} autoFocus {...invalid("hour")} />
         <input name="name" aria-label={t("planner.name")} placeholder={t("planner.name")} defaultValue={values.name} />
       </Fragment>
-      <button type="submit" disabled={pending}>
+      <button type="submit" className="button-primary" disabled={pending}>
         {t("planner.save")}
       </button>
       <button type="button" onClick={onDone}>
         {t("planner.cancel")}
       </button>
-      <FormErrors state={state} />
+      {allMessages()}
     </form>
   );
 }
 
-export function FormErrors({ state }: { state: { errors: (MealFieldError | MealFromTemplateError)[] } }) {
-  return state.errors.map((error) => (
-    <p key={error} className="form-error">
-      {t(`planner.error.${error}`)}
-    </p>
-  ));
+export function useMealErrors(errors: MealFieldError[]) {
+  return useFieldErrors(
+    errors,
+    (error) => MEAL_ERROR_FIELDS[error],
+    (error) => t(`planner.error.${error}`),
+  );
+}
+
+type SlotError = keyof typeof MEAL_SLOT_ERROR_FIELDS;
+
+function useSlotErrors(error: SlotError | null) {
+  return useFieldErrors(
+    error ? [error] : [],
+    (slotError) => MEAL_SLOT_ERROR_FIELDS[slotError],
+    (slotError) => t(`planner.error.${slotError}`),
+  );
 }

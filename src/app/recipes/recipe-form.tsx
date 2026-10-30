@@ -8,6 +8,8 @@ import { RECIPE_UNITS, type DefaultUnit } from "@/core/units";
 import { t } from "@/strings";
 import { groupCategoriesByKind } from "../categories/category-groups";
 import type { CategoryOption } from "../categories/category-options";
+import { ingredientErrorField, ingredientField, RECIPE_ERROR_FIELDS } from "../field-errors";
+import { useFieldErrors } from "../form-error";
 import type { RecipeFormState, RecipeFormValues } from "./actions";
 
 // A Product the Ingredient picker offers. An Archived one is offered only in
@@ -40,25 +42,40 @@ export function RecipeForm({
     values: initialValues,
   });
   const values = state.values;
+  const { invalid, messages } = useFieldErrors(
+    state.errors,
+    (error) => RECIPE_ERROR_FIELDS[error],
+    (error) => t(`recipes.error.${error}`),
+  );
 
   return (
     <form action={formAction} className="product-form">
       <label>
         {t("recipes.name")}
-        <input name="name" defaultValue={values.name} required autoFocus />
+        <input name="name" defaultValue={values.name} required autoFocus {...invalid("name")} />
       </label>
+      {messages("name")}
       <label>
         {t("recipes.portions")}
-        <input name="portions" inputMode="numeric" defaultValue={values.portions} required />
+        <input name="portions" inputMode="numeric" defaultValue={values.portions} required {...invalid("portions")} />
       </label>
+      {messages("portions")}
       <label>
         {t("recipes.prepTime")}
-        <input name="prepTimeMinutes" inputMode="numeric" defaultValue={values.prepTimeMinutes} required />
+        <input
+          name="prepTimeMinutes"
+          inputMode="numeric"
+          defaultValue={values.prepTimeMinutes}
+          required
+          {...invalid("prepTime")}
+        />
       </label>
+      {messages("prepTime")}
       <label>
         {t("recipes.sourceUrl")}
-        <input name="sourceUrl" type="url" defaultValue={values.sourceUrl} />
+        <input name="sourceUrl" type="url" defaultValue={values.sourceUrl} {...invalid("sourceUrl")} />
       </label>
+      {messages("sourceUrl")}
       <IngredientRows state={state} products={products} />
       <fieldset className="category-picker">
         <legend>{t("recipes.categoryOverrides")}</legend>
@@ -90,34 +107,28 @@ export function RecipeForm({
         {t("recipes.steps")}
         <textarea name="steps" rows={10} defaultValue={values.steps} />
       </label>
-      {state.errors.map((error) => (
-        <p key={error} className="form-error">
-          {t(`recipes.error.${error}`)}
-        </p>
-      ))}
-      {state.ingredientErrors.map((error) => (
-        <p key={`${error.row}-${error.code}`} className="form-error">
-          {ingredientErrorMessage(error)}
-        </p>
-      ))}
       <div className="product-form-actions">
-        <button type="submit" disabled={pending}>
+        <button type="submit" className="button-primary" disabled={pending}>
           {submitLabel}
         </button>
-        <Link href={cancelHref}>{t("recipes.cancel")}</Link>
+        <Link href={cancelHref} className="button">
+          {t("recipes.cancel")}
+        </Link>
       </div>
     </form>
   );
 }
 
-type Row = IngredientInput & { key: string };
+// `submittedRow` is the row's number in the last submit, which its errors use,
+// so they stay with it when rows are removed. Null for a row added since.
+type Row = IngredientInput & { key: string; submittedRow: number | null };
 
 // Every row gets a fresh key from this counter, including those refilled from
 // a submit.
 let nextRowKey = 0;
 
 function toRows(inputs: IngredientInput[]): Row[] {
-  return inputs.map((input) => ({ ...input, key: String(nextRowKey++) }));
+  return inputs.map((input, index) => ({ ...input, key: String(nextRowKey++), submittedRow: index + 1 }));
 }
 
 // The Ingredient rows, in the order entered, refilled from `state` after each
@@ -141,8 +152,12 @@ function IngredientRows({ state, products }: { state: RecipeFormState; products:
     change(key, unit ? { productId, unit } : { productId });
   };
   const add = () =>
-    setRows((current) => [...current, ...toRows([{ productId: "", amount: "", unit: "g", minor: false }])]);
+    setRows((current) => [
+      ...current,
+      ...toRows([{ productId: "", amount: "", unit: "g", minor: false }]).map((row) => ({ ...row, submittedRow: null })),
+    ]);
   const remove = (key: string) => setRows((current) => current.filter((row) => row.key !== key));
+  const { invalid, messages } = useFieldErrors(state.ingredientErrors, ingredientErrorField, ingredientErrorMessage);
 
   return (
     <fieldset className="ingredient-rows">
@@ -155,6 +170,7 @@ function IngredientRows({ state, products }: { state: RecipeFormState; products:
             aria-label={t("recipes.ingredientProduct")}
             defaultValue={row.productId}
             onChange={(event) => pickProduct(row.key, event.target.value)}
+            {...invalid(ingredientField(row.submittedRow, "product"))}
           >
             <option value="">{t("recipes.ingredientPickProduct")}</option>
             {products
@@ -165,27 +181,31 @@ function IngredientRows({ state, products }: { state: RecipeFormState; products:
                 </option>
               ))}
           </select>
-          <input
-            name="ingredientAmount"
-            aria-label={t("recipes.ingredientAmount")}
-            inputMode="decimal"
-            value={row.amount}
-            onChange={(event) => change(row.key, { amount: event.target.value })}
-          />
-          {/* Remounted when the Product changes, to start at its Default Unit. */}
-          <select
-            key={row.productId}
-            name="ingredientUnit"
-            aria-label={t("recipes.ingredientUnit")}
-            defaultValue={row.unit}
-            onChange={(event) => change(row.key, { unit: event.target.value })}
-          >
-            {RECIPE_UNITS.map((unit) => (
-              <option key={unit} value={unit}>
-                {t(`unit.${unit}`)}
-              </option>
-            ))}
-          </select>
+          <span className="field-joined">
+            <input
+              name="ingredientAmount"
+              aria-label={t("recipes.ingredientAmount")}
+              inputMode="decimal"
+              value={row.amount}
+              onChange={(event) => change(row.key, { amount: event.target.value })}
+              {...invalid(ingredientField(row.submittedRow, "amount"))}
+            />
+            {/* Remounted when the Product changes, to start at its Default Unit. */}
+            <select
+              key={row.productId}
+              name="ingredientUnit"
+              aria-label={t("recipes.ingredientUnit")}
+              defaultValue={row.unit}
+              onChange={(event) => change(row.key, { unit: event.target.value })}
+              {...invalid(ingredientField(row.submittedRow, "unit"))}
+            >
+              {RECIPE_UNITS.map((unit) => (
+                <option key={unit} value={unit}>
+                  {t(`unit.${unit}`)}
+                </option>
+              ))}
+            </select>
+          </span>
           <label>
             <input
               type="checkbox"
@@ -196,12 +216,15 @@ function IngredientRows({ state, products }: { state: RecipeFormState; products:
             />
             {t("recipes.ingredientMinor")}
           </label>
-          <button type="button" onClick={() => remove(row.key)}>
+          <button type="button" className="button-danger" onClick={() => remove(row.key)}>
             {t("recipes.ingredientRemove")}
           </button>
+          {messages(ingredientField(row.submittedRow, "product"))}
+          {messages(ingredientField(row.submittedRow, "amount"))}
+          {messages(ingredientField(row.submittedRow, "unit"))}
         </div>
       ))}
-      <button type="button" onClick={add}>
+      <button type="button" className="button-list-add" onClick={add}>
         {t("recipes.ingredientAdd")}
       </button>
     </fieldset>

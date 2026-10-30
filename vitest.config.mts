@@ -12,5 +12,8 @@ export default defineConfig({
   test: {
     include: ["src/**/*.test.ts"],
     environment: "node",
+    // Each database test file starts Postgres and runs every migration, which
+    // can pass the default 10 seconds on a busy machine.
+    hookTimeout: 60_000,
   },
 });
