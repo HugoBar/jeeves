@@ -34,6 +34,11 @@ export function formatQuantity(amount: number, unit: Unit): string {
   return `${quantityFormat.format(amount)} ${t(`unit.${unit}`)}`;
 }
 
+// How many Products there are: "1 Product", "24 Products".
+export function formatProductCount(count: number): string {
+  return count === 1 ? t("stock.countOne") : t("stock.count", { count });
+}
+
 const listFormat = new Intl.ListFormat("en", { type: "conjunction" });
 
 // Items as a sentence lists them: "a and b", "a, b, and c".
