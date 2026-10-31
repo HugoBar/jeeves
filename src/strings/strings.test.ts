@@ -5,6 +5,7 @@ import {
   formatDayHeading,
   formatDayMonth,
   formatList,
+  formatPackSize,
   formatWeekRange,
   mealTypeLabel,
   t,
@@ -55,6 +56,16 @@ describe("formatDayMonth", () => {
 
   it("abbreviates September like every other month", () => {
     expect(formatDayMonth(new Date(2026, 8, 5))).toBe("5 Sep");
+  });
+});
+
+describe("formatPackSize", () => {
+  it("shows the Pack Size's name and amount", () => {
+    expect(formatPackSize({ name: "Bag", amount: 1000 }, "g")).toBe("Bag · 1,000 g");
+  });
+
+  it("starts with a capital, however the name was typed", () => {
+    expect(formatPackSize({ name: "pack", amount: 6 }, "pc")).toBe("Pack · 6 pc");
   });
 });
 

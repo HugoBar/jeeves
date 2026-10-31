@@ -208,6 +208,7 @@ export const en = {
   "products.error.densityInUse":
     "{product}'s Density is used by {uses}. Change those Ingredients to {unit} first, or keep the Density.",
   "products.densityUse": "{recipe} ({quantity})",
+  "products.packSizeValue": "{name} · {quantity}",
   "products.edit": "Edit",
   "products.remove": "Remove",
   "products.removeConfirm": "Remove {name}?",

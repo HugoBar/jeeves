@@ -1,5 +1,6 @@
 import type { CategorySeedKey } from "@/core/food-categories";
 import type { MealTypeSeedKey } from "@/core/meal-types";
+import type { PackSize } from "@/core/products";
 import type { DefaultUnit, Unit } from "@/core/units";
 import { en } from "./en";
 
@@ -51,6 +52,15 @@ export function formatList(items: readonly string[]): string {
 // "en" alone would put the month first.
 export function formatDayMonth(value: Date): string {
   return `${value.toLocaleDateString("en", { day: "numeric" })} ${value.toLocaleDateString("en", { month: "short" })}`;
+}
+
+// A Pack Size as shown to the user: "Bag · 1,000 g". Its amount is in the
+// Product's Default Unit.
+export function formatPackSize({ name, amount }: PackSize, unit: DefaultUnit): string {
+  return t("products.packSizeValue", {
+    name: `${name.charAt(0).toUpperCase()}${name.slice(1)}`,
+    quantity: formatQuantity(amount, unit),
+  });
 }
 
 // A Stock Movement's delta with its sign: "+500 g", "-1.5 pc".
