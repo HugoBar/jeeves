@@ -1134,6 +1134,29 @@ html:has(.sheet[open]) {
   color: var(--color-ink-soft);
 }
 
+/* A fact worth knowing, inside a card. */
+.banner-note {
+  margin: 0;
+  border-color: transparent;
+  background: var(--color-inset);
+  color: var(--color-ink-soft);
+}
+
+.banner-note svg {
+  color: var(--color-ink-muted);
+}
+
+.banner-error {
+  margin: 0;
+  border-color: var(--color-danger-line);
+  background: var(--color-danger-soft);
+  color: var(--color-danger-deep);
+}
+
+.banner-error svg {
+  color: var(--color-danger);
+}
+
 .item-row,
 .item-form {
   display: flex;

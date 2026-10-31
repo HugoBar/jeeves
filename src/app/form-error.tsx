@@ -1,4 +1,4 @@
-import { Fragment, useId, type ReactNode } from "react";
+import { Fragment, useId, type ReactNode, type Ref } from "react";
 
 function AlertIcon() {
   return (
@@ -26,6 +26,16 @@ export function FormWarning({ children }: { children: ReactNode }) {
       <AlertIcon />
       {children}
     </p>
+  );
+}
+
+// What's wrong with a rejected form as a whole, above its fields.
+export function FormBanner({ ref, children }: { ref?: Ref<HTMLDivElement>; children: ReactNode }) {
+  return (
+    <div ref={ref} role="alert" className="banner banner-error">
+      <AlertIcon />
+      <p>{children}</p>
+    </div>
   );
 }
 
