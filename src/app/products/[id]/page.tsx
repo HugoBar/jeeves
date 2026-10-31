@@ -1,4 +1,5 @@
 import { notFound } from "next/navigation";
+import { parseHistoryRows } from "@/core/stock";
 import { isUuid } from "@/core/uuid";
 import { getDb } from "@/db";
 import { getProduct } from "@/db/products";
@@ -8,20 +9,29 @@ import { removeProductAction } from "../actions";
 import { ProductView } from "../product-view";
 import { correctAction, discardAction, restockAction } from "../stock-actions";
 
-// A Product's page.
-export default async function ProductPage({ params }: { params: Promise<{ id: string }> }) {
+// A Product's page. One row past `rows` tells whether there are older ones.
+export default async function ProductPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ id: string }>;
+  searchParams: Promise<{ rows?: string | string[] }>;
+}) {
   const { id } = await params;
   if (!isUuid(id)) notFound();
+  const rows = parseHistoryRows((await searchParams).rows);
   const db = getDb();
   const product = await getProduct(db, id);
   if (!product) notFound();
-  const [movements, categories] = await Promise.all([listStockMovements(db, id), loadCategoryOptions(db)]);
+  const [movements, categories] = await Promise.all([listStockMovements(db, id, rows + 1), loadCategoryOptions(db)]);
 
   return (
     <ProductView
       product={product}
       categories={categories}
-      movements={movements}
+      movements={movements.slice(0, rows)}
+      rows={rows}
+      hasOlder={movements.length > rows}
       actions={{
         restock: restockAction.bind(null, id),
         discard: discardAction.bind(null, id),

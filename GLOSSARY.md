@@ -122,7 +122,7 @@ A named, user-created shortcut for creating a Meal with preset settings, such as
 _Avoid_: Meal pattern, layout, meal definition
 
 **Meal**:
-One Meal Type eaten on a specific date, such as Tuesday's Lunch, with its own hour, Meal Slots and optional name (such as "Morning Snack"), shown in place of the Meal Type when set. It can be created from scratch or from a Meal Template, which only pre-fills it. It is Planned, Confirmed, Skipped or Unconfirmed as a whole.
+One Meal Type eaten on a specific date, such as Tuesday's Lunch, with its own hour, Meal Slots and optional name (such as "Morning Snack"), shown in place of the Meal Type when set (Stock history shows both). It can be created from scratch or from a Meal Template, which only pre-fills it. It is Planned, Confirmed, Skipped or Unconfirmed as a whole.
 _Avoid_: Meal slot (for the whole meal), plan entry
 
 **Meal Series**:
