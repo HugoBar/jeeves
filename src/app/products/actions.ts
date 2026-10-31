@@ -12,7 +12,7 @@ import {
 import { parseDefaultUnit } from "@/core/units";
 import { getDb } from "@/db";
 import type { RemoveOutcome } from "@/db/archive";
-import { createProduct, getProduct, removeProductIfStill, updateProduct } from "@/db/products";
+import { createProduct, getProduct, isProductNameTaken, removeProductIfStill, updateProduct } from "@/db/products";
 import { listIngredientUses } from "@/db/recipes";
 
 export type ProductFormValues = ProductFieldsInput & { defaultUnit?: string };
@@ -29,7 +29,7 @@ export async function createProductAction(
 ): Promise<ProductFormState> {
   const values = valuesFrom(formData);
   const parsed = parseProductFields(values);
-  if (!parsed.ok) return { errors: parsed.errors, values };
+  if (!parsed.ok) return { errors: await withTakenName(parsed.errors, values.name), values };
   // The form only offers the Default Units, so anything else is a crafted request.
   const defaultUnit = parseDefaultUnit(values.defaultUnit);
   if (!defaultUnit) throw new Error("Invalid Default Unit");
@@ -45,7 +45,7 @@ export async function editProductAction(
 ): Promise<ProductFormState> {
   const values = valuesFrom(formData);
   const parsed = parseProductFields(values);
-  if (!parsed.ok) return { errors: parsed.errors, values };
+  if (!parsed.ok) return { errors: await withTakenName(parsed.errors, values.name, id), values };
   const db = getDb();
   // Clearing a Density Recipes still convert with would leave them unable to.
   if (parsed.fields.density === null) {
@@ -63,6 +63,16 @@ export async function editProductAction(
 export async function removeProductAction(id: string, expected: RemoveOutcome): Promise<void> {
   if (await removeProductIfStill(getDb(), id, expected)) redirect("/products");
   refresh();
+}
+
+// A save stopped by its fields never reaches the database's check for a taken
+// name, so the form asks here, to report every problem at once.
+async function withTakenName(
+  errors: ProductFormError[],
+  name: string,
+  exceptId?: string,
+): Promise<ProductFormError[]> {
+  return (await isProductNameTaken(getDb(), name, exceptId)) ? ["duplicateName", ...errors] : errors;
 }
 
 function valuesFrom(formData: FormData): ProductFormValues {
