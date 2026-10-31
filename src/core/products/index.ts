@@ -31,7 +31,8 @@ export interface ProductFieldsInput {
 export type ProductFieldError =
   | "blankName"
   | "invalidDensity"
-  | "incompletePackSize"
+  | "noPackSizeName"
+  | "noPackSizeAmount"
   | "invalidPackSizeAmount";
 
 export type ProductFieldsResult =
@@ -50,7 +51,8 @@ export function parseProductFields(input: ProductFieldsInput): ProductFieldsResu
   if (!name) errors.push("blankName");
   if (densityText && density === null) errors.push("invalidDensity");
   // A Pack Size is a name and an amount together, or nothing.
-  if (!packSizeName !== !packSizeAmountText) errors.push("incompletePackSize");
+  if (packSizeName && !packSizeAmountText) errors.push("noPackSizeAmount");
+  else if (!packSizeName && packSizeAmountText) errors.push("noPackSizeName");
   else if (packSizeAmountText && packSizeAmount === null) errors.push("invalidPackSizeAmount");
   if (errors.length) return { ok: false, errors };
 

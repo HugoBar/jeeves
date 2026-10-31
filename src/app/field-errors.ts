@@ -8,7 +8,7 @@ import type {
   MealSlotFillError,
   NewMealSlotError,
 } from "@/core/meals";
-import type { ProductFormError, ProductFormValues } from "./products/actions";
+import type { ProductFormError } from "./products/actions";
 import type { RecipeFormState } from "./recipes/actions";
 
 // Which field of its form each error belongs to, so that field can show it.
@@ -56,15 +56,10 @@ export const PRODUCT_ERROR_FIELDS = {
   duplicateName: "name",
   invalidDensity: "density",
   densityInUse: "density",
-  incompletePackSize: "packSizeAmount",
+  noPackSizeName: "packSizeName",
+  noPackSizeAmount: "packSizeAmount",
   invalidPackSizeAmount: "packSizeAmount",
 } as const satisfies Record<ProductFormError, string>;
-
-// A Pack Size needs both its parts, so the error is on the one left blank.
-export function productErrorField(error: ProductFormError, values: Pick<ProductFormValues, "packSizeName">) {
-  if (error === "incompletePackSize" && !values.packSizeName.trim()) return "packSizeName";
-  return PRODUCT_ERROR_FIELDS[error];
-}
 
 export const RECIPE_ERROR_FIELDS = {
   blankName: "name",

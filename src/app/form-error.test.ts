@@ -6,7 +6,6 @@ import {
   MEAL_FROM_TEMPLATE_ERROR_FIELDS,
   MEAL_SLOT_ERROR_FIELDS,
   PRODUCT_ERROR_FIELDS,
-  productErrorField,
   templateSlotErrorField,
 } from "./field-errors";
 import { useFieldErrors } from "./form-error";
@@ -51,15 +50,15 @@ describe("a field with an error", () => {
 });
 
 describe("which field an error belongs to", () => {
-  it("puts a Product's name errors on its name and density errors on its Density", () => {
+  it("puts a Product's name errors on its name and a bad Density on its Density", () => {
     expect(PRODUCT_ERROR_FIELDS.blankName).toBe("name");
     expect(PRODUCT_ERROR_FIELDS.duplicateName).toBe("name");
-    expect(PRODUCT_ERROR_FIELDS.densityInUse).toBe("density");
+    expect(PRODUCT_ERROR_FIELDS.invalidDensity).toBe("density");
   });
 
   it("puts an incomplete Pack Size on the part left blank", () => {
-    expect(productErrorField("incompletePackSize", { packSizeName: " " })).toBe("packSizeName");
-    expect(productErrorField("incompletePackSize", { packSizeName: "Bag" })).toBe("packSizeAmount");
+    expect(PRODUCT_ERROR_FIELDS.noPackSizeName).toBe("packSizeName");
+    expect(PRODUCT_ERROR_FIELDS.noPackSizeAmount).toBe("packSizeAmount");
   });
 
   it("puts an Ingredient's error on the field in its row that can fix it", () => {

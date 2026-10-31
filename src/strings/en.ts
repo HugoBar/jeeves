@@ -208,7 +208,8 @@ export const en = {
   "products.error.blankName": "Enter a name.",
   "products.error.duplicateName": "Another Product already has this name.",
   "products.error.invalidDensity": "Density must be a number above 0.",
-  "products.error.incompletePackSize": "A Pack Size needs both a name and an amount.",
+  "products.error.noPackSizeName": "Add the pack name, or clear the pack amount.",
+  "products.error.noPackSizeAmount": "Add the pack amount, or clear the pack name.",
   "products.error.invalidPackSizeAmount": "Pack Size amount must be a number above 0.",
   "products.error.densityInUse":
     "{product}'s Density is used by {uses}. Change those Ingredients to {unit} first, or keep the Density.",

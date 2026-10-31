@@ -7,7 +7,7 @@ import type { IngredientUse } from "@/core/products";
 import { formatList, formatQuantity, t } from "@/strings";
 import { groupCategoriesByKind } from "../categories/category-groups";
 import type { CategoryOption } from "../categories/category-options";
-import { productErrorField } from "../field-errors";
+import { PRODUCT_ERROR_FIELDS } from "../field-errors";
 import { useFieldErrors } from "../form-error";
 import type { ProductFormState, ProductFormValues } from "./actions";
 
@@ -35,7 +35,7 @@ export function ProductForm({
   const values = state.values;
   const { invalid, messages } = useFieldErrors(
     state.errors,
-    (error) => productErrorField(error, values),
+    (error) => PRODUCT_ERROR_FIELDS[error],
     (error) =>
       error === "densityInUse"
         ? densityInUseMessage(values.name, state.densityUses ?? [], fixedUnit!)

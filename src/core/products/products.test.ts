@@ -45,13 +45,17 @@ describe("parseProductFields", () => {
     },
   );
 
-  it.each([
-    ["a name without an amount", { packSizeName: "bag", packSizeAmount: "" }],
-    ["an amount without a name", { packSizeName: " ", packSizeAmount: "1000" }],
-  ])("rejects a Pack Size with %s", (_, packSize) => {
-    expect(parseProductFields({ ...filled, ...packSize })).toEqual({
+  it("rejects a Pack Size with a name but no amount", () => {
+    expect(parseProductFields({ ...filled, packSizeName: "bag", packSizeAmount: "" })).toEqual({
       ok: false,
-      errors: ["incompletePackSize"],
+      errors: ["noPackSizeAmount"],
+    });
+  });
+
+  it("rejects a Pack Size with an amount but no name", () => {
+    expect(parseProductFields({ ...filled, packSizeName: " ", packSizeAmount: "1000" })).toEqual({
+      ok: false,
+      errors: ["noPackSizeName"],
     });
   });
 
@@ -72,7 +76,7 @@ describe("parseProductFields", () => {
   it("reports every problem at once", () => {
     expect(
       parseProductFields({ name: "", density: "-1", packSizeName: "", packSizeAmount: "500", categoryIds: [] }),
-    ).toEqual({ ok: false, errors: ["blankName", "invalidDensity", "incompletePackSize"] });
+    ).toEqual({ ok: false, errors: ["blankName", "invalidDensity", "noPackSizeName"] });
   });
 });
 
