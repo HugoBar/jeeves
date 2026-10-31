@@ -1,48 +1,30 @@
 "use server";
 
 import { refresh } from "next/cache";
-import { parsePositiveQuantity, parseQuantityOnHand, type ParsedQuantity, type QuantityError } from "@/core/stock";
+import { parseStockAmount, type QuantityError, type StockAction } from "@/core/stock";
 import { getDb } from "@/db";
 import { correctProductStock, discardProductStock, restockProduct } from "@/db/stock-movements";
 
-// `value` refills the field after a rejected submit, which React resets.
-export type StockFormState = { error: QuantityError | null; value: string };
-
-async function applyFromForm(
-  formData: FormData,
-  parse: (text: string) => ParsedQuantity,
+async function applyAmount(
+  action: StockAction,
+  amount: string,
   apply: (quantity: number) => Promise<void>,
-): Promise<StockFormState> {
-  const value = String(formData.get("quantity") ?? "");
-  const parsed = parse(value);
-  if (!parsed.ok) return { error: parsed.error, value };
+): Promise<QuantityError | null> {
+  const parsed = parseStockAmount(action, amount);
+  if (!parsed.ok) return parsed.error;
   await apply(parsed.quantity);
   refresh();
-  return { error: null, value: "" };
+  return null;
 }
 
-export async function restockAction(
-  productId: string,
-  _state: StockFormState,
-  formData: FormData,
-): Promise<StockFormState> {
-  return applyFromForm(formData, parsePositiveQuantity, (quantity) => restockProduct(getDb(), productId, quantity));
+export async function restockAction(productId: string, amount: string): Promise<QuantityError | null> {
+  return applyAmount("restock", amount, (quantity) => restockProduct(getDb(), productId, quantity));
 }
 
-export async function discardAction(
-  productId: string,
-  _state: StockFormState,
-  formData: FormData,
-): Promise<StockFormState> {
-  return applyFromForm(formData, parsePositiveQuantity, (quantity) => discardProductStock(getDb(), productId, quantity));
+export async function discardAction(productId: string, amount: string): Promise<QuantityError | null> {
+  return applyAmount("discard", amount, (quantity) => discardProductStock(getDb(), productId, quantity));
 }
 
-export async function correctAction(
-  productId: string,
-  _state: StockFormState,
-  formData: FormData,
-): Promise<StockFormState> {
-  return applyFromForm(formData, parseQuantityOnHand, (quantity) =>
-    correctProductStock(getDb(), productId, quantity),
-  );
+export async function correctAction(productId: string, amount: string): Promise<QuantityError | null> {
+  return applyAmount("correction", amount, (quantity) => correctProductStock(getDb(), productId, quantity));
 }

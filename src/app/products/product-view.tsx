@@ -8,15 +8,9 @@ import { FoodCategoryPill } from "../food-category-pill";
 import { BackLink } from "../list-row";
 import { LocalDate } from "../local-date";
 import { RemoveButton } from "../remove-button";
-import { StockForm, type StockFormAction } from "./stock-form";
+import { StockActions, type StockActionRunners } from "./stock-action-sheet";
 
-interface StockActions {
-  restock: StockFormAction;
-  discard: StockFormAction;
-  correct: StockFormAction;
-}
-
-// A Product: its Stock, the Restock, Discard and Correction forms, its Details,
+// A Product: its Stock, the Restock, Discard and Correction sheet, its Details,
 // its Stock Movement history and Remove. Pills follow the order of
 // `categories`, which also holds their labels. `movements` run newest first.
 export function ProductView({
@@ -28,7 +22,7 @@ export function ProductView({
   product: Product;
   categories: CategoryOption[];
   movements: StockMovement[];
-  actions: StockActions & { remove: () => Promise<void> };
+  actions: StockActionRunners & { remove: () => Promise<void> };
 }) {
   const productCategories = categories.filter((category) => product.categoryIds.includes(category.id));
   return (
@@ -77,7 +71,7 @@ function StockCard({
 }: {
   product: Product;
   lastMovement: StockMovement | undefined;
-  actions: StockActions;
+  actions: StockActionRunners;
 }) {
   return (
     <div className="card stock-card">
@@ -92,11 +86,7 @@ function StockCard({
           </>
         )}
       </div>
-      <div className="stock-card-forms">
-        <StockForm kind="restock" action={actions.restock} unit={product.defaultUnit} />
-        <StockForm kind="discard" action={actions.discard} unit={product.defaultUnit} />
-        <StockForm kind="correction" action={actions.correct} unit={product.defaultUnit} />
-      </div>
+      <StockActions product={product} actions={actions} />
     </div>
   );
 }

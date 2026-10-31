@@ -31,9 +31,9 @@ const movement = (type: Props["movements"][number]["type"], delta: number, resul
 });
 
 const actions: Props["actions"] = {
-  restock: async (state) => state,
-  discard: async (state) => state,
-  correct: async (state) => state,
+  restock: async () => null,
+  discard: async () => null,
+  correction: async () => null,
   remove: async () => {},
 };
 
@@ -69,16 +69,11 @@ describe("the Stock card", () => {
   it("shows the Stock amount, with Restock, Discard and Correction", () => {
     const html = render();
     expect(html).toContain("1,800 g");
-    expect(html.match(/<button[^>]*type="submit"[^>]*>[^<]+/g)?.map((button) => button.replace(/.*>/, ""))).toEqual([
-      "Restock",
-      "Discard",
-      "Correction",
-    ]);
+    expect(html).toMatch(/<button[^>]*>Restock<\/button><button[^>]*>Discard<\/button><button[^>]*>Correction<\/button>/);
   });
 
-  it("makes Restock the main action", () => {
-    expect(render().match(/class="button-primary"/g)).toHaveLength(1);
-    expect(render()).toMatch(/class="button-primary"[^>]*>Restock</);
+  it("leaves typing an amount to the sheet", () => {
+    expect(render()).not.toContain("<input");
   });
 
   it("shows the last change from the newest Stock Movement", () => {

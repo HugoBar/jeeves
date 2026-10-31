@@ -25,7 +25,7 @@ export default async function ProductPage({ params }: { params: Promise<{ id: st
       actions={{
         restock: restockAction.bind(null, id),
         discard: discardAction.bind(null, id),
-        correct: correctAction.bind(null, id),
+        correction: correctAction.bind(null, id),
         remove: removeProductAction.bind(null, id),
       }}
     />

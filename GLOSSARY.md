@@ -39,6 +39,9 @@ _Avoid_: Remove (when talking about Stock), waste
 Setting a Product's Stock to the quantity actually on hand, fixing drift.
 _Avoid_: Adjustment, recount
 
+**Stock action**:
+A Restock, Discard or Correction, which someone records by hand on a Product.
+
 **Confirmation**:
 Marking a Meal as eaten, which deducts from Stock the Products its Meal Slots used. It is the only way eating a Meal changes Stock.
 _Avoid_: Check-in, logging
