@@ -61,7 +61,7 @@ function towards(current: StockState, resultingQuantity: number, stockSuspect: b
   };
 }
 
-// A quantity typed into a Stock form, in the Product's Default Unit. Each
+// A quantity typed into the Stock action sheet, in the Product's Default Unit. Each
 // error names the rule the text broke.
 export type QuantityError = "notAboveZero" | "notZeroOrMore";
 
@@ -79,4 +79,30 @@ export function parsePositiveQuantity(text: string): ParsedQuantity {
 // The quantity counted for a Correction: 0 or more.
 export function parseQuantityOnHand(text: string): ParsedQuantity {
   return toParsed(parseNonNegative(text.trim(), AMOUNT_COLUMN), "notZeroOrMore");
+}
+
+// The Stock Movements someone records by hand on a Product.
+export const STOCK_ACTIONS = ["restock", "discard", "correction"] as const satisfies readonly StockMovementType[];
+
+export type StockAction = (typeof STOCK_ACTIONS)[number];
+
+// How each Stock action reads its amount, and what that amount does to Stock.
+const STOCK_ACTION_RULES: Record<
+  StockAction,
+  { parse: (text: string) => ParsedQuantity; change: (current: StockState, quantity: number) => StockChange }
+> = {
+  restock: { parse: parsePositiveQuantity, change: restock },
+  discard: { parse: parsePositiveQuantity, change: deduct },
+  correction: { parse: parseQuantityOnHand, change: correct },
+};
+
+export function parseStockAmount(action: StockAction, text: string): ParsedQuantity {
+  return STOCK_ACTION_RULES[action].parse(text);
+}
+
+// What a Stock action will do with the amount typed so far; null until that
+// amount is valid.
+export function previewStockAction(action: StockAction, current: StockState, text: string): StockChange | null {
+  const parsed = parseStockAmount(action, text);
+  return parsed.ok ? STOCK_ACTION_RULES[action].change(current, parsed.quantity) : null;
 }
