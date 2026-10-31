@@ -56,6 +56,10 @@ describe("which field an error belongs to", () => {
     expect(PRODUCT_ERROR_FIELDS.invalidDensity).toBe("density");
   });
 
+  it("puts a Density a Recipe needs on no field, as the banner says it", () => {
+    expect(PRODUCT_ERROR_FIELDS.densityInUse).toBe("form");
+  });
+
   it("puts an incomplete Pack Size on the part left blank", () => {
     expect(PRODUCT_ERROR_FIELDS.noPackSizeName).toBe("packSizeName");
     expect(PRODUCT_ERROR_FIELDS.noPackSizeAmount).toBe("packSizeAmount");

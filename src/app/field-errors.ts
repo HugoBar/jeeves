@@ -55,7 +55,7 @@ export const PRODUCT_ERROR_FIELDS = {
   blankName: "name",
   duplicateName: "name",
   invalidDensity: "density",
-  densityInUse: "density",
+  densityInUse: FORM_LEVEL,
   noPackSizeName: "packSizeName",
   noPackSizeAmount: "packSizeAmount",
   invalidPackSizeAmount: "packSizeAmount",
