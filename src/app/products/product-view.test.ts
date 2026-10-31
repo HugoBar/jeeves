@@ -28,6 +28,7 @@ const movement = (type: Props["movements"][number]["type"], delta: number, resul
   delta,
   resultingQuantity,
   mealId: null,
+  meal: null,
 });
 
 const actions: Props["actions"] = {
