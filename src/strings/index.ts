@@ -46,10 +46,11 @@ export function formatList(items: readonly string[]): string {
   return listFormat.format(items);
 }
 
-// A moment as shown to the user: "23 Oct 2026, 14:05", in the time zone of
-// whoever runs it.
-export function formatDateTime(value: Date): string {
-  return value.toLocaleString("en-GB", { dateStyle: "medium", timeStyle: "short" });
+// A moment's day as shown to the user: "23 Oct", in the time zone of whoever
+// runs it. Day and month are asked for apart because en-GB writes "Sept", and
+// "en" alone would put the month first.
+export function formatDayMonth(value: Date): string {
+  return `${value.toLocaleDateString("en", { day: "numeric" })} ${value.toLocaleDateString("en", { month: "short" })}`;
 }
 
 // A Stock Movement's delta with its sign: "+500 g", "-1.5 pc".

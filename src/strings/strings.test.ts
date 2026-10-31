@@ -2,8 +2,8 @@ import { describe, expect, it } from "vitest";
 import {
   editingLabel,
   foodCategoryLabel,
-  formatDateTime,
   formatDayHeading,
+  formatDayMonth,
   formatList,
   formatWeekRange,
   mealTypeLabel,
@@ -44,13 +44,17 @@ describe("mealTypeLabel", () => {
   });
 });
 
-describe("formatDateTime", () => {
-  it("shows the afternoon on a 24-hour clock", () => {
-    expect(formatDateTime(new Date(2026, 9, 28, 14, 59))).toBe("28 Oct 2026, 14:59");
+describe("formatDayMonth", () => {
+  it("shows the day and short month", () => {
+    expect(formatDayMonth(new Date(2026, 9, 27, 14, 59))).toBe("27 Oct");
   });
 
-  it("shows just after midnight as 00, not 12", () => {
-    expect(formatDateTime(new Date(2026, 9, 28, 0, 5))).toBe("28 Oct 2026, 00:05");
+  it("uses the day where the moment happened, even just before midnight", () => {
+    expect(formatDayMonth(new Date(2026, 9, 27, 23, 59))).toBe("27 Oct");
+  });
+
+  it("abbreviates September like every other month", () => {
+    expect(formatDayMonth(new Date(2026, 8, 5))).toBe("5 Sep");
   });
 });
 

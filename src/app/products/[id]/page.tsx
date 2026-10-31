@@ -5,7 +5,7 @@ import { getDb } from "@/db";
 import { getProduct } from "@/db/products";
 import { listStockMovements } from "@/db/stock-movements";
 import { formatDelta, formatQuantity, t } from "@/strings";
-import { LocalDateTime } from "../../local-date-time";
+import { LocalDate } from "../../local-date";
 import { RemoveButton } from "../../remove-button";
 import { removeProductAction } from "../actions";
 import { correctAction, discardAction, restockAction } from "../stock-actions";
@@ -58,7 +58,7 @@ export default async function ProductPage({ params }: { params: Promise<{ id: st
               <span className="list-row-text">
                 <span className="list-row-title">{t(`stockMovement.${movement.type}`)}</span>
                 <span className="list-row-meta">
-                  <LocalDateTime value={movement.createdAt} />
+                  <LocalDate value={movement.createdAt} />
                 </span>
               </span>
               <span className="list-row-meta">
