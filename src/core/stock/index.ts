@@ -1,4 +1,4 @@
-import { AMOUNT_COLUMN, parseNonNegative, parsePositive, roundForColumn } from "@/core/amounts";
+import { AMOUNT_COLUMN, parseAboveZero, parseNonNegative, parsePositive, roundForColumn } from "@/core/amounts";
 
 // What caused a Stock Movement (glossary: Stock Movement).
 export const STOCK_MOVEMENT_TYPES = ["restock", "discard", "correction", "confirmation", "reopen"] as const;
@@ -71,9 +71,15 @@ function toParsed(quantity: number | null, error: QuantityError): ParsedQuantity
   return quantity === null ? { ok: false, error } : { ok: true, quantity };
 }
 
-// The quantity bought or discarded: above 0.
+// The quantity bought: above 0.
 export function parsePositiveQuantity(text: string): ParsedQuantity {
   return toParsed(parsePositive(text.trim(), AMOUNT_COLUMN), "notAboveZero");
+}
+
+// The quantity discarded: above 0, with no upper limit. It is never stored,
+// as Stock stops at 0 and the movement records what actually left.
+export function parseDiscardQuantity(text: string): ParsedQuantity {
+  return toParsed(parseAboveZero(text.trim(), AMOUNT_COLUMN), "notAboveZero");
 }
 
 // The quantity counted for a Correction: 0 or more.
@@ -92,7 +98,7 @@ const STOCK_ACTION_RULES: Record<
   { parse: (text: string) => ParsedQuantity; change: (current: StockState, quantity: number) => StockChange }
 > = {
   restock: { parse: parsePositiveQuantity, change: restock },
-  discard: { parse: parsePositiveQuantity, change: deduct },
+  discard: { parse: parseDiscardQuantity, change: deduct },
   correction: { parse: parseQuantityOnHand, change: correct },
 };
 

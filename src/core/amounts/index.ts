@@ -23,11 +23,17 @@ export function maxForColumn(column: DecimalColumn): number {
   return (10 ** column.precision - 1) / 10 ** column.scale;
 }
 
-// A positive number rounded as the column stores it; null if the text is not
-// one, rounds to 0 or does not fit.
-export function parsePositive(text: string, column: DecimalColumn): number | null {
+// A positive number rounded as the column stores it, however large; null if
+// the text is not one or rounds to 0.
+export function parseAboveZero(text: string, column: DecimalColumn): number | null {
   const value = roundForColumn(Number(text), column);
-  return value > 0 && value <= maxForColumn(column) ? value : null;
+  return value > 0 && Number.isFinite(value) ? value : null;
+}
+
+// The same for a number that will be stored: null too if it does not fit.
+export function parsePositive(text: string, column: DecimalColumn): number | null {
+  const value = parseAboveZero(text, column);
+  return value !== null && value <= maxForColumn(column) ? value : null;
 }
 
 // Zero or a positive number rounded as the column stores it; null if the text

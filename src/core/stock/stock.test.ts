@@ -129,8 +129,34 @@ describe("parseStockAmount", () => {
   });
 });
 
+describe("parseStockAmount for a Discard", () => {
+  it("has no upper limit, as Stock stops at 0 however much is discarded", () => {
+    expect(parseStockAmount("discard", "123123123")).toEqual({ ok: true, quantity: 123123123 });
+  });
+
+  it("keeps the limit on amounts that end up stored", () => {
+    expect(parseStockAmount("restock", "123123123")).toEqual({ ok: false, error: "notAboveZero" });
+    expect(parseStockAmount("correction", "123123123")).toEqual({ ok: false, error: "notZeroOrMore" });
+  });
+
+  it.each([[""], ["abc"], ["0"], ["-1"], ["0.001"], ["Infinity"], ["1e400"], ["1e308"]])(
+    "rejects what isn't an amount above 0 (%j)",
+    (text) => {
+      expect(parseStockAmount("discard", text)).toEqual({ ok: false, error: "notAboveZero" });
+    },
+  );
+});
+
 describe("previewStockAction", () => {
   const current = { stock: 1800, stockSuspect: false };
+
+  it("still warns of a Discard too big to store", () => {
+    expect(previewStockAction("discard", { stock: 400, stockSuspect: false }, "123123123")).toMatchObject({
+      resultingQuantity: 0,
+      stockSuspect: true,
+      clamped: true,
+    });
+  });
 
   it("shows what a Restock will leave", () => {
     expect(previewStockAction("restock", current, "200")?.resultingQuantity).toBe(2000);
