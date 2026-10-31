@@ -9,6 +9,16 @@ function Chevron({ path }: { path: string }) {
   );
 }
 
+// The link back to the page this one came from.
+export function BackLink({ href, children }: { href: string; children: ReactNode }) {
+  return (
+    <Link href={href} className="back-link">
+      <Chevron path="M15 6l-6 6 6 6" />
+      {children}
+    </Link>
+  );
+}
+
 // A list row that opens a page. All of it is the link.
 export function LinkRow({ href, children }: { href: string; children: ReactNode }) {
   return (

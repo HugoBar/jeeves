@@ -7,6 +7,8 @@ import { t } from "@/strings";
 import { useFieldErrors } from "../form-error";
 import type { StockFormState } from "./stock-actions";
 
+export type StockFormAction = (state: StockFormState, formData: FormData) => Promise<StockFormState>;
+
 const initialState: StockFormState = { error: null, value: "" };
 
 // One quantity field and a button, for a Restock, Discard or Correction.
@@ -16,7 +18,7 @@ export function StockForm({
   unit,
 }: {
   kind: Extract<StockMovementType, "restock" | "discard" | "correction">;
-  action: (state: StockFormState, formData: FormData) => Promise<StockFormState>;
+  action: StockFormAction;
   unit: DefaultUnit;
 }) {
   const [state, formAction, pending] = useActionState(action, initialState);
@@ -37,7 +39,7 @@ export function StockForm({
         required
         {...invalid("quantity")}
       />
-      <button type="submit" className="button-primary" disabled={pending}>
+      <button type="submit" className={kind === "restock" ? "button-primary" : undefined} disabled={pending}>
         {t(`${kind}.submit`)}
       </button>
       {allMessages()}

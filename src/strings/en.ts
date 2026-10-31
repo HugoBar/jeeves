@@ -278,7 +278,7 @@ export const en = {
   "discard.quantity": "Quantity thrown away (in {unit})",
   "discard.submit": "Discard",
   "correction.quantity": "Quantity on hand (in {unit})",
-  "correction.submit": "Correct",
+  "correction.submit": "Correction",
   "quantity.error.notAboveZero": "Quantity must be a number above 0.",
   "quantity.error.notZeroOrMore": "Quantity must be a number, 0 or more.",
   "stockMovement.change": "{delta}, now {quantity}",
