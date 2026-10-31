@@ -836,7 +836,8 @@ html:has(.sheet[open]) {
 }
 
 .sheet-eyebrow,
-.stock-list-head {
+.stock-list-head,
+.eyebrow {
   color: var(--color-ink-muted);
   font-size: var(--text-label);
   font-weight: 600;
@@ -1198,6 +1199,282 @@ html:has(.sheet[open]) {
     font-size: var(--text-item);
     font-weight: 600;
     letter-spacing: 0;
+  }
+}
+
+/* Shown only on phone, or only from 768px. */
+.desktop-only {
+  display: none;
+}
+
+@media (min-width: 768px) {
+  .phone-only {
+    display: none;
+  }
+
+  .desktop-only {
+    display: inline;
+  }
+}
+
+/* A card of content on a page. */
+.card {
+  padding: 18px var(--space);
+  border: 1px solid var(--color-border);
+  border-radius: 20px;
+  background: var(--color-surface);
+}
+
+.card h2 {
+  margin: 0;
+}
+
+.card-heading {
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--color-line-soft);
+}
+
+.card-heading p {
+  margin: 0;
+  color: var(--color-ink-muted);
+  font-size: var(--text-meta);
+}
+
+/* The link back to the page this one came from. */
+a.back-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 44px;
+  margin-bottom: 8px;
+  color: var(--color-ink-muted);
+  font-weight: 600;
+  text-decoration: none;
+}
+
+/* The Product page: one column on phone, with Details above Stock history.
+   From 768px Stock and Stock history sit left, Details and Remove right. */
+.product-heading {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px 12px;
+  align-items: center;
+  margin-bottom: 14px;
+}
+
+.product-heading h1 {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.product-heading .pills {
+  grid-column: 1 / -1;
+}
+
+.product-columns {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.product-column {
+  display: contents;
+}
+
+.product-details {
+  order: 1;
+}
+
+.product-history {
+  order: 2;
+}
+
+.product-remove {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  order: 3;
+}
+
+.product-remove h2 {
+  color: var(--color-danger);
+  font-size: var(--text-body);
+}
+
+.stock-card {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.stock-card-summary {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  min-width: 0;
+}
+
+.stock-card-summary p {
+  margin: 0;
+  color: var(--color-ink-soft);
+  font-size: var(--text-meta);
+}
+
+.stock-card-summary p.stock-card-last-change {
+  color: var(--color-ink-muted);
+}
+
+.stock-card-amount {
+  font-size: 36px;
+  font-weight: 700;
+  letter-spacing: -0.025em;
+  line-height: 1.1;
+}
+
+.stock-card-forms .stock-form {
+  padding: 0 0 8px;
+}
+
+.stock-card-forms .stock-form:last-child {
+  padding-bottom: 0;
+}
+
+.stock-card-forms input {
+  padding-inline: 12px;
+}
+
+.stock-card-forms button {
+  min-width: 104px;
+  padding-inline: 12px;
+}
+
+.details {
+  margin: 0;
+}
+
+.details > div {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 12px 0;
+}
+
+.details > div + div {
+  border-top: 1px solid var(--color-line-soft);
+}
+
+.details > div:last-child {
+  padding-bottom: 0;
+}
+
+.details dt {
+  min-width: 0;
+  font-size: var(--text-item);
+}
+
+.details dt span {
+  display: block;
+  color: var(--color-ink-muted);
+  font-size: var(--text-meta);
+}
+
+/* Stays on one line unless a long Pack Size name needs more room. */
+.details dd {
+  flex: none;
+  max-width: 60%;
+  margin: 0;
+  font-size: var(--text-item);
+  font-weight: 600;
+  text-align: right;
+}
+
+.details dd.details-unset {
+  color: var(--color-ink-muted);
+}
+
+.stock-history {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.stock-history li + li {
+  border-top: 1px solid var(--color-line-soft);
+}
+
+.stock-history li:last-child {
+  padding-bottom: 0;
+}
+
+.stock-history-empty {
+  margin: 12px 0 0;
+  color: var(--color-ink-muted);
+}
+
+@media (min-width: 768px) {
+  .product-heading {
+    align-items: end;
+    margin-bottom: var(--space);
+  }
+
+  .product-heading h1 {
+    font-size: 30px;
+  }
+
+  .product-heading .pills {
+    grid-column: 1;
+  }
+
+  .product-heading .button {
+    grid-column: 2;
+    grid-row: 1 / span 2;
+  }
+
+  .product-columns {
+    display: grid;
+    grid-template-columns: minmax(0, 1.7fr) minmax(0, 1fr);
+    gap: var(--space);
+    align-items: start;
+  }
+
+  .product-column {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space);
+    min-width: 0;
+  }
+
+  .card {
+    padding: 20px;
+  }
+
+  .stock-card-amount {
+    font-size: 44px;
+  }
+
+  .stock-history .list-row {
+    display: grid;
+    grid-template-columns: 36px minmax(0, 200px) minmax(0, 1fr);
+    gap: 12px;
+  }
+
+  .stock-history .list-row-text {
+    display: contents;
+  }
+}
+
+@media (min-width: 1024px) {
+  .stock-card {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    gap: 24px;
+  }
+
+  .stock-card-forms {
+    flex: 0 0 340px;
   }
 }
 
