@@ -105,6 +105,21 @@ export function formatMealDate(date: string): string {
   return `${formatDayHeading(date)} ${dayPart(date, { month: "short" })}`;
 }
 
+// A Confirmation's Meal in Stock history: "Tue Dinner · Rice bowl", or "Tue
+// Dinner" for a Meal with no name.
+export function formatMovementMeal({
+  date,
+  name,
+  mealType,
+}: {
+  date: string;
+  name: string | null;
+  mealType: { seedKey: MealTypeSeedKey | null; name: string | null };
+}): string {
+  const params = { day: dayPart(date, { weekday: "short" }), mealType: mealTypeLabel(mealType) };
+  return name === null ? t("stockMovement.meal", params) : t("stockMovement.namedMeal", { ...params, name });
+}
+
 // Which day a Meal form edits, saying "next" for a day of next week (spec
 // "Planning"). With no week, as off the planner, it names the date.
 export function editingLabel(date: string, week: "this" | "next" | null): string {

@@ -5,6 +5,7 @@ import {
   formatDayHeading,
   formatDayMonth,
   formatList,
+  formatMovementMeal,
   formatPackSize,
   formatPackSizeNote,
   formatWeekRange,
@@ -125,6 +126,26 @@ describe("editingLabel", () => {
 describe("formatDayHeading", () => {
   it("shows the weekday and day of the month", () => {
     expect(formatDayHeading("2026-11-01")).toBe("Sun 1");
+  });
+});
+
+describe("formatMovementMeal", () => {
+  const dinner = { seedKey: "dinner", name: null } as const;
+
+  it("shows the Meal's weekday, Meal Type and name", () => {
+    expect(formatMovementMeal({ date: "2026-10-27", name: "Rice bowl", mealType: dinner })).toBe(
+      "Tue Dinner · Rice bowl",
+    );
+  });
+
+  it("shows only the weekday and Meal Type of a Meal with no name", () => {
+    expect(formatMovementMeal({ date: "2026-10-27", name: null, mealType: dinner })).toBe("Tue Dinner");
+  });
+
+  it("shows a renamed Meal Type by its name", () => {
+    expect(formatMovementMeal({ date: "2026-10-27", name: null, mealType: { seedKey: null, name: "Supper" } })).toBe(
+      "Tue Supper",
+    );
   });
 });
 
