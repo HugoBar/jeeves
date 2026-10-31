@@ -1,5 +1,5 @@
 import "server-only";
-import { eq, isNull } from "drizzle-orm";
+import { and, eq, isNull, ne, sql } from "drizzle-orm";
 import type { ProductFields } from "@/core/products";
 import type { DefaultUnit } from "@/core/units";
 import { deleteOrArchive, removeIfStill, removeOutcome, type RemoveOutcome } from "./archive";
@@ -55,6 +55,23 @@ export async function listActiveProducts(db: Db): Promise<Product[]> {
 
 // Another non-Archived Product already has the name, ignoring case.
 type DuplicateName = { ok: false; error: "duplicateName" };
+
+// The same check ahead of a save, for a form rejected for something else that
+// should say so too. `exceptId` is the Product being edited.
+export async function isProductNameTaken(db: Db, name: string, exceptId?: string): Promise<boolean> {
+  const rows = await db
+    .select({ id: products.id })
+    .from(products)
+    .where(
+      and(
+        sql`lower(${products.name}) = lower(${name.trim()})`,
+        isNull(products.archivedAt),
+        exceptId ? ne(products.id, exceptId) : undefined,
+      ),
+    )
+    .limit(1);
+  return rows.length > 0;
+}
 
 // A new Product starts with no Stock; Stock only changes through Stock Movements.
 export async function createProduct(

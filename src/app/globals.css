@@ -1134,6 +1134,29 @@ html:has(.sheet[open]) {
   color: var(--color-ink-soft);
 }
 
+/* A fact worth knowing, inside a card. */
+.banner-note {
+  margin: 0;
+  border-color: transparent;
+  background: var(--color-inset);
+  color: var(--color-ink-soft);
+}
+
+.banner-note svg {
+  color: var(--color-ink-muted);
+}
+
+.banner-error {
+  margin: 0;
+  border-color: var(--color-danger-line);
+  background: var(--color-danger-soft);
+  color: var(--color-danger-deep);
+}
+
+.banner-error svg {
+  color: var(--color-danger);
+}
+
 .item-row,
 .item-form {
   display: flex;
@@ -1246,10 +1269,16 @@ html:has(.sheet[open]) {
   }
 
   /* A page with room for columns. It lines up with the header. */
-  .app-main:has(.page-wide) {
+  .app-main:has(.page-wide),
+  .app-main:has(.page-form) {
     max-width: 1280px;
     padding-top: 28px;
     padding-inline: 24px;
+  }
+
+  /* A form in two columns of cards. */
+  .app-main:has(.page-form) {
+    max-width: 1000px;
   }
 }
 
@@ -1347,6 +1376,190 @@ a.back-link {
   color: var(--color-ink-muted);
   font-weight: 600;
   text-decoration: none;
+}
+
+/* New Product and Edit Product: Basics, Food Categories and Optional, one under
+   the other on phone. From 768px Food Categories moves to the right. */
+.product-form-cards,
+.product-form-columns,
+.product-form-card {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.product-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.product-field legend,
+.product-field-label {
+  margin-bottom: 6px;
+  font-size: var(--text-meta);
+  font-weight: 600;
+}
+
+.product-field-label {
+  margin-bottom: 0;
+}
+
+.product-form-categories legend {
+  color: var(--color-ink-muted);
+}
+
+.field-locked {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+  padding: 0 14px;
+  border-radius: 12px;
+  background: var(--color-inset);
+  color: var(--color-ink-soft);
+  font-weight: 600;
+}
+
+.field-locked svg {
+  color: var(--color-icon-muted);
+}
+
+/* The Default Unit: a radio button shown as a tile. */
+.unit-choices {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.unit-choice {
+  position: relative;
+  align-items: center;
+  gap: 0;
+  padding: 8px 4px;
+  border: 1px solid var(--color-line-field);
+  border-radius: 12px;
+  color: var(--color-ink-soft);
+  font-weight: 400;
+  line-height: 1.3;
+  cursor: pointer;
+}
+
+.unit-choice strong {
+  color: var(--color-ink);
+  font-size: var(--text-item);
+}
+
+.unit-choice:has(input:checked) {
+  border-color: var(--color-field-editing);
+  background: var(--color-accent-soft);
+  color: var(--color-accent-ink);
+}
+
+.unit-choice:has(input:checked) strong {
+  color: var(--color-accent-ink);
+}
+
+/* A Food Category to pick: a checkbox shown as a chip, ticked when picked. */
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.product-form-cards .chip {
+  position: relative;
+  gap: 6px;
+  padding: 0 16px;
+  border: 1px dashed var(--color-line-strong);
+  border-radius: 999px;
+  color: var(--color-ink-soft);
+  font-size: var(--text-meta);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.product-form-cards .chip:has(input:checked) {
+  border: 1px solid var(--color-ink);
+  color: var(--color-ink);
+}
+
+.chip:has(input:checked)::before {
+  content: "✓" / "";
+}
+
+.product-form-cards .chip input,
+.unit-choice input {
+  position: absolute;
+  width: 1px;
+  min-height: 0;
+  height: 1px;
+  padding: 0;
+  opacity: 0;
+}
+
+.chip:has(input:focus-visible),
+.unit-choice:has(input:focus-visible) {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
+
+.product-pack-size {
+  display: grid;
+  grid-template-columns: minmax(0, 3fr) minmax(0, 5fr);
+  gap: 8px;
+}
+
+.product-form-cards .product-form-actions {
+  gap: 8px;
+}
+
+.product-form-cards .product-form-actions .button,
+.product-form-cards .product-form-actions button {
+  flex: 1;
+  min-height: 48px;
+}
+
+.product-form-cards .product-form-actions button {
+  flex: 1.35;
+}
+
+@media (min-width: 768px) {
+  .product-form-columns {
+    display: grid;
+    grid-template-rows: auto 1fr;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--space);
+    align-items: start;
+  }
+
+  .product-form-categories {
+    grid-row: 1 / span 2;
+    grid-column: 2;
+  }
+
+  .product-density {
+    max-width: 290px;
+  }
+
+  .product-pack-size {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .product-form-cards .chip {
+    min-height: 36px;
+  }
+
+  .product-form-cards .product-form-actions {
+    justify-content: flex-end;
+  }
+
+  .product-form-cards .product-form-actions .button,
+  .product-form-cards .product-form-actions button {
+    flex: none;
+    min-height: 44px;
+    padding: 0 22px;
+  }
 }
 
 /* The Product page: one column on phone, with Details above Stock history.
