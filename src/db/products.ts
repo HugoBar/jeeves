@@ -2,7 +2,7 @@ import "server-only";
 import { eq, isNull } from "drizzle-orm";
 import type { ProductFields } from "@/core/products";
 import type { DefaultUnit } from "@/core/units";
-import { deleteOrArchive, type RemoveOutcome } from "./archive";
+import { deleteOrArchive, removeIfStill, removeOutcome, type RemoveOutcome } from "./archive";
 import { activeCategoryIdsByProduct, replaceActiveCategoryLinks, type CategoryLinkTable } from "./food-categories";
 import type { Db } from "./index";
 import { isUniqueViolation } from "./postgres-errors";
@@ -124,4 +124,12 @@ function linkCategories(db: Db, productId: string, categoryIds: string[]): Promi
 // Archived. Its own Food Category links cascade and never block deletion.
 export function removeProduct(db: Db, id: string): Promise<RemoveOutcome> {
   return deleteOrArchive(db, products, id);
+}
+
+export function removeProductOutcome(db: Db, id: string): Promise<RemoveOutcome> {
+  return removeOutcome(db, products, id);
+}
+
+export function removeProductIfStill(db: Db, id: string, expected: RemoveOutcome): Promise<boolean> {
+  return removeIfStill(db, products, id, expected);
 }

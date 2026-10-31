@@ -2,7 +2,16 @@ import { eq, sql } from "drizzle-orm";
 import { beforeAll, describe, expect, it } from "vitest";
 import type { DefaultUnit } from "@/core/units";
 import { createCategory, removeCategory } from "./food-categories";
-import { createProduct, getProduct, listActiveProducts, removeProduct, updateProduct } from "./products";
+import {
+  createProduct,
+  getProduct,
+  listActiveProducts,
+  removeProduct,
+  removeProductIfStill,
+  removeProductOutcome,
+  updateProduct,
+} from "./products";
+import { createRecipe } from "./recipes";
 import { products } from "./schema";
 import { listStockMovements, restockProduct } from "./stock-movements";
 import { createTestDb } from "./test-database";
@@ -204,6 +213,72 @@ describe("removeProduct", () => {
     expect(await removeProduct(db, product.id)).toBe("deleted");
     // Nothing links to the category any more, so it is not Archived either.
     expect(await removeCategory(db, spices.id)).toBe("deleted");
+  });
+});
+
+describe("removeProductOutcome", () => {
+  it("says a Product nothing uses will be deleted, and leaves it in place", async () => {
+    const spices = await createCategory(db, { name: "Seasoning", kind: "kind" });
+    const product = await aProduct("Nutmeg");
+    await updateProduct(db, product.id, { name: "Nutmeg", density: null, packSize: null, categoryIds: [spices.id] });
+
+    expect(await removeProductOutcome(db, product.id)).toBe("deleted");
+    expect((await getProduct(db, product.id))?.categoryIds).toEqual([spices.id]);
+  });
+
+  it("says a Product with a Stock Movement will be Archived, and leaves it active", async () => {
+    const product = await aProduct("Saffron");
+    await restockProduct(db, product.id, 5);
+
+    expect(await removeProductOutcome(db, product.id)).toBe("archived");
+    expect((await listActiveProducts(db)).map((p) => p.id)).toContain(product.id);
+  });
+
+  it("follows any table that refers to the Product, such as an Ingredient", async () => {
+    const product = await aProduct("Cardamom");
+    await createRecipe(db, {
+      name: "Chai",
+      portions: 2,
+      steps: "Simmer",
+      prepTimeMinutes: 10,
+      sourceUrl: null,
+      ingredients: [{ productId: product.id, amount: 5, unit: "g", minor: false }],
+      categoryOverrides: [],
+    });
+
+    expect(await removeProductOutcome(db, product.id)).toBe("archived");
+  });
+});
+
+describe("removeProductIfStill", () => {
+  it("deletes a Product nothing uses when that is what was said", async () => {
+    const product = await aProduct("Fennel");
+
+    expect(await removeProductIfStill(db, product.id, "deleted")).toBe(true);
+    expect(await getProduct(db, product.id)).toBeUndefined();
+  });
+
+  it("Archives a Product in use when that is what was said", async () => {
+    const product = await aProduct("Mace");
+    await restockProduct(db, product.id, 5);
+
+    expect(await removeProductIfStill(db, product.id, "archived")).toBe(true);
+    expect((await listActiveProducts(db)).map((p) => p.id)).not.toContain(product.id);
+  });
+
+  it("removes nothing if a Product said to be deleted has come into use", async () => {
+    const product = await aProduct("Sumac");
+    await restockProduct(db, product.id, 5);
+
+    expect(await removeProductIfStill(db, product.id, "deleted")).toBe(false);
+    expect((await listActiveProducts(db)).map((p) => p.id)).toContain(product.id);
+  });
+
+  it("removes nothing if a Product said to be Archived is no longer in use", async () => {
+    const product = await aProduct("Anise");
+
+    expect(await removeProductIfStill(db, product.id, "archived")).toBe(false);
+    expect((await listActiveProducts(db)).map((p) => p.id)).toContain(product.id);
   });
 });
 
