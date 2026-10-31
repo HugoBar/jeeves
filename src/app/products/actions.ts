@@ -1,5 +1,6 @@
 "use server";
 
+import { refresh } from "next/cache";
 import { redirect } from "next/navigation";
 import {
   densityBlockers,
@@ -10,7 +11,8 @@ import {
 } from "@/core/products";
 import { parseDefaultUnit } from "@/core/units";
 import { getDb } from "@/db";
-import { createProduct, getProduct, removeProduct, updateProduct } from "@/db/products";
+import type { RemoveOutcome } from "@/db/archive";
+import { createProduct, getProduct, removeProductIfStill, updateProduct } from "@/db/products";
 import { listIngredientUses } from "@/db/recipes";
 
 export type ProductFormValues = ProductFieldsInput & { defaultUnit?: string };
@@ -56,9 +58,11 @@ export async function editProductAction(
   redirect(`/products/${id}`);
 }
 
-export async function removeProductAction(id: string): Promise<void> {
-  await removeProduct(getDb(), id);
-  redirect("/products");
+// `expected` is what the page said Remove would do. If that no longer holds,
+// nothing is removed and the page refreshes to say what it would do now.
+export async function removeProductAction(id: string, expected: RemoveOutcome): Promise<void> {
+  if (await removeProductIfStill(getDb(), id, expected)) redirect("/products");
+  refresh();
 }
 
 function valuesFrom(formData: FormData): ProductFormValues {

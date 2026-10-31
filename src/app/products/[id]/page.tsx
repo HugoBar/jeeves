@@ -2,7 +2,7 @@ import { notFound } from "next/navigation";
 import { parseHistoryRows } from "@/core/stock";
 import { isUuid } from "@/core/uuid";
 import { getDb } from "@/db";
-import { getProduct } from "@/db/products";
+import { getProduct, removeProductOutcome } from "@/db/products";
 import { listStockMovements } from "@/db/stock-movements";
 import { loadCategoryOptions } from "../../categories/category-options";
 import { removeProductAction } from "../actions";
@@ -23,7 +23,11 @@ export default async function ProductPage({
   const db = getDb();
   const product = await getProduct(db, id);
   if (!product) notFound();
-  const [movements, categories] = await Promise.all([listStockMovements(db, id, rows + 1), loadCategoryOptions(db)]);
+  const [movements, categories, removeOutcome] = await Promise.all([
+    listStockMovements(db, id, rows + 1),
+    loadCategoryOptions(db),
+    removeProductOutcome(db, id),
+  ]);
 
   return (
     <ProductView
@@ -32,11 +36,12 @@ export default async function ProductPage({
       movements={movements.slice(0, rows)}
       rows={rows}
       hasOlder={movements.length > rows}
+      removeOutcome={removeOutcome}
       actions={{
         restock: restockAction.bind(null, id),
         discard: discardAction.bind(null, id),
         correction: correctAction.bind(null, id),
-        remove: removeProductAction.bind(null, id),
+        remove: removeProductAction.bind(null, id, removeOutcome),
       }}
     />
   );

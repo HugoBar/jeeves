@@ -140,3 +140,43 @@ export function DeleteSheet({
     </ConfirmSheet>
   );
 }
+
+// One line of what Archiving means, marked by how it lands.
+export interface SheetEffect {
+  tone: "gone" | "kept" | "warn";
+  text: string;
+}
+
+// Archiving something in use, which can't be deleted. What it means differs
+// from one thing to another, so `effects` lists it.
+export function ArchiveSheet({
+  name,
+  effects,
+  onArchive,
+  onClose,
+}: {
+  name: string;
+  effects: SheetEffect[];
+  onArchive: () => void | Promise<void>;
+  onClose: () => void;
+}) {
+  return (
+    <ConfirmSheet
+      eyebrow={t("sheet.remove")}
+      title={t("sheet.archiveTitle", { name })}
+      body={t("sheet.archiveBody", { name })}
+      confirmLabel={t("sheet.archive")}
+      destructive
+      onConfirm={onArchive}
+      onClose={onClose}
+    >
+      <ul className="sheet-effects">
+        {effects.map(({ tone, text }) => (
+          <li key={text} className={`sheet-effect-${tone}`}>
+            {text}
+          </li>
+        ))}
+      </ul>
+    </ConfirmSheet>
+  );
+}

@@ -42,9 +42,17 @@ const render = (
   product: Partial<Props["product"]> = {},
   movements: Props["movements"] = [],
   history: Pick<Props, "rows" | "hasOlder"> = { rows: 10, hasOlder: false },
+  removeOutcome: Props["removeOutcome"] = "deleted",
 ) =>
   renderToStaticMarkup(
-    createElement(ProductView, { product: { ...rice, ...product }, categories, movements, ...history, actions }),
+    createElement(ProductView, {
+      product: { ...rice, ...product },
+      categories,
+      movements,
+      ...history,
+      removeOutcome,
+      actions,
+    }),
   );
 
 describe("the Product page's heading", () => {
@@ -199,9 +207,25 @@ describe("Stock history", () => {
 });
 
 describe("the Remove card", () => {
-  it("is headed Remove and has the Remove button", () => {
-    const html = render();
-    expect(html).toContain("<h2>Remove</h2>");
-    expect(html).toMatch(/class="button-danger"[^>]*>Remove</);
+  it("is headed Remove", () => {
+    expect(render()).toContain("<h2>Remove</h2>");
+  });
+
+  it("says a Product in use will be Archived, with an Archive button", () => {
+    const html = render({}, [], { rows: 10, hasOlder: false }, "archived");
+    expect(html).toContain(
+      "Basmati rice is in use, so it will be <strong>Archived</strong>. It leaves every picker; past Meals and Stock history keep it.",
+    );
+    expect(html).toMatch(/class="button-danger"[^>]*>Archive Basmati rice</);
+  });
+
+  it("says a Product nothing uses will be deleted, with a Delete button", () => {
+    const html = render({ name: "Chickpeas" }, [], { rows: 10, hasOlder: false }, "deleted");
+    expect(html).toContain("Nothing uses Chickpeas, so it will be deleted.");
+    expect(html).toMatch(/class="button-danger"[^>]*>Delete Chickpeas</);
+  });
+
+  it("no longer hedges about what Remove will do", () => {
+    expect(render()).not.toContain("instead");
   });
 });
