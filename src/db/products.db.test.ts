@@ -5,6 +5,7 @@ import { createCategory, removeCategory } from "./food-categories";
 import {
   createProduct,
   getProduct,
+  isProductNameTaken,
   listActiveProducts,
   removeProduct,
   removeProductIfStill,
@@ -104,6 +105,21 @@ describe("updateProduct", () => {
       stock: 0,
       stockSuspect: false,
     });
+  });
+
+  it("says a name is taken, ignoring case and extra spaces", async () => {
+    await aProduct("Jasmine rice");
+
+    expect(await isProductNameTaken(db, " JASMINE RICE ")).toBe(true);
+    expect(await isProductNameTaken(db, "Wild rice")).toBe(false);
+  });
+
+  it("doesn't count a Product's own name, or an Archived Product's, as taken", async () => {
+    const product = await aProduct("Sushi rice");
+    await archive((await aProduct("Arborio")).id);
+
+    expect(await isProductNameTaken(db, "Sushi rice", product.id)).toBe(false);
+    expect(await isProductNameTaken(db, "Arborio")).toBe(false);
   });
 
   it("refuses to rename a Product to another Product's name", async () => {
