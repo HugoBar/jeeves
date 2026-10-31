@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   correct,
   deduct,
+  parseHistoryRows,
   parsePositiveQuantity,
   parseQuantityOnHand,
   parseStockAmount,
@@ -9,6 +10,23 @@ import {
   restock,
   reverse,
 } from "./index";
+
+describe("parseHistoryRows", () => {
+  it("starts at the newest 10 rows", () => {
+    expect(parseHistoryRows(undefined)).toBe(10);
+  });
+
+  it("reads how many rows the page asked for", () => {
+    expect(parseHistoryRows("30")).toBe(30);
+  });
+
+  it.each([["0"], ["-10"], ["2.5"], ["ten"], [""], ["99999999999999999999"], [["10", "20"]]])(
+    "falls back to 10 rows for %j",
+    (rows) => {
+      expect(parseHistoryRows(rows)).toBe(10);
+    },
+  );
+});
 
 describe("restock", () => {
   it("adds the quantity bought to Stock", () => {

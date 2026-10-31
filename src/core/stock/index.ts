@@ -87,6 +87,16 @@ export function parseQuantityOnHand(text: string): ParsedQuantity {
   return toParsed(parseNonNegative(text.trim(), AMOUNT_COLUMN), "notZeroOrMore");
 }
 
+// How many rows Stock history starts with, and adds on each "Show older".
+export const STOCK_HISTORY_PAGE_SIZE = 10;
+
+// How many rows the Product page's address asks Stock history to show.
+// Anything but a positive whole number falls back to the first rows.
+export function parseHistoryRows(rows: string | string[] | undefined): number {
+  const parsed = typeof rows === "string" ? Number(rows) : NaN;
+  return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : STOCK_HISTORY_PAGE_SIZE;
+}
+
 // The Stock Movements someone records by hand on a Product.
 export const STOCK_ACTIONS = ["restock", "discard", "correction"] as const satisfies readonly StockMovementType[];
 

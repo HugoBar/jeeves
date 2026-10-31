@@ -1,8 +1,9 @@
 import Link from "next/link";
+import { STOCK_HISTORY_PAGE_SIZE } from "@/core/stock";
 import type { DefaultUnit } from "@/core/units";
 import type { Product } from "@/db/products";
 import type { StockMovement } from "@/db/stock-movements";
-import { formatDelta, formatPackSize, formatQuantity, t } from "@/strings";
+import { formatDelta, formatMovementMeal, formatPackSize, formatQuantity, t } from "@/strings";
 import type { CategoryOption } from "../categories/category-options";
 import { FoodCategoryPill } from "../food-category-pill";
 import { BackLink } from "../list-row";
@@ -12,16 +13,21 @@ import { StockActions, type StockActionRunners } from "./stock-action-sheet";
 
 // A Product: its Stock, the Restock, Discard and Correction sheet, its Details,
 // its Stock Movement history and Remove. Pills follow the order of
-// `categories`, which also holds their labels. `movements` run newest first.
+// `categories`, which also holds their labels. `movements` run newest first:
+// the `rows` asked for, and `hasOlder` says if there are more.
 export function ProductView({
   product,
   categories,
   movements,
+  rows,
+  hasOlder,
   actions,
 }: {
   product: Product;
   categories: CategoryOption[];
   movements: StockMovement[];
+  rows: number;
+  hasOlder: boolean;
   actions: StockActionRunners & { remove: () => Promise<void> };
 }) {
   const productCategories = categories.filter((category) => product.categoryIds.includes(category.id));
@@ -45,7 +51,13 @@ export function ProductView({
       <div className="product-columns">
         <div className="product-column">
           <StockCard product={product} lastMovement={movements[0]} actions={actions} />
-          <StockHistory unit={product.defaultUnit} movements={movements} />
+          <StockHistory
+            productId={product.id}
+            unit={product.defaultUnit}
+            movements={movements}
+            rows={rows}
+            hasOlder={hasOlder}
+          />
         </div>
         <div className="product-column">
           <ProductDetails product={product} />
@@ -137,7 +149,21 @@ function Detail({ label, help, value }: { label: string; help: string; value: st
   );
 }
 
-function StockHistory({ unit, movements }: { unit: DefaultUnit; movements: StockMovement[] }) {
+// "Show older" asks the server for more of the newest rows, instead of adding
+// to the ones on screen, so a Stock Movement made meanwhile leaves no gap.
+function StockHistory({
+  productId,
+  unit,
+  movements,
+  rows,
+  hasOlder,
+}: {
+  productId: string;
+  unit: DefaultUnit;
+  movements: StockMovement[];
+  rows: number;
+  hasOlder: boolean;
+}) {
   return (
     <div className="card product-history">
       <div className="card-heading">
@@ -147,24 +173,38 @@ function StockHistory({ unit, movements }: { unit: DefaultUnit; movements: Stock
       {movements.length === 0 ? (
         <p className="stock-history-empty">{t("products.historyEmpty")}</p>
       ) : (
-        <ul className="stock-history">
-          {movements.map((movement) => (
-            <li key={movement.id} className="list-row">
-              <span className={`list-row-tile list-row-tile-${movement.type}`} />
-              <span className="list-row-text">
-                <span className="list-row-title">
-                  {t("stockMovement.amount", {
-                    type: t(`stockMovement.${movement.type}`),
-                    amount: movementAmount(movement, unit),
-                  })}
+        <>
+          <ul className="stock-history">
+            {movements.map((movement) => (
+              <li key={movement.id} className="list-row">
+                <span className={`list-row-tile list-row-tile-${movement.type}`} />
+                <span className="list-row-text">
+                  <span className="list-row-title">
+                    {t("stockMovement.amount", {
+                      type: t(`stockMovement.${movement.type}`),
+                      amount: movementAmount(movement, unit),
+                    })}
+                  </span>
+                  <span className="list-row-meta">
+                    <LocalDate value={movement.createdAt} />
+                    {movement.meal &&
+                      ` ${t("stockMovement.mealAfterDate", { meal: formatMovementMeal(movement.meal) })}`}
+                  </span>
                 </span>
-                <span className="list-row-meta">
-                  <LocalDate value={movement.createdAt} />
-                </span>
-              </span>
-            </li>
-          ))}
-        </ul>
+              </li>
+            ))}
+          </ul>
+          {hasOlder && (
+            <Link
+              href={`/products/${productId}?rows=${rows + STOCK_HISTORY_PAGE_SIZE}`}
+              className="stock-history-older"
+              replace
+              scroll={false}
+            >
+              {t("products.historyOlder")}
+            </Link>
+          )}
+        </>
       )}
     </div>
   );

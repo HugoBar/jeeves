@@ -1,5 +1,5 @@
 import "server-only";
-import { desc, eq } from "drizzle-orm";
+import { and, desc, eq } from "drizzle-orm";
 import {
   correct,
   deduct,
@@ -9,7 +9,8 @@ import {
   type StockState,
 } from "@/core/stock";
 import type { Db } from "./index";
-import { products, stockMovements } from "./schema";
+import type { MealType } from "./meal-types";
+import { meals, mealTypes, products, stockMovements } from "./schema";
 
 export interface StockMovement {
   id: string;
@@ -20,6 +21,15 @@ export interface StockMovement {
   // The Meal a Confirmation or Reopen came from; null for other movements,
   // and once that Meal is removed.
   mealId: string | null;
+  // What a Stock history row shows of a Confirmation's Meal; null for other
+  // movements, and once that Meal is removed.
+  meal: StockMovementMeal | null;
+}
+
+interface StockMovementMeal {
+  date: string;
+  name: string | null;
+  mealType: Pick<MealType, "seedKey" | "name">;
 }
 
 // Writes a Stock Movement and the Stock column it leaves in one transaction,
@@ -71,9 +81,11 @@ export async function correctProductStock(db: Db, productId: string, quantity: n
   await applyMovement(db, productId, "correction", (current) => correct(current, quantity));
 }
 
-// The Product's Stock Movement history, newest first.
-export async function listStockMovements(db: Db, productId: string): Promise<StockMovement[]> {
-  return db
+// The Product's Stock Movement history, newest first, or only its newest
+// `limit` rows. Rows that share a time are ordered by id, so each limit starts
+// with the rows of any smaller one.
+export async function listStockMovements(db: Db, productId: string, limit?: number): Promise<StockMovement[]> {
+  const query = db
     .select({
       id: stockMovements.id,
       createdAt: stockMovements.createdAt,
@@ -81,8 +93,18 @@ export async function listStockMovements(db: Db, productId: string): Promise<Sto
       delta: stockMovements.delta,
       resultingQuantity: stockMovements.resultingQuantity,
       mealId: stockMovements.mealId,
+      meal: { date: meals.date, name: meals.name },
+      mealType: { seedKey: mealTypes.seedKey, name: mealTypes.name },
     })
     .from(stockMovements)
+    .leftJoin(meals, and(eq(stockMovements.mealId, meals.id), eq(stockMovements.type, "confirmation")))
+    .leftJoin(mealTypes, eq(meals.mealTypeId, mealTypes.id))
     .where(eq(stockMovements.productId, productId))
-    .orderBy(desc(stockMovements.createdAt));
+    .orderBy(desc(stockMovements.createdAt), desc(stockMovements.id))
+    .$dynamic();
+  const rows = await (limit === undefined ? query : query.limit(limit));
+  return rows.map(({ meal, mealType, ...movement }) => ({
+    ...movement,
+    meal: meal && mealType && { ...meal, mealType },
+  }));
 }

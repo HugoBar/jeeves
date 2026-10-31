@@ -182,7 +182,8 @@ button:disabled {
 }
 
 button:focus-visible,
-a.button:focus-visible {
+a.button:focus-visible,
+.stock-history-older:focus-visible {
   outline: 2px solid var(--color-accent);
   outline-offset: 2px;
 }
@@ -1491,6 +1492,22 @@ a.back-link {
 
 .stock-history li:last-child {
   padding-bottom: 0;
+}
+
+.stock-history:has(+ .stock-history-older) li:last-child {
+  padding-bottom: 8px;
+}
+
+.stock-history-older {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  margin-top: 8px;
+  border-top: 1px solid var(--color-line-soft);
+  padding-top: 8px;
+  font-weight: 600;
+  text-decoration: none;
 }
 
 .stock-history-empty {

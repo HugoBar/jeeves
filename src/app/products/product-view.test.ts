@@ -28,6 +28,7 @@ const movement = (type: Props["movements"][number]["type"], delta: number, resul
   delta,
   resultingQuantity,
   mealId: null,
+  meal: null,
 });
 
 const actions: Props["actions"] = {
@@ -37,8 +38,14 @@ const actions: Props["actions"] = {
   remove: async () => {},
 };
 
-const render = (product: Partial<Props["product"]> = {}, movements: Props["movements"] = []) =>
-  renderToStaticMarkup(createElement(ProductView, { product: { ...rice, ...product }, categories, movements, actions }));
+const render = (
+  product: Partial<Props["product"]> = {},
+  movements: Props["movements"] = [],
+  history: Pick<Props, "rows" | "hasOlder"> = { rows: 10, hasOlder: false },
+) =>
+  renderToStaticMarkup(
+    createElement(ProductView, { product: { ...rice, ...product }, categories, movements, ...history, actions }),
+  );
 
 describe("the Product page's heading", () => {
   it("links back to the Stock list", () => {
@@ -153,6 +160,41 @@ describe("Stock history", () => {
 
   it("has no running total on a row", () => {
     expect(render({}, [movement("restock", 1000, 1800)])).not.toContain("now");
+  });
+
+  const meta = (html: string) => /list-row-meta">(.*?)<\/span>/.exec(html)?.[1];
+  const date = '<time dateTime="2026-10-27T12:00:00.000Z"></time>';
+  const dinner = { date: "2026-10-27", mealType: { seedKey: "dinner", name: null } } as const;
+
+  it("shows a Confirmation's Meal after the date", () => {
+    const row = { ...movement("confirmation", -200, 1800), meal: { ...dinner, name: "Rice bowl" } };
+    expect(meta(render({}, [row]))).toBe(`${date} · Tue Dinner · Rice bowl`);
+  });
+
+  it("shows only the weekday and Meal Type of a Meal with no name", () => {
+    const row = { ...movement("confirmation", -200, 1800), meal: { ...dinner, name: null } };
+    expect(meta(render({}, [row]))).toBe(`${date} · Tue Dinner`);
+  });
+
+  it("shows only the date on a Confirmation whose Meal no longer exists", () => {
+    expect(meta(render({}, [movement("confirmation", -200, 1800)]))).toBe(date);
+  });
+
+  const showOlder = /<a [^>]*href="([^"]+)"[^>]*>Show older<\/a>/;
+  const movements = [movement("restock", 1000, 1800)];
+
+  it("links to the next rows when there are older ones", () => {
+    const html = render({}, movements, { rows: 10, hasOlder: true });
+    expect(showOlder.exec(html)?.[1]).toBe("/products/1?rows=20");
+  });
+
+  it("asks for 10 more rows on each Show older", () => {
+    const html = render({}, movements, { rows: 20, hasOlder: true });
+    expect(showOlder.exec(html)?.[1]).toBe("/products/1?rows=30");
+  });
+
+  it("has no Show older when there are no more rows", () => {
+    expect(render({}, movements)).not.toContain("Show older");
   });
 });
 
