@@ -70,6 +70,16 @@ describe("discardProductStock", () => {
     expect(await getProduct(db, product.id)).toMatchObject({ stock: 0, stockSuspect: true });
     expect((await listStockMovements(db, product.id))[0]).toMatchObject({ delta: -100, resultingQuantity: 0 });
   });
+
+  it("clamps a Discard too big for a Stock column to hold", async () => {
+    const product = await aProduct("Beef steak");
+    await restockProduct(db, product.id, 400);
+
+    await discardProductStock(db, product.id, 123123123);
+
+    expect(await getProduct(db, product.id)).toMatchObject({ stock: 0, stockSuspect: true });
+    expect((await listStockMovements(db, product.id))[0]).toMatchObject({ delta: -400, resultingQuantity: 0 });
+  });
 });
 
 describe("correctProductStock", () => {

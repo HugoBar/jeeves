@@ -369,6 +369,27 @@ textarea:focus {
   border-color: var(--color-field-editing);
 }
 
+.field-joined.field-warning {
+  border-color: var(--color-warning-bar);
+}
+
+/* A unit that can't be changed, inside the field at its end. */
+.field-unit {
+  display: flex;
+  align-items: center;
+  padding-right: 14px;
+  color: var(--color-ink-muted);
+  font-size: var(--text-item);
+  font-weight: 400;
+}
+
+.field-hint {
+  margin: 0;
+  color: var(--color-ink-muted);
+  font-size: var(--text-meta);
+  font-weight: 400;
+}
+
 input[aria-invalid="true"]:not([type="checkbox"], .field-joined *),
 select[aria-invalid="true"]:not(.field-joined *),
 textarea[aria-invalid="true"],
@@ -913,8 +934,75 @@ html:has(.sheet[open]) {
   flex: 1.4;
 }
 
+/* The Stock action sheet. */
+.stock-action-tabs {
+  display: flex;
+  flex: none;
+  gap: 4px;
+  padding: 4px;
+  border-radius: 999px;
+  background: var(--color-ground);
+}
+
+.stock-action-tabs button {
+  --button-bg: transparent;
+  --button-line: transparent;
+  --button-ink: var(--color-ink-muted);
+  flex: 1;
+  min-width: 0;
+  padding: 0 8px;
+}
+
+.stock-action-tabs button[aria-pressed="true"] {
+  --button-bg: var(--color-surface);
+  --button-ink: var(--color-ink);
+  box-shadow: 0 1px 3px var(--color-sheet-shadow);
+}
+
+.stock-action-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space);
+}
+
+.stock-action-amount {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.stock-action-amount .field-joined {
+  min-height: 56px;
+}
+
+.stock-action-amount input:not([type="checkbox"]) {
+  font-size: 22px;
+  font-weight: 700;
+}
+
+.stock-after {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px 12px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: var(--color-inset);
+  color: var(--color-ink-muted);
+}
+
+.stock-after strong {
+  color: var(--color-ink);
+  font-size: var(--text-item);
+}
+
 /* Sheet on desktop */
 @media (min-width: 768px) {
+  .stock-action-tabs button {
+    min-height: 36px;
+  }
+
   .sheet {
     top: 0;
     width: calc(100% - 48px);
@@ -1040,8 +1128,7 @@ html:has(.sheet[open]) {
 }
 
 .item-row,
-.item-form,
-.stock-form {
+.item-form {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
@@ -1058,8 +1145,7 @@ html:has(.sheet[open]) {
   align-items: flex-end;
 }
 
-.item-form > input,
-.stock-form > input {
+.item-form > input {
   flex: 1;
 }
 
@@ -1077,6 +1163,10 @@ html:has(.sheet[open]) {
 .form-error svg {
   flex: none;
   margin-top: 1px;
+}
+
+.form-warning {
+  color: var(--color-warning-ink);
 }
 
 .product-form {
@@ -1332,21 +1422,16 @@ a.back-link {
   line-height: 1.1;
 }
 
-.stock-card-forms .stock-form {
-  padding: 0 0 8px;
+/* Restock across the top on phone. From 1024px all three sit beside the
+   amount. Always in the order of the sheet's tabs. */
+.stock-card-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
 }
 
-.stock-card-forms .stock-form:last-child {
-  padding-bottom: 0;
-}
-
-.stock-card-forms input {
-  padding-inline: 12px;
-}
-
-.stock-card-forms button {
-  min-width: 104px;
-  padding-inline: 12px;
+.stock-card-actions .button-primary {
+  grid-column: 1 / -1;
 }
 
 .details {
@@ -1473,8 +1558,9 @@ a.back-link {
     gap: 24px;
   }
 
-  .stock-card-forms {
-    flex: 0 0 340px;
+  .stock-card-actions {
+    display: flex;
+    flex: none;
   }
 }
 

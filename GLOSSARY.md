@@ -24,7 +24,7 @@ _Avoid_: Inventory level, batch
 A Product's weight-per-volume, used to convert between mass and volume units. Count-based Products never convert.
 
 **Pack Size**:
-An optional named package amount for a Product, such as "bag = 1000 g", used only when displaying the Shopping List.
+An optional named package amount for a Product, such as "bag = 1000 g". It rounds the Shopping List to whole packs and is shown as a reminder when Restocking; it never changes how Stock is counted.
 _Avoid_: Package unit (in Recipes)
 
 **Restock**:
@@ -38,6 +38,9 @@ _Avoid_: Remove (when talking about Stock), waste
 **Correction**:
 Setting a Product's Stock to the quantity actually on hand, fixing drift.
 _Avoid_: Adjustment, recount
+
+**Stock action**:
+A Restock, Discard or Correction, which someone records by hand on a Product.
 
 **Confirmation**:
 Marking a Meal as eaten, which deducts from Stock the Products its Meal Slots used. It is the only way eating a Meal changes Stock.

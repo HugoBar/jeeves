@@ -1,5 +1,14 @@
 import { describe, expect, it } from "vitest";
-import { correct, deduct, parsePositiveQuantity, parseQuantityOnHand, restock, reverse } from "./index";
+import {
+  correct,
+  deduct,
+  parsePositiveQuantity,
+  parseQuantityOnHand,
+  parseStockAmount,
+  previewStockAction,
+  restock,
+  reverse,
+} from "./index";
 
 describe("restock", () => {
   it("adds the quantity bought to Stock", () => {
@@ -111,6 +120,78 @@ describe("parseQuantityOnHand", () => {
       expect(parseQuantityOnHand(text)).toEqual({ ok: false, error: "notZeroOrMore" });
     },
   );
+});
+
+describe("parseStockAmount", () => {
+  it("rejects by each Stock action's own rule", () => {
+    expect(parseStockAmount("discard", "0")).toEqual({ ok: false, error: "notAboveZero" });
+    expect(parseStockAmount("correction", "0")).toEqual({ ok: true, quantity: 0 });
+  });
+});
+
+describe("parseStockAmount for a Discard", () => {
+  it("has no upper limit, as Stock stops at 0 however much is discarded", () => {
+    expect(parseStockAmount("discard", "123123123")).toEqual({ ok: true, quantity: 123123123 });
+  });
+
+  it("keeps the limit on amounts that end up stored", () => {
+    expect(parseStockAmount("restock", "123123123")).toEqual({ ok: false, error: "notAboveZero" });
+    expect(parseStockAmount("correction", "123123123")).toEqual({ ok: false, error: "notZeroOrMore" });
+  });
+
+  it.each([[""], ["abc"], ["0"], ["-1"], ["0.001"], ["Infinity"], ["1e400"], ["1e308"]])(
+    "rejects what isn't an amount above 0 (%j)",
+    (text) => {
+      expect(parseStockAmount("discard", text)).toEqual({ ok: false, error: "notAboveZero" });
+    },
+  );
+});
+
+describe("previewStockAction", () => {
+  const current = { stock: 1800, stockSuspect: false };
+
+  it("still warns of a Discard too big to store", () => {
+    expect(previewStockAction("discard", { stock: 400, stockSuspect: false }, "123123123")).toMatchObject({
+      resultingQuantity: 0,
+      stockSuspect: true,
+      clamped: true,
+    });
+  });
+
+  it("shows what a Restock will leave", () => {
+    expect(previewStockAction("restock", current, "200")?.resultingQuantity).toBe(2000);
+  });
+
+  it("shows what a Discard will leave", () => {
+    expect(previewStockAction("discard", current, "150")?.resultingQuantity).toBe(1650);
+  });
+
+  it("shows a Correction as the amount counted", () => {
+    expect(previewStockAction("correction", current, "1650")?.resultingQuantity).toBe(1650);
+    expect(previewStockAction("correction", current, "0")?.resultingQuantity).toBe(0);
+  });
+
+  it("clamps a Discard of more than is in Stock at 0 and flags it", () => {
+    expect(previewStockAction("discard", current, "2000")).toMatchObject({
+      resultingQuantity: 0,
+      stockSuspect: true,
+      clamped: true,
+    });
+  });
+
+  it("doesn't clamp a Discard of exactly what is in Stock", () => {
+    expect(previewStockAction("discard", current, "1800")).toMatchObject({ resultingQuantity: 0, clamped: false });
+  });
+
+  it.each([
+    ["restock", ""],
+    ["restock", "0"],
+    ["discard", "abc"],
+    ["correction", ""],
+    ["correction", "-1"],
+  ] as const)("has nothing to show for a %s of %j", (action, text) => {
+    expect(previewStockAction(action, current, text)).toBeNull();
+  });
 });
 
 describe("reverse", () => {

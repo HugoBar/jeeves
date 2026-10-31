@@ -63,6 +63,17 @@ export function formatPackSize({ name, amount }: PackSize, unit: DefaultUnit): s
   });
 }
 
+// A Pack Size in a sentence: "Pack Size is a 1,000 g bag." The amount is
+// spoken right after the article, so eight and eleven take "an". A capital
+// starting a word is dropped, but "XL bag" keeps its letters.
+export function formatPackSizeNote({ name, amount }: PackSize, unit: DefaultUnit): string {
+  const quantity = formatQuantity(amount, unit);
+  return t(/^(8|1[18](,\d{3})*(\.| ))/.test(quantity) ? "products.packSizeNoteAn" : "products.packSizeNote", {
+    quantity,
+    name: name.replace(/^\p{Lu}(?!\p{Lu})/u, (capital) => capital.toLowerCase()),
+  });
+}
+
 // A Stock Movement's delta with its sign: "+500 g", "-1.5 pc".
 export function formatDelta(delta: number, unit: DefaultUnit): string {
   return `${delta > 0 ? "+" : ""}${formatQuantity(delta, unit)}`;

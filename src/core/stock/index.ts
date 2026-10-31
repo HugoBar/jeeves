@@ -1,4 +1,4 @@
-import { AMOUNT_COLUMN, parseNonNegative, parsePositive, roundForColumn } from "@/core/amounts";
+import { AMOUNT_COLUMN, parseAboveZero, parseNonNegative, parsePositive, roundForColumn } from "@/core/amounts";
 
 // What caused a Stock Movement (glossary: Stock Movement).
 export const STOCK_MOVEMENT_TYPES = ["restock", "discard", "correction", "confirmation", "reopen"] as const;
@@ -61,7 +61,7 @@ function towards(current: StockState, resultingQuantity: number, stockSuspect: b
   };
 }
 
-// A quantity typed into a Stock form, in the Product's Default Unit. Each
+// A quantity typed into the Stock action sheet, in the Product's Default Unit. Each
 // error names the rule the text broke.
 export type QuantityError = "notAboveZero" | "notZeroOrMore";
 
@@ -71,12 +71,44 @@ function toParsed(quantity: number | null, error: QuantityError): ParsedQuantity
   return quantity === null ? { ok: false, error } : { ok: true, quantity };
 }
 
-// The quantity bought or discarded: above 0.
+// The quantity bought: above 0.
 export function parsePositiveQuantity(text: string): ParsedQuantity {
   return toParsed(parsePositive(text.trim(), AMOUNT_COLUMN), "notAboveZero");
+}
+
+// The quantity discarded: above 0, with no upper limit. It is never stored,
+// as Stock stops at 0 and the movement records what actually left.
+export function parseDiscardQuantity(text: string): ParsedQuantity {
+  return toParsed(parseAboveZero(text.trim(), AMOUNT_COLUMN), "notAboveZero");
 }
 
 // The quantity counted for a Correction: 0 or more.
 export function parseQuantityOnHand(text: string): ParsedQuantity {
   return toParsed(parseNonNegative(text.trim(), AMOUNT_COLUMN), "notZeroOrMore");
+}
+
+// The Stock Movements someone records by hand on a Product.
+export const STOCK_ACTIONS = ["restock", "discard", "correction"] as const satisfies readonly StockMovementType[];
+
+export type StockAction = (typeof STOCK_ACTIONS)[number];
+
+// How each Stock action reads its amount, and what that amount does to Stock.
+const STOCK_ACTION_RULES: Record<
+  StockAction,
+  { parse: (text: string) => ParsedQuantity; change: (current: StockState, quantity: number) => StockChange }
+> = {
+  restock: { parse: parsePositiveQuantity, change: restock },
+  discard: { parse: parseDiscardQuantity, change: deduct },
+  correction: { parse: parseQuantityOnHand, change: correct },
+};
+
+export function parseStockAmount(action: StockAction, text: string): ParsedQuantity {
+  return STOCK_ACTION_RULES[action].parse(text);
+}
+
+// What a Stock action will do with the amount typed so far; null until that
+// amount is valid.
+export function previewStockAction(action: StockAction, current: StockState, text: string): StockChange | null {
+  const parsed = parseStockAmount(action, text);
+  return parsed.ok ? STOCK_ACTION_RULES[action].change(current, parsed.quantity) : null;
 }
