@@ -920,6 +920,12 @@ html:has(.sheet[open]) {
   color: var(--color-accent-ink);
 }
 
+.sheet-effect-warn::before {
+  content: "!" / "";
+  background: var(--color-warning);
+  color: var(--color-warning-ink);
+}
+
 .sheet-actions {
   display: flex;
   gap: 8px;
@@ -1387,9 +1393,15 @@ a.back-link {
   order: 3;
 }
 
-.product-remove h2 {
+/* Direct children only, as the Remove sheet opens inside the card. */
+.product-remove > h2 {
   color: var(--color-danger);
   font-size: var(--text-body);
+}
+
+.product-remove > p {
+  margin: 0;
+  color: var(--color-ink-soft);
 }
 
 .stock-card {

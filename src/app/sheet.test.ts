@@ -4,7 +4,7 @@ import { fileURLToPath } from "node:url";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
-import { ConfirmSheet, DeleteSheet, Sheet } from "./sheet";
+import { ArchiveSheet, ConfirmSheet, DeleteSheet, Sheet } from "./sheet";
 
 const appDir = fileURLToPath(new URL(".", import.meta.url));
 const css = readFileSync(join(appDir, "globals.css"), "utf8");
@@ -71,7 +71,42 @@ describe("the delete sheet", () => {
   });
 });
 
+describe("the Archive sheet", () => {
+  const html = renderToStaticMarkup(
+    createElement(ArchiveSheet, {
+      name: "Basmati rice",
+      effects: [
+        { tone: "gone", text: "It leaves" },
+        { tone: "warn", text: "Meals change" },
+        { tone: "kept", text: "History stays" },
+      ],
+      onArchive: noop,
+      onClose: noop,
+    }),
+  );
+
+  it("asks about Archiving and says why it can't be deleted", () => {
+    expect(html).toContain("Archive Basmati rice?");
+    expect(html).toContain("Basmati rice is in use, so it can&#x27;t be deleted. Archiving keeps your history intact:");
+  });
+
+  it("lists what happens, each with its own marker", () => {
+    expect(html).toContain('<li class="sheet-effect-gone">It leaves</li>');
+    expect(html).toContain('<li class="sheet-effect-warn">Meals change</li>');
+    expect(html).toContain('<li class="sheet-effect-kept">History stays</li>');
+  });
+
+  it("has a destructive Archive and a Cancel", () => {
+    expect(html).toMatch(/<button[^>]*class="button-delete"[^>]*>Archive<\/button>/);
+    expect(html).toContain(">Cancel</button>");
+  });
+});
+
 describe("the sheet's layout", () => {
+  it("keeps its own title inside the Remove card, which styles only its direct children", () => {
+    expect(css).not.toMatch(/\.product-remove [a-z]/);
+  });
+
   it("sits at the bottom on phone, with no Close button", () => {
     expect(phoneCss).toMatch(/\.sheet {[^}]*bottom: 0/);
     expect(phoneCss).toMatch(/\.sheet-close {[^}]*display: none/);
