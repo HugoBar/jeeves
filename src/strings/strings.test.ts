@@ -6,6 +6,7 @@ import {
   formatDayMonth,
   formatList,
   formatPackSize,
+  formatPackSizeNote,
   formatWeekRange,
   mealTypeLabel,
   t,
@@ -66,6 +67,33 @@ describe("formatPackSize", () => {
 
   it("starts with a capital, however the name was typed", () => {
     expect(formatPackSize({ name: "pack", amount: 6 }, "pc")).toBe("Pack · 6 pc");
+  });
+});
+
+describe("formatPackSizeNote", () => {
+  it("says the Pack Size in a sentence", () => {
+    expect(formatPackSizeNote({ name: "bag", amount: 1000 }, "g")).toBe("Pack Size is a 1,000 g bag.");
+  });
+
+  it("keeps the name lowercase, however it was typed", () => {
+    expect(formatPackSizeNote({ name: "Bag", amount: 1000 }, "g")).toBe("Pack Size is a 1,000 g bag.");
+  });
+
+  it("leaves a name that starts with capitals as it is", () => {
+    expect(formatPackSizeNote({ name: "XL bag", amount: 1000 }, "g")).toBe("Pack Size is a 1,000 g XL bag.");
+  });
+
+  it.each([
+    [800, "an 800 g bag"],
+    [8, "an 8 g bag"],
+    [11, "an 11 g bag"],
+    [18000, "an 18,000 g bag"],
+    [11.5, "an 11.5 g bag"],
+    [180, "a 180 g bag"],
+    [1100, "a 1,100 g bag"],
+    [500, "a 500 g bag"],
+  ])("reads the amount aloud to pick a or an (%d)", (amount, expected) => {
+    expect(formatPackSizeNote({ name: "bag", amount }, "g")).toBe(`Pack Size is ${expected}.`);
   });
 });
 

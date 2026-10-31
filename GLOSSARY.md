@@ -24,7 +24,7 @@ _Avoid_: Inventory level, batch
 A Product's weight-per-volume, used to convert between mass and volume units. Count-based Products never convert.
 
 **Pack Size**:
-An optional named package amount for a Product, such as "bag = 1000 g", used only when displaying the Shopping List.
+An optional named package amount for a Product, such as "bag = 1000 g". It rounds the Shopping List to whole packs and is shown as a reminder when Restocking; it never changes how Stock is counted.
 _Avoid_: Package unit (in Recipes)
 
 **Restock**:

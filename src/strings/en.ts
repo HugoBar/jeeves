@@ -221,6 +221,8 @@ export const en = {
   "products.packSize": "Pack Size",
   "products.packSizeHelp": "Rounds the Shopping List to whole packs",
   "products.packSizeValue": "{name} · {quantity}",
+  "products.packSizeNote": "Pack Size is a {quantity} {name}.",
+  "products.packSizeNoteAn": "Pack Size is an {quantity} {name}.",
   "products.densityDetail": "Density",
   "products.densityHelp": "Only needed to convert cups or spoons",
   "products.densityValue": "{density} g per ml",
