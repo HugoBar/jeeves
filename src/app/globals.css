@@ -1079,6 +1079,10 @@ html:has(.sheet[open]) {
   margin-top: 1px;
 }
 
+.form-warning {
+  color: var(--color-warning-ink);
+}
+
 .product-form {
   display: flex;
   flex-direction: column;
