@@ -107,7 +107,7 @@ export function RecipeForm({
         {t("recipes.steps")}
         <textarea name="steps" rows={10} defaultValue={values.steps} />
       </label>
-      <div className="product-form-actions">
+      <div className="form-actions">
         <button type="submit" className="button-primary" disabled={pending}>
           {submitLabel}
         </button>

@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useActionState, useEffect, useRef, useState, type ReactNode } from "react";
+import { useActionState, useEffect, useRef, useState } from "react";
 import { DEFAULT_UNITS, parseDefaultUnit, type DefaultUnit } from "@/core/units";
 import type { IngredientUse } from "@/core/products";
 import type { Product } from "@/db/products";
@@ -9,6 +9,7 @@ import { formatList, formatQuantity, t } from "@/strings";
 import { groupCategoriesByKind } from "../categories/category-groups";
 import type { CategoryOption } from "../categories/category-options";
 import { PRODUCT_ERROR_FIELDS } from "../field-errors";
+import { FormCard } from "../form-card";
 import { FormBanner, useFieldErrors } from "../form-error";
 import type { ProductFormError, ProductFormState, ProductFormValues } from "./actions";
 
@@ -34,7 +35,7 @@ export function ProductForm({
     values: initialValues,
   });
   return (
-    <form action={formAction} className="product-form-cards">
+    <form action={formAction} className="form-cards">
       <ProductFormFields state={state} pending={pending} {...content} />
     </form>
   );
@@ -75,8 +76,8 @@ export function ProductFormFields({
         </FormBanner>
       )}
       <div className="product-form-columns">
-        <Card title={t("products.basics")}>
-          <div className="product-field">
+        <FormCard title={t("products.basics")}>
+          <div className="form-field">
             <label>
               {t("products.name")}
               <input
@@ -100,13 +101,13 @@ export function ProductFormFields({
               </p>
             </>
           )}
-        </Card>
-        <Card title={t("products.foodCategories")} hint={t("products.categoriesHint")} className="product-form-categories">
+        </FormCard>
+        <FormCard title={t("products.foodCategories")} hint={t("products.categoriesHint")} className="product-form-categories">
           {/* Kinds first, unlike the helper's Roles first. */}
           {groupCategoriesByKind(categories)
             .reverse()
             .map((group) => (
-              <fieldset key={group.kind} className="product-field">
+              <fieldset key={group.kind} className="form-field">
                 <legend>{group.heading}</legend>
                 <div className="chips">
                   {group.categories.map((category) => (
@@ -123,9 +124,9 @@ export function ProductFormFields({
                 </div>
               </fieldset>
             ))}
-        </Card>
-        <Card title={t("products.optional")} hint={t("products.optionalHint")}>
-          <fieldset className="product-field">
+        </FormCard>
+        <FormCard title={t("products.optional")} hint={t("products.optionalHint")}>
+          <fieldset className="form-field">
             <legend>{t("products.packSize")}</legend>
             <div className="product-pack-size">
               <input
@@ -151,7 +152,7 @@ export function ProductFormFields({
               <p className="field-hint">{t("products.packSizeHint")}</p>
             )}
           </fieldset>
-          <div className="product-field">
+          <div className="form-field">
             <label>
               {t("products.densityDetail")}
               <span className="field-joined product-density">
@@ -167,9 +168,9 @@ export function ProductFormFields({
             </label>
             {messages("density") ?? <p className="field-hint">{t("products.densityFormHint")}</p>}
           </div>
-        </Card>
+        </FormCard>
       </div>
-      <div className="product-form-actions">
+      <div className="form-actions">
         <Link href={cancelHref} className="button">
           {t("products.cancel")}
         </Link>
@@ -181,31 +182,9 @@ export function ProductFormFields({
   );
 }
 
-function Card({
-  title,
-  hint,
-  className = "",
-  children,
-}: {
-  title: string;
-  hint?: string;
-  className?: string;
-  children: ReactNode;
-}) {
-  return (
-    <section className={`card product-form-card ${className}`}>
-      <div>
-        <h2>{title}</h2>
-        {hint && <p className="field-hint">{hint}</p>}
-      </div>
-      {children}
-    </section>
-  );
-}
-
 function UnitPicker({ picked, onPick }: { picked: DefaultUnit; onPick: (unit: DefaultUnit) => void }) {
   return (
-    <fieldset className="product-field">
+    <fieldset className="form-field">
       <legend>{t("products.defaultUnit")}</legend>
       <div className="unit-choices">
         {DEFAULT_UNITS.map((unit) => (
@@ -229,8 +208,8 @@ function UnitPicker({ picked, onPick }: { picked: DefaultUnit; onPick: (unit: De
 
 function LockedUnit({ unit }: { unit: DefaultUnit }) {
   return (
-    <div className="product-field">
-      <span className="product-field-label">{t("products.defaultUnit")}</span>
+    <div className="form-field">
+      <span className="form-field-label">{t("products.defaultUnit")}</span>
       <span className="field-locked">
         <LockIcon />
         {t(`unit.${unit}`)}
