@@ -40,6 +40,16 @@ export function formatProductCount(count: number): string {
   return count === 1 ? t("stock.countOne") : t("stock.count", { count });
 }
 
+// How many Recipes there are: "1 Recipe", "8 Recipes".
+export function formatRecipeCount(count: number): string {
+  return count === 1 ? t("recipes.countOne") : t("recipes.count", { count });
+}
+
+// A Recipe's Portions in running text: "1 portion", "4 portions".
+export function formatPortions(portions: number): string {
+  return portions === 1 ? t("recipes.portionsAmountOne") : t("recipes.portionsAmount", { portions });
+}
+
 const listFormat = new Intl.ListFormat("en", { type: "conjunction" });
 
 // Items as a sentence lists them: "a and b", "a, b, and c".
