@@ -113,6 +113,44 @@ export function applyCategoryOverrides(
   return [...ids];
 }
 
+// A Food Category as the Recipe form shows it: from the Ingredients, added
+// just for this Recipe, or removed from what the Ingredients give.
+export interface CategoryChip {
+  categoryId: string;
+  status: "derived" | "added" | "removed";
+}
+
+// The Recipe form's chips: the derived categories kept, then those added,
+// then those removed. An override with nothing to change shows nothing, but
+// is kept, as it applies again once the Ingredients change.
+export function categoryChips(derivedIds: readonly string[], overrides: readonly CategoryOverride[]): CategoryChip[] {
+  const modeOf = new Map(overrides.map(({ categoryId, mode }) => [categoryId, mode]));
+  const derived = new Set(derivedIds);
+  return [
+    ...derivedIds
+      .filter((id) => modeOf.get(id) !== "remove")
+      .map((categoryId) => ({ categoryId, status: "derived" as const })),
+    ...overrides
+      .filter(({ categoryId, mode }) => mode === "add" && !derived.has(categoryId))
+      .map(({ categoryId }) => ({ categoryId, status: "added" as const })),
+    ...derivedIds
+      .filter((id) => modeOf.get(id) === "remove")
+      .map((categoryId) => ({ categoryId, status: "removed" as const })),
+  ];
+}
+
+// The overrides with `categoryId`'s set to `mode`, or cleared with null so it
+// follows the Ingredients again. A category has at most one override.
+export function withCategoryOverride(
+  overrides: readonly CategoryOverride[],
+  categoryId: string,
+  mode: CategoryOverrideMode | null,
+): CategoryOverride[] {
+  if (mode === null) return overrides.filter((override) => override.categoryId !== categoryId);
+  if (!overrides.some((override) => override.categoryId === categoryId)) return [...overrides, { categoryId, mode }];
+  return overrides.map((override) => (override.categoryId === categoryId ? { categoryId, mode } : override));
+}
+
 // Raw values from one category of the overrides picker; an empty mode leaves
 // the category to follow the Ingredients.
 export interface CategoryOverrideInput {
