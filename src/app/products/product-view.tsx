@@ -9,7 +9,7 @@ import type { CategoryOption } from "../categories/category-options";
 import { FoodCategoryPill } from "../food-category-pill";
 import { BackLink } from "../list-row";
 import { LocalDate } from "../local-date";
-import { ArchiveOrDeleteButton } from "../remove-button";
+import { RemoveCard } from "../remove-card";
 import { StockActions, type StockActionRunners } from "./stock-action-sheet";
 
 // A Product: its Stock, the Restock, Discard and Correction sheet, its Details,
@@ -65,50 +65,22 @@ export function ProductView({
         </div>
         <div className="product-column">
           <ProductDetails product={product} />
-          <RemoveCard name={product.name} outcome={removeOutcome} action={actions.remove} />
+          <RemoveCard
+            className="product-remove"
+            name={product.name}
+            outcome={removeOutcome}
+            inUse={t("products.removeInUse", { name: product.name })}
+            archiveEffects={[
+              { tone: "gone", text: t("products.archiveLeaves") },
+              { tone: "kept", text: t("products.archiveRecipes") },
+              { tone: "warn", text: t("products.archiveMeals") },
+              { tone: "kept", text: t("products.archiveHistory") },
+            ]}
+            action={actions.remove}
+          />
         </div>
       </div>
     </section>
-  );
-}
-
-function RemoveCard({
-  name,
-  outcome,
-  action,
-}: {
-  name: string;
-  outcome: RemoveOutcome;
-  action: () => Promise<void>;
-}) {
-  return (
-    <div className="card product-remove">
-      <h2>{t("products.remove")}</h2>
-      {outcome === "archived" ? <InUseNote name={name} /> : <p>{t("sheet.deleteBody", { name })}</p>}
-      <ArchiveOrDeleteButton
-        name={name}
-        outcome={outcome}
-        archiveEffects={[
-          { tone: "gone", text: t("products.archiveLeaves") },
-          { tone: "kept", text: t("products.archiveRecipes") },
-          { tone: "warn", text: t("products.archiveMeals") },
-          { tone: "kept", text: t("products.archiveHistory") },
-        ]}
-        action={action}
-      />
-    </div>
-  );
-}
-
-// "Archived" is bold, so it sits between the sentence's two parts.
-function InUseNote({ name }: { name: string }) {
-  const [before, after] = t("products.removeInUse", { name }).split("{archived}");
-  return (
-    <p>
-      {before}
-      <strong>{t("products.removeArchived")}</strong>
-      {after}
-    </p>
   );
 }
 
