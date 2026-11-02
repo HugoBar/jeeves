@@ -17,6 +17,8 @@ import {
   listRecipeCategoryOverrides,
   listRecipeIngredients,
   removeRecipe,
+  removeRecipeIfStill,
+  removeRecipeOutcome,
   updateRecipe,
 } from "./recipes";
 import { foodCategories, ingredients, products, recipes } from "./schema";
@@ -437,6 +439,65 @@ describe("removeRecipe", () => {
     expect(await listRecipeIngredients(db, recipe.id)).toEqual([]);
     // Nothing refers to the Product any more, so it is not Archived either.
     expect(await removeProduct(db, beans.id)).toBe("deleted");
+  });
+});
+
+// Puts the Recipe in a Meal Slot, which is what makes a Recipe in use.
+async function planInAMeal(recipeId: string) {
+  const lunch = (await listActiveMealTypes(db)).find((mealType) => mealType.seedKey === "lunch")!;
+  const meal = await createMeal(db, { date: "2026-11-10", hour: "12:00", name: null, mealTypeId: lunch.id });
+  await addMealSlot(db, meal.id, {
+    slotCategoryId: (await listActiveCategories(db))[0]!.id,
+    fill: { content: "recipe", recipeId, portions: 2 },
+  });
+}
+
+describe("removeRecipeOutcome", () => {
+  it("says a Recipe nothing uses will be deleted, and leaves it in place", async () => {
+    const recipe = await createRecipe(db, content({ name: "Lentil soup" }));
+
+    expect(await removeRecipeOutcome(db, recipe.id)).toBe("deleted");
+    expect(await getRecipe(db, recipe.id)).toEqual(recipe);
+  });
+
+  it("says a Recipe planned in a Meal will be Archived, and leaves it active", async () => {
+    const recipe = await createRecipe(db, content({ name: "Chicken curry" }));
+    await planInAMeal(recipe.id);
+
+    expect(await removeRecipeOutcome(db, recipe.id)).toBe("archived");
+    expect((await listActiveRecipes(db)).map((r) => r.id)).toContain(recipe.id);
+  });
+});
+
+describe("removeRecipeIfStill", () => {
+  it("deletes a Recipe nothing uses when that is what was said", async () => {
+    const recipe = await createRecipe(db, content({ name: "Pea soup" }));
+
+    expect(await removeRecipeIfStill(db, recipe.id, "deleted")).toBe(true);
+    expect(await getRecipe(db, recipe.id)).toBeUndefined();
+  });
+
+  it("Archives a Recipe in use when that is what was said", async () => {
+    const recipe = await createRecipe(db, content({ name: "Fish pie" }));
+    await planInAMeal(recipe.id);
+
+    expect(await removeRecipeIfStill(db, recipe.id, "archived")).toBe(true);
+    expect((await listActiveRecipes(db)).map((r) => r.id)).not.toContain(recipe.id);
+  });
+
+  it("removes nothing if a Recipe said to be deleted has come into use", async () => {
+    const recipe = await createRecipe(db, content({ name: "Paella" }));
+    await planInAMeal(recipe.id);
+
+    expect(await removeRecipeIfStill(db, recipe.id, "deleted")).toBe(false);
+    expect((await listActiveRecipes(db)).map((r) => r.id)).toContain(recipe.id);
+  });
+
+  it("removes nothing if a Recipe said to be Archived is no longer in use", async () => {
+    const recipe = await createRecipe(db, content({ name: "Ramen" }));
+
+    expect(await removeRecipeIfStill(db, recipe.id, "archived")).toBe(false);
+    expect((await listActiveRecipes(db)).map((r) => r.id)).toContain(recipe.id);
   });
 });
 

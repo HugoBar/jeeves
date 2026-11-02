@@ -9,7 +9,7 @@ import {
   type RecipeContent,
   type RecipeFields,
 } from "@/core/recipes";
-import { deleteOrArchive, type RemoveOutcome } from "./archive";
+import { deleteOrArchive, removeIfStill, removeOutcome, type RemoveOutcome } from "./archive";
 import {
   activeCategoryIds,
   activeCategoryIdsByProduct,
@@ -234,6 +234,14 @@ export async function listPickableProducts(db: Db, recipeId?: string): Promise<P
 // Category overrides must cascade so they never block deletion.
 export function removeRecipe(db: Db, id: string): Promise<RemoveOutcome> {
   return deleteOrArchive(db, recipes, id);
+}
+
+export function removeRecipeOutcome(db: Db, id: string): Promise<RemoveOutcome> {
+  return removeOutcome(db, recipes, id);
+}
+
+export function removeRecipeIfStill(db: Db, id: string, expected: RemoveOutcome): Promise<boolean> {
+  return removeIfStill(db, recipes, id, expected);
 }
 
 // Every Ingredient using the Product, in Recipes that can still be cooked:
