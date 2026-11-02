@@ -1,5 +1,6 @@
 "use server";
 
+import { refresh } from "next/cache";
 import { redirect } from "next/navigation";
 import { parseIngredients, type IngredientError, type IngredientInput } from "@/core/ingredients";
 import {
@@ -11,7 +12,8 @@ import {
   type RecipeFieldsInput,
 } from "@/core/recipes";
 import { getDb } from "@/db";
-import { createRecipe, listPickableProducts, removeRecipe, updateRecipe } from "@/db/recipes";
+import type { RemoveOutcome } from "@/db/archive";
+import { createRecipe, listPickableProducts, removeRecipeIfStill, updateRecipe } from "@/db/recipes";
 
 export type RecipeFormValues = RecipeFieldsInput & {
   ingredients: IngredientInput[];
@@ -45,9 +47,11 @@ export async function editRecipeAction(
   redirect(`/recipes/${id}`);
 }
 
-export async function removeRecipeAction(id: string): Promise<void> {
-  await removeRecipe(getDb(), id);
-  redirect("/recipes");
+// `expected` is what the page said Remove would do. If that no longer holds,
+// nothing is removed and the page refreshes to say what it would do now.
+export async function removeRecipeAction(id: string, expected: RemoveOutcome): Promise<void> {
+  if (await removeRecipeIfStill(getDb(), id, expected)) redirect("/recipes");
+  refresh();
 }
 
 // Checks the Recipe's fields and its Ingredients together, so every error

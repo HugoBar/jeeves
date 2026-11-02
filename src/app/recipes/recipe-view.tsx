@@ -1,25 +1,29 @@
 import Link from "next/link";
 import Markdown from "react-markdown";
+import type { RemoveOutcome } from "@/db/archive";
 import type { FoodCategory } from "@/db/food-categories";
 import type { Recipe, RecipeIngredient } from "@/db/recipes";
 import { formatPortions, formatQuantity, t } from "@/strings";
 import { BackLink } from "../list-row";
-import { RemoveButton } from "../remove-button";
+import { RemoveCard } from "../remove-card";
 import { RecipeCategoryPills } from "./recipe-food-categories";
 
 type RecipeCategory = Pick<FoodCategory, "id" | "kind" | "name" | "seedKey">;
 
 // A Recipe: its Portions, prep time and Source, its Food Categories,
-// Ingredients and steps, and Remove. `remove` is already bound to its id.
+// Ingredients and steps, and Remove. `removeOutcome` is what Remove would do,
+// and `remove` is already bound to its id and that outcome.
 export function RecipeView({
   recipe,
   ingredients,
   foodCategories,
+  removeOutcome,
   remove,
 }: {
   recipe: Recipe;
   ingredients: RecipeIngredient[];
   foodCategories: RecipeCategory[];
+  removeOutcome: RemoveOutcome;
   remove: () => Promise<void>;
 }) {
   return (
@@ -48,7 +52,18 @@ export function RecipeView({
           <IngredientsCard ingredients={ingredients} />
           <StepsCard steps={recipe.steps} />
         </div>
-        <RemoveCard name={recipe.name} action={remove} />
+        <RemoveCard
+          className="recipe-remove"
+          name={recipe.name}
+          outcome={removeOutcome}
+          inUse={t("recipes.removeInUse", { name: recipe.name })}
+          archiveEffects={[
+            { tone: "gone", text: t("recipes.archiveLeaves") },
+            { tone: "kept", text: t("recipes.archivePastMeals") },
+            { tone: "warn", text: t("recipes.archiveMeals") },
+          ]}
+          action={remove}
+        />
       </div>
     </section>
   );
@@ -107,22 +122,6 @@ function StepsCard({ steps }: { steps: string }) {
         // react-markdown escapes raw HTML and drops unsafe link URLs.
         <Markdown>{steps}</Markdown>
       )}
-    </div>
-  );
-}
-
-// Remove works as before the redesign: one button, and the sheet says what happens.
-function RemoveCard({ name, action }: { name: string; action: () => Promise<void> }) {
-  return (
-    <div className="card recipe-remove">
-      <h2>{t("recipes.remove")}</h2>
-      <p>{t("recipes.removeConfirmBody")}</p>
-      <RemoveButton
-        action={action}
-        label={t("recipes.remove")}
-        title={t("recipes.removeConfirm", { name })}
-        body={t("recipes.removeConfirmBody")}
-      />
     </div>
   );
 }

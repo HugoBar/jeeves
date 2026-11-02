@@ -20,6 +20,7 @@ const render = (props: Partial<Props> = {}) =>
       recipe: curry,
       ingredients: [],
       foodCategories: [],
+      removeOutcome: "deleted",
       remove: async () => {},
       ...props,
     }),
@@ -160,14 +161,27 @@ describe("Steps", () => {
   });
 });
 
-describe("Remove", () => {
-  it("has a Remove card with the Remove button", () => {
-    const html = render();
-    expect(html).toMatch(/<div class="card recipe-remove"><h2>Remove<\/h2>/);
-    expect(html).toMatch(/<button type="button" class="button-danger">Remove<\/button>/);
+describe("the Remove card", () => {
+  it("is headed Remove", () => {
+    expect(render()).toMatch(/<div class="card recipe-remove"><h2>Remove<\/h2>/);
   });
 
-  it("says a Recipe in use is Archived instead", () => {
-    expect(render()).toContain("If it is in use, such as being planned in a Meal Slot, it is Archived instead.");
+  it("says a Recipe in use will be Archived, with an Archive button", () => {
+    const html = render({ removeOutcome: "archived" });
+    expect(html).toContain(
+      "Chicken curry is in use, so it will be <strong>Archived</strong>. It leaves every picker; past Meals keep it.",
+    );
+    expect(html).toMatch(/<button type="button" class="button-danger">Archive Chicken curry<\/button>/);
+  });
+
+  it("says a Recipe nothing uses will be deleted, with a Delete button", () => {
+    const html = render({ recipe: { ...curry, name: "Lentil soup" }, removeOutcome: "deleted" });
+    expect(html).toContain("Nothing uses Lentil soup, so it will be deleted.");
+    expect(html).toMatch(/<button type="button" class="button-danger">Delete Lentil soup<\/button>/);
+  });
+
+  it("no longer hedges about what Remove will do", () => {
+    expect(render({ removeOutcome: "archived" })).not.toContain("instead");
+    expect(render({ removeOutcome: "deleted" })).not.toContain("instead");
   });
 });
