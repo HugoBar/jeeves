@@ -1,10 +1,12 @@
 import { describe, expect, it } from "vitest";
 import {
   applyCategoryOverrides,
+  categoryChips,
   deriveFoodCategoryIds,
   parseCategoryOverrides,
   parseRecipeFields,
   toRecipeFieldsInput,
+  withCategoryOverride,
 } from "./index";
 
 const filled = {
@@ -166,11 +168,10 @@ describe("applyCategoryOverrides", () => {
 });
 
 describe("parseCategoryOverrides", () => {
-  it("reads the picked overrides, skipping categories left to follow the Ingredients", () => {
+  it("reads the overrides set on the form", () => {
     expect(
       parseCategoryOverrides([
         { categoryId: "main", mode: "add" },
-        { categoryId: "pasta", mode: "" },
         { categoryId: "dairy", mode: "remove" },
       ]),
     ).toEqual([
@@ -182,5 +183,59 @@ describe("parseCategoryOverrides", () => {
   // The form only offers "add" and "remove", so anything else is a crafted request.
   it("throws on any other mode", () => {
     expect(() => parseCategoryOverrides([{ categoryId: "main", mode: "always" }])).toThrow(RangeError);
+  });
+});
+
+describe("categoryChips", () => {
+  it("shows the derived categories, then those added, then those removed", () => {
+    expect(
+      categoryChips(
+        ["main", "grains", "veg"],
+        [
+          { categoryId: "grains", mode: "remove" },
+          { categoryId: "fruit", mode: "add" },
+        ],
+      ),
+    ).toEqual([
+      { categoryId: "main", status: "derived" },
+      { categoryId: "veg", status: "derived" },
+      { categoryId: "fruit", status: "added" },
+      { categoryId: "grains", status: "removed" },
+    ]);
+  });
+
+  // The overrides stay as set, so they apply again once the Ingredients change.
+  it("shows an \"add\" the Ingredients already give as derived, and no chip for a \"remove\" they don't", () => {
+    expect(
+      categoryChips(
+        ["pasta"],
+        [
+          { categoryId: "pasta", mode: "add" },
+          { categoryId: "dairy", mode: "remove" },
+        ],
+      ),
+    ).toEqual([{ categoryId: "pasta", status: "derived" }]);
+  });
+});
+
+describe("withCategoryOverride", () => {
+  const overrides = [
+    { categoryId: "fruit", mode: "add" as const },
+    { categoryId: "grains", mode: "remove" as const },
+  ];
+
+  it("adds an override for a category that had none", () => {
+    expect(withCategoryOverride(overrides, "dairy", "add")).toEqual([...overrides, { categoryId: "dairy", mode: "add" }]);
+  });
+
+  it("replaces a category's override, keeping its place", () => {
+    expect(withCategoryOverride(overrides, "fruit", "remove")).toEqual([
+      { categoryId: "fruit", mode: "remove" },
+      { categoryId: "grains", mode: "remove" },
+    ]);
+  });
+
+  it("clears it, so the category follows the Ingredients again", () => {
+    expect(withCategoryOverride(overrides, "grains", null)).toEqual([{ categoryId: "fruit", mode: "add" }]);
   });
 });
