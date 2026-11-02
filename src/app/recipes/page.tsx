@@ -1,41 +1,24 @@
-import Link from "next/link";
 import { connection } from "next/server";
-import { sortByName } from "@/core/names";
 import { getDb } from "@/db";
-import { listActiveRecipes } from "@/db/recipes";
-import { t } from "@/strings";
-import { LinkRow } from "../list-row";
+import { finalCategoryIdsByRecipe, listActiveRecipes } from "@/db/recipes";
+import { loadCategoryOptions } from "../categories/category-options";
+import { RecipeList } from "./recipe-list";
 
 // The Recipes list.
 export default async function RecipesPage() {
   // Read from the database on every request, never at build time.
   await connection();
-  const recipes = sortByName(await listActiveRecipes(getDb()));
+  const db = getDb();
+  const [recipes, categories] = await Promise.all([listActiveRecipes(db), loadCategoryOptions(db)]);
+  const categoryIds = await finalCategoryIdsByRecipe(
+    db,
+    recipes.map((recipe) => recipe.id),
+  );
 
   return (
-    <section>
-      <h1>{t("recipes.title")}</h1>
-      <p>
-        <Link href="/recipes/new" className="button button-primary">
-          {t("recipes.add")}
-        </Link>
-      </p>
-      {recipes.length === 0 ? (
-        <p>{t("recipes.empty")}</p>
-      ) : (
-        <ul className="list">
-          {recipes.map((recipe) => (
-            <li key={recipe.id}>
-              <LinkRow href={`/recipes/${recipe.id}`}>
-                <span className="list-row-text">
-                  <span className="list-row-title">{recipe.name}</span>
-                </span>
-                <span className="list-row-meta">{t("recipes.portionsCount", { portions: recipe.portions })}</span>
-              </LinkRow>
-            </li>
-          ))}
-        </ul>
-      )}
-    </section>
+    <RecipeList
+      recipes={recipes.map((recipe) => ({ ...recipe, categoryIds: categoryIds.get(recipe.id)! }))}
+      categories={categories}
+    />
   );
 }
