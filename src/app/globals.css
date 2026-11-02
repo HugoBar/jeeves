@@ -1176,6 +1176,18 @@ html:has(.sheet[open]) {
   font-weight: 600;
 }
 
+/* A small grey marker beside a name, such as Minor. */
+.tag {
+  display: inline-block;
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: var(--color-line-soft);
+  color: var(--color-ink-muted);
+  font-size: 12px;
+  font-weight: 600;
+  vertical-align: 1px;
+}
+
 /* Banners: amber to warn, or .banner-neutral for a note that blocks nothing. */
 .banner {
   display: flex;
@@ -1650,8 +1662,10 @@ a.back-link {
 }
 
 /* The Product page: one column on phone, with Details above Stock history.
-   From 768px Stock and Stock history sit left, Details and Remove right. */
-.product-heading {
+   From 768px Stock and Stock history sit left, Details and Remove right. Its
+   heading is shared with the Recipe page. */
+.product-heading,
+.recipe-heading {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   gap: 8px 12px;
@@ -1659,7 +1673,8 @@ a.back-link {
   margin-bottom: 14px;
 }
 
-.product-heading h1 {
+.product-heading h1,
+.recipe-heading h1 {
   margin: 0;
   overflow-wrap: anywhere;
 }
@@ -1686,20 +1701,26 @@ a.back-link {
   order: 2;
 }
 
-.product-remove {
+.product-remove,
+.recipe-remove {
   display: flex;
   flex-direction: column;
   gap: 10px;
+}
+
+.product-remove {
   order: 3;
 }
 
 /* Direct children only, as the Remove sheet opens inside the card. */
-.product-remove > h2 {
+.product-remove > h2,
+.recipe-remove > h2 {
   color: var(--color-danger);
   font-size: var(--text-body);
 }
 
-.product-remove > p {
+.product-remove > p,
+.recipe-remove > p {
   margin: 0;
   color: var(--color-ink-soft);
 }
@@ -1828,20 +1849,24 @@ a.back-link {
 }
 
 @media (min-width: 768px) {
-  .product-heading {
+  .product-heading,
+  .recipe-heading {
     align-items: end;
     margin-bottom: var(--space);
   }
 
-  .product-heading h1 {
+  .product-heading h1,
+  .recipe-heading h1 {
     font-size: 30px;
   }
 
-  .product-heading .pills {
+  .product-heading .pills,
+  .recipe-facts {
     grid-column: 1;
   }
 
-  .product-heading .button {
+  .product-heading .button,
+  .recipe-heading .button {
     grid-column: 2;
     grid-row: 1 / span 2;
   }
@@ -1921,10 +1946,148 @@ a.back-link {
   margin-top: 4px;
 }
 
+/* The Recipe page: one column on phone, Food Categories under the title
+   without a card. From 768px Ingredients and Steps sit left, Food Categories
+   and Remove right. */
+.recipe-facts {
+  display: flex;
+  flex-wrap: wrap;
+  grid-column: 1 / -1;
+  gap: 4px 16px;
+  margin: 0;
+  color: var(--color-ink-muted);
+}
+
+/* The padding makes Source 44px tall to tap, and the margin keeps it in line. */
+.recipe-facts a {
+  margin-block: -13px;
+  padding-block: 13px;
+  font-weight: 600;
+}
+
 /* Links in a Recipe's steps stay in their sentence: the padding only makes
    them easier to tap, as padding on inline text doesn't move the lines. */
 .recipe-steps a {
   padding-block: 13px;
+}
+
+.recipe-columns,
+.recipe-main {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.recipe-categories {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 0;
+  border: none;
+  background: none;
+}
+
+/* Only on phone, where the pills sit under the title. Same as .visually-hidden. */
+@media (max-width: 767px) {
+  .recipe-categories h2 {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+}
+
+.recipe-categories p {
+  margin: 0;
+}
+
+.recipe-categories-source,
+.recipe-minor-note,
+.recipe-card-empty {
+  color: var(--color-ink-muted);
+  font-size: var(--text-meta);
+}
+
+.recipe-ingredients ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.recipe-ingredient {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: center;
+  min-height: 52px;
+  padding-block: 8px;
+  border-bottom: 1px solid var(--color-line-soft);
+  font-size: var(--text-item);
+  font-weight: 600;
+}
+
+.recipe-ingredient > span:last-child {
+  text-align: right;
+}
+
+.recipe-minor-note,
+.recipe-card-empty {
+  margin: 12px 0 0;
+}
+
+.recipe-steps ol,
+.recipe-steps ul {
+  margin: 10px 0 0;
+  font-size: var(--text-item);
+  padding-left: 24px;
+}
+
+.recipe-steps li + li {
+  margin-top: 8px;
+}
+
+.recipe-steps p {
+  margin: 10px 0 0;
+  font-size: var(--text-item);
+}
+
+@media (min-width: 768px) {
+  .recipe-columns {
+    display: grid;
+    grid-template-areas:
+      "main categories"
+      "main remove";
+    grid-template-rows: auto 1fr;
+    grid-template-columns: minmax(0, 1.7fr) minmax(0, 1fr);
+    gap: var(--space);
+    align-items: start;
+  }
+
+  .recipe-main {
+    grid-area: main;
+    gap: var(--space);
+    min-width: 0;
+  }
+
+  .recipe-categories {
+    grid-area: categories;
+    gap: 10px;
+    padding: 20px;
+    border: 1px solid var(--color-border);
+    background: var(--color-surface);
+  }
+
+  .recipe-remove {
+    grid-area: remove;
+  }
+
+  /* Room on the right is left for Stock per Ingredient in V1. */
+  .recipe-ingredient {
+    grid-template-columns: minmax(0, 3fr) minmax(0, 1fr) minmax(0, 1fr);
+    min-height: 56px;
+  }
 }
 
 /* Planner: each week carries its own colors, set as --week-*. "Needs
