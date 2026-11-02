@@ -352,10 +352,27 @@ describe("listPickableProducts", () => {
 
     const pickable = await listPickableProducts(db);
 
-    expect(pickable).toContainEqual({ id: product.id, name: "Picked Oil", defaultUnit: "ml", density: 0.92, archived: false });
+    expect(pickable).toContainEqual({
+      id: product.id,
+      name: "Picked Oil",
+      defaultUnit: "ml",
+      density: 0.92,
+      archived: false,
+      categoryIds: [],
+    });
     expect(pickable.map((p) => p.id)).not.toContain(archived.id);
     const names = pickable.map((p) => p.name);
     expect(names).toEqual([...names].sort((a, b) => a.localeCompare(b)));
+  });
+
+  // So the Recipe form can show the Food Categories its Ingredients give.
+  it("lists each Product's non-Archived Food Categories", async () => {
+    const legume = await createCategory(db, { name: "Pulse", kind: "kind" });
+    const gone = await createCategory(db, { name: "Old Pulse", kind: "kind" });
+    const lentils = await aProduct("Red Lentils", { categoryIds: [legume.id, gone.id] });
+    expect(await removeCategory(db, gone.id)).toBe("archived");
+
+    expect((await listPickableProducts(db)).find((p) => p.id === lentils.id)?.categoryIds).toEqual([legume.id]);
   });
 
   // So editing a Recipe never silently swaps out an Ingredient whose Product

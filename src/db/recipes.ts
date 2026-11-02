@@ -203,6 +203,9 @@ export async function getRecipeFoodCategories(db: Db, recipeId: string): Promise
 export interface PickableProductRow extends PickableProduct {
   id: string;
   archived: boolean;
+  // Its non-Archived Food Categories, so the Recipe form can show what its
+  // Ingredients give.
+  categoryIds: string[];
 }
 
 // The Products an Ingredient can use, by name: the non-Archived ones, plus
@@ -225,9 +228,12 @@ export async function listPickableProducts(db: Db, recipeId?: string): Promise<P
     })
     .from(products)
     .where(or(isNull(products.archivedAt), usedByRecipe));
+  const categoryIdsByProduct = await activeCategoryIdsByProduct(db, rows.map((row) => row.id));
   // Sorted here rather than by the database's collation, which may put
   // capitals before lowercase.
-  return rows.sort((a, b) => a.name.localeCompare(b.name));
+  return rows
+    .map((row) => ({ ...row, categoryIds: categoryIdsByProduct.get(row.id)! }))
+    .sort((a, b) => a.name.localeCompare(b.name));
 }
 
 // A Recipe something refers to is only Archived. Its own Ingredients and Food
