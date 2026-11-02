@@ -17,8 +17,17 @@ const blank: State["values"] = {
 };
 
 const products: Props["products"] = [
-  { id: "rice", name: "Basmati rice", defaultUnit: "g", archived: false },
-  { id: "milk", name: "Coconut milk", defaultUnit: "ml", archived: false },
+  { id: "rice", name: "Basmati rice", defaultUnit: "g", archived: false, categoryIds: ["grains"] },
+  { id: "milk", name: "Coconut milk", defaultUnit: "ml", archived: false, categoryIds: [] },
+  { id: "chicken", name: "Chicken thighs", defaultUnit: "g", archived: false, categoryIds: ["main", "poultry"] },
+];
+
+const categories: Props["categories"] = [
+  { id: "main", label: "Main Dish", kind: "role" },
+  { id: "side", label: "Side Dish", kind: "role" },
+  { id: "fruit", label: "Fruit", kind: "kind" },
+  { id: "grains", label: "Grains", kind: "kind" },
+  { id: "poultry", label: "Poultry", kind: "kind" },
 ];
 
 const renderForm = (state: Partial<State> = {}, props: Partial<Props> = {}) =>
@@ -27,7 +36,7 @@ const renderForm = (state: Partial<State> = {}, props: Partial<Props> = {}) =>
       state: { errors: [], ingredientErrors: [], values: blank, ...state },
       pending: false,
       products,
-      categories: [],
+      categories,
       submitLabel: "Add Recipe",
       ...props,
     }),
@@ -172,12 +181,57 @@ describe("a rejected save", () => {
         steps: "Cook it.",
         categoryOverrides: [{ categoryId: "side", mode: "add" }],
       },
-    }, { categories: [{ id: "side", label: "Side Dish", kind: "role" }] });
+    });
     expect(inputNamed(html, "portions")).toContain('value="0"');
     expect(inputNamed(html, "prepTimeMinutes")).toContain('value="40"');
     expect(inputNamed(html, "sourceUrl")).toContain('value="example.com"');
     expect(html).toContain("Cook it.</textarea>");
     expect(ingredientRows(html)).toHaveLength(3);
-    expect(html).toMatch(/<option value="add" selected="">Add<\/option>/);
+    expect(html).toContain('<input type="hidden" name="overrideCategoryId" value="side"/>');
+    expect(html).toContain('<input type="hidden" name="overrideMode" value="add"/>');
+  });
+});
+
+describe("the Food Categories", () => {
+  const chicken = { productId: "chicken", amount: "600", unit: "g", minor: false };
+  const minorRice = { productId: "rice", amount: "250", unit: "g", minor: true };
+  const chips = (html: string) => /<ul class="category-chips">(.*?)<\/ul>/.exec(html)?.[1] ?? "";
+
+  it("says where they come from", () => {
+    expect(text(renderForm())).toContain(
+      "Food Categories From its non-Minor Ingredients. Remove one or add another just for this Recipe.",
+    );
+  });
+
+  it("shows those the non-Minor Ingredients give as chips, each with a remove button", () => {
+    const html = chips(renderForm({ values: { ...blank, ingredients: [chicken, minorRice] } }));
+    expect(text(html)).toContain("Main Dish Poultry Add category");
+    expect(html).not.toContain("Grains");
+    expect(html).toContain('aria-label="Remove Main Dish"');
+  });
+
+  it("strikes through one removed from the Ingredients', with an undo button, and shows one added with a +", () => {
+    const html = chips(
+      renderForm({
+        values: {
+          ...blank,
+          ingredients: [chicken],
+          categoryOverrides: [
+            { categoryId: "poultry", mode: "remove" },
+            { categoryId: "fruit", mode: "add" },
+          ],
+        },
+      }),
+    );
+    expect(text(html)).toContain("Main Dish + Fruit Poultry Add category");
+    expect(html).toContain("<s>Poultry</s>");
+    expect(html).toContain('aria-label="Bring back Poultry"');
+    expect(html).toContain('aria-label="Remove Fruit"');
+  });
+
+  it("sends every override, including one with nothing to change yet", () => {
+    const html = renderForm({ values: { ...blank, categoryOverrides: [{ categoryId: "grains", mode: "remove" }] } });
+    expect(html).toContain('<input type="hidden" name="overrideCategoryId" value="grains"/>');
+    expect(html).toContain('<input type="hidden" name="overrideMode" value="remove"/>');
   });
 });

@@ -78,8 +78,8 @@ async function parseRecipeForm(values: RecipeFormValues, recipeId?: string) {
 }
 
 // Ingredient rows submit their fields in order. An unticked Minor checkbox
-// submits nothing, so each ticked one submits its row's index. Each category
-// in the overrides picker submits its id and its mode, in order.
+// submits nothing, so each ticked one submits its row's index. Each Food
+// Category Override submits its category's id and its mode, in order.
 function valuesFrom(formData: FormData): RecipeFormValues {
   const text = (key: string) => String(formData.get(key) ?? "");
   const all = (key: string) => formData.getAll(key).map(String);

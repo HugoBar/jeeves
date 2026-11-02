@@ -168,11 +168,10 @@ describe("applyCategoryOverrides", () => {
 });
 
 describe("parseCategoryOverrides", () => {
-  it("reads the picked overrides, skipping categories left to follow the Ingredients", () => {
+  it("reads the overrides set on the form", () => {
     expect(
       parseCategoryOverrides([
         { categoryId: "main", mode: "add" },
-        { categoryId: "pasta", mode: "" },
         { categoryId: "dairy", mode: "remove" },
       ]),
     ).toEqual([

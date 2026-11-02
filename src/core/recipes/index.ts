@@ -151,8 +151,7 @@ export function withCategoryOverride(
   return overrides.map((override) => (override.categoryId === categoryId ? { categoryId, mode } : override));
 }
 
-// Raw values from one category of the overrides picker; an empty mode leaves
-// the category to follow the Ingredients.
+// Raw values of one Food Category Override from the Recipe form.
 export interface CategoryOverrideInput {
   categoryId: string;
   mode: string;
@@ -161,7 +160,6 @@ export interface CategoryOverrideInput {
 export function parseCategoryOverrides(inputs: readonly CategoryOverrideInput[]): CategoryOverride[] {
   const overrides: CategoryOverride[] = [];
   for (const { categoryId, mode } of inputs) {
-    if (mode === "") continue;
     // The form only offers these modes, so anything else is a crafted request.
     const parsed = CATEGORY_OVERRIDE_MODES.find((known) => known === mode);
     if (!parsed) throw new RangeError(`Not a Food Category override mode: ${mode}`);

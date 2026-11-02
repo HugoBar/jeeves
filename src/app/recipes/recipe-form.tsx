@@ -1,17 +1,17 @@
 "use client";
 
 import Link from "next/link";
-import { Fragment, useActionState, useEffect, useId, useRef, useState, type ReactNode } from "react";
+import { Fragment, useActionState, useEffect, useId, useRef, useState } from "react";
 import type { IngredientError, IngredientInput } from "@/core/ingredients";
-import { CATEGORY_OVERRIDE_MODES } from "@/core/recipes";
+import { deriveFoodCategoryIds } from "@/core/recipes";
 import { RECIPE_UNITS, type DefaultUnit } from "@/core/units";
 import { t } from "@/strings";
-import { groupCategoriesByKind } from "../categories/category-groups";
 import type { CategoryOption } from "../categories/category-options";
 import { ingredientErrorField, ingredientField, RECIPE_ERROR_FIELDS } from "../field-errors";
 import { FormCard } from "../form-card";
 import { FormBanner, useFieldErrors, type InvalidProps } from "../form-error";
 import type { RecipeFormState, RecipeFormValues } from "./actions";
+import { CategoryChips } from "./category-chips";
 
 // A Product the Ingredient picker offers. An Archived one is offered only in
 // the rows that already hold it.
@@ -20,6 +20,7 @@ export interface ProductOption {
   name: string;
   defaultUnit: DefaultUnit;
   archived: boolean;
+  categoryIds: string[];
 }
 
 type RecipeFormContent = {
@@ -28,9 +29,6 @@ type RecipeFormContent = {
   submitLabel: string;
   editing?: boolean;
   cancelHref?: string;
-  // Shown above the Food Category Overrides, as Edit Recipe shows the
-  // Recipe's Food Categories as last saved.
-  savedFoodCategories?: ReactNode;
 };
 
 // New Recipe and Edit Recipe.
@@ -64,7 +62,6 @@ export function RecipeFormFields({
   submitLabel,
   editing = false,
   cancelHref = "/recipes",
-  savedFoodCategories,
 }: RecipeFormContent & { state: RecipeFormState; pending: boolean }) {
   const { values, errors } = state;
   const ingredients = useIngredientRows(state, products);
@@ -74,6 +71,11 @@ export function RecipeFormFields({
     (error) => t(`recipes.error.${error}`),
   );
   const shownErrorCount = errors.length + ingredients.shownErrorCount;
+  // The Food Categories follow the Ingredients as they are edited.
+  const categoryIdsOf = new Map(products.map((product) => [product.id, product.categoryIds]));
+  const derivedIds = deriveFoodCategoryIds(
+    ingredients.rows.map((row) => ({ minor: row.minor, categoryIds: categoryIdsOf.get(row.productId) ?? [] })),
+  );
 
   // The save button is below the fields, so a rejected save scrolls back up.
   const banner = useRef<HTMLDivElement>(null);
@@ -146,35 +148,7 @@ export function RecipeFormFields({
               <p className="field-hint">{t("recipes.stepsHint")}</p>
             </div>
           </FormCard>
-          <FormCard
-            title={t("recipes.categoryOverrides")}
-            hint={t("recipes.categoryOverridesHint")}
-            className="category-picker"
-          >
-            {savedFoodCategories}
-            {groupCategoriesByKind(categories).map((group) => (
-              <div key={group.kind} className="form-field">
-                <h3>{group.heading}</h3>
-                {group.categories.map((category) => (
-                  <label key={category.id}>
-                    <input type="hidden" name="overrideCategoryId" value={category.id} />
-                    {category.label}
-                    <select
-                      name="overrideMode"
-                      defaultValue={values.categoryOverrides.find((o) => o.categoryId === category.id)?.mode ?? ""}
-                    >
-                      <option value="">{t("recipes.categoryOverride.follow")}</option>
-                      {CATEGORY_OVERRIDE_MODES.map((mode) => (
-                        <option key={mode} value={mode}>
-                          {t(`recipes.categoryOverride.${mode}`)}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                ))}
-              </div>
-            ))}
-          </FormCard>
+          <CategoryChips state={state} derivedIds={derivedIds} categories={categories} />
         </div>
       </div>
       <div className="form-actions">

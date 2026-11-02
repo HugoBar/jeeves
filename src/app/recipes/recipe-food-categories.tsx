@@ -3,25 +3,6 @@ import type { FoodCategory } from "@/db/food-categories";
 import { foodCategoryLabel, t } from "@/strings";
 import { FoodCategoryPill } from "../food-category-pill";
 
-// A set of a Recipe's Food Categories, with where it comes from.
-export function RecipeFoodCategories({
-  categories,
-  heading,
-  source,
-}: {
-  categories: FoodCategory[];
-  heading: string;
-  source: string;
-}) {
-  return (
-    <div className="form-field">
-      <h3>{heading}</h3>
-      <p className="field-hint">{source}</p>
-      <RecipeCategoryPills categories={categories} />
-    </div>
-  );
-}
-
 // A Recipe's Food Categories as pills, Roles first, then Kinds, each
 // alphabetical, or a note that it has none.
 export function RecipeCategoryPills({
