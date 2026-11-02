@@ -12,6 +12,7 @@ import {
 } from "@/db/recipes";
 import { t } from "@/strings";
 import { loadCategoryOptions } from "../../../categories/category-options";
+import { BackLink } from "../../../list-row";
 import { editRecipeAction } from "../../actions";
 import { RecipeFoodCategories } from "../../recipe-food-categories";
 import { RecipeForm } from "../../recipe-form";
@@ -32,8 +33,11 @@ export default async function EditRecipePage({ params }: { params: Promise<{ id:
   ]);
 
   return (
-    <section>
-      <h1>{t("recipes.editTitle", { name: recipe.name })}</h1>
+    <section className="page-form recipe-form-page">
+      <BackLink href={`/recipes/${recipe.id}`}>{recipe.name}</BackLink>
+      <div className="page-toolbar">
+        <h1>{t("recipes.editRecipe")}</h1>
+      </div>
       <RecipeForm
         action={editRecipeAction.bind(null, recipe.id)}
         initialValues={{
@@ -44,17 +48,22 @@ export default async function EditRecipePage({ params }: { params: Promise<{ id:
         products={products}
         categories={categories}
         submitLabel={t("recipes.save")}
+        editing
         cancelHref={`/recipes/${recipe.id}`}
-      />
-      <RecipeFoodCategories
-        categories={foodCategories.derived}
-        heading={t("recipes.derivedFoodCategories")}
-        source={t("recipes.derivedFoodCategoriesSource")}
-      />
-      <RecipeFoodCategories
-        categories={foodCategories.final}
-        heading={t("recipes.finalFoodCategories")}
-        source={t("recipes.finalFoodCategoriesSource")}
+        savedFoodCategories={
+          <>
+            <RecipeFoodCategories
+              categories={foodCategories.derived}
+              heading={t("recipes.derivedFoodCategories")}
+              source={t("recipes.derivedFoodCategoriesSource")}
+            />
+            <RecipeFoodCategories
+              categories={foodCategories.final}
+              heading={t("recipes.finalFoodCategories")}
+              source={t("recipes.finalFoodCategoriesSource")}
+            />
+          </>
+        }
       />
     </section>
   );

@@ -14,11 +14,11 @@ export function RecipeFoodCategories({
   source: string;
 }) {
   return (
-    <>
-      <h2>{heading}</h2>
-      <p>{source}</p>
+    <div className="form-field">
+      <h3>{heading}</h3>
+      <p className="field-hint">{source}</p>
       <RecipeCategoryPills categories={categories} />
-    </>
+    </div>
   );
 }
 

@@ -2,6 +2,7 @@ import { getDb } from "@/db";
 import { listPickableProducts } from "@/db/recipes";
 import { t } from "@/strings";
 import { loadCategoryOptions } from "../../categories/category-options";
+import { BackLink } from "../../list-row";
 import { createRecipeAction } from "../actions";
 import { RecipeForm } from "../recipe-form";
 
@@ -12,8 +13,11 @@ export default async function NewRecipePage() {
   ]);
 
   return (
-    <section>
-      <h1>{t("recipes.newTitle")}</h1>
+    <section className="page-form recipe-form-page">
+      <BackLink href="/recipes">{t("recipes.title")}</BackLink>
+      <div className="page-toolbar">
+        <h1>{t("recipes.newTitle")}</h1>
+      </div>
       <RecipeForm
         action={createRecipeAction}
         initialValues={{

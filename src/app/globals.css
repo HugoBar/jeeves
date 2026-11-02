@@ -1298,32 +1298,6 @@ html:has(.sheet[open]) {
   color: var(--color-warning-ink);
 }
 
-.product-form {
-  display: flex;
-  flex-direction: column;
-  gap: calc(var(--space) / 2);
-}
-
-.category-picker {
-  display: flex;
-  flex-direction: column;
-  gap: calc(var(--space) / 2);
-}
-
-.category-picker h2 {
-  margin: 0;
-}
-
-/* A Food Category Override: the category, then its picker. */
-.category-picker label:not(:has(> input[type="checkbox"])) {
-  flex-direction: row;
-  align-items: center;
-  gap: calc(var(--space) / 2);
-  font-size: var(--text-body);
-  font-weight: 400;
-}
-
-.ingredient-rows,
 .slot-rows {
   display: flex;
   flex-direction: column;
@@ -1331,7 +1305,6 @@ html:has(.sheet[open]) {
   gap: calc(var(--space) / 2);
 }
 
-.ingredient-row,
 .slot-row {
   display: flex;
   flex-wrap: wrap;
@@ -1659,6 +1632,206 @@ a.back-link {
     flex: none;
     min-height: 44px;
     padding: 0 22px;
+  }
+}
+
+/* New Recipe and Edit Recipe: Basics, Ingredients, Steps and Food Category
+   Overrides, one under the other on phone. From 768px Steps and the Overrides
+   move to the right. */
+.recipe-form-columns,
+.recipe-form-column {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.recipe-form-numbers {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  align-items: start;
+}
+
+/* Portions, between its - and + buttons. */
+.recipe-stepper {
+  align-items: stretch;
+}
+
+.recipe-stepper input:not([type="checkbox"]) {
+  width: 3em;
+  min-height: 0;
+  padding: 0;
+  text-align: center;
+}
+
+.recipe-stepper button {
+  --button-bg: var(--color-inset);
+  --button-line: transparent;
+  flex: none;
+  width: 44px;
+  min-height: 44px;
+  padding: 0;
+  border-radius: 0;
+}
+
+.recipe-form-column textarea {
+  width: 100%;
+  resize: vertical;
+}
+
+/* Each Ingredient on phone: a box with the Product and remove on top, then
+   amount, unit and Minor. From 768px a row of a table under its headings. */
+.ingredient-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.ingredient-row {
+  display: grid;
+  grid-template-columns: minmax(0, 7fr) minmax(0, 7fr) minmax(0, 6fr) 44px;
+  grid-template-areas:
+    "product product product remove"
+    "amount unit minor minor";
+  gap: 10px;
+  align-items: center;
+  padding: 12px;
+  border: 1px solid transparent;
+  border-radius: 16px;
+  background: var(--color-inset);
+}
+
+.ingredient-row-invalid {
+  border-color: var(--color-danger);
+  background: var(--color-surface);
+}
+
+.ingredient-product {
+  grid-area: product;
+}
+
+.ingredient-amount {
+  grid-area: amount;
+}
+
+.ingredient-unit {
+  grid-area: unit;
+}
+
+.ingredient-minor {
+  grid-area: minor;
+  justify-self: end;
+}
+
+.ingredient-remove {
+  --button-bg: transparent;
+  --button-line: transparent;
+  --button-ink: var(--color-ink-muted);
+  grid-area: remove;
+  padding: 0;
+}
+
+.ingredient-errors {
+  grid-column: 1 / -1;
+}
+
+.recipe-ingredients .button-list-add {
+  align-self: flex-start;
+}
+
+.recipe-minor-form-note {
+  padding-top: 12px;
+  border-top: 1px solid var(--color-line-soft);
+}
+
+.ingredient-head {
+  color: var(--color-ink-muted);
+  font-size: var(--text-meta);
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+/* A Food Category Override: the category, then its picker. */
+.category-picker h3 {
+  margin: 0;
+  font-size: var(--text-meta);
+  color: var(--color-ink-muted);
+}
+
+.category-picker label {
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: var(--text-body);
+  font-weight: 400;
+}
+
+@media (min-width: 768px) {
+  .app-main:has(.recipe-form-page) {
+    max-width: 1160px;
+  }
+
+  .recipe-form-columns {
+    display: grid;
+    grid-template-columns: minmax(0, 1.45fr) minmax(0, 1fr);
+    gap: var(--space);
+    align-items: start;
+  }
+
+  .recipe-form-numbers {
+    grid-template-columns: minmax(0, 275px) minmax(0, 325px);
+    gap: 24px;
+  }
+
+  .recipe-stepper {
+    align-items: center;
+    gap: 4px;
+    padding: 4px;
+  }
+
+  .recipe-stepper button {
+    width: 40px;
+    min-height: 34px;
+    border-radius: 8px;
+  }
+
+  .ingredient-rows {
+    gap: 0;
+  }
+
+  .ingredient-head,
+  .ingredient-row {
+    display: grid;
+    grid-template-columns: minmax(0, 2.2fr) repeat(3, minmax(0, 1fr)) 44px;
+    grid-template-areas: "product amount unit minor remove";
+    gap: 8px 16px;
+    padding: 10px 0;
+    border: 0;
+    border-bottom: 1px solid var(--color-line-soft);
+    border-radius: 0;
+    background: none;
+  }
+
+  .ingredient-minor {
+    justify-self: start;
+  }
+
+  /* The heading names it, so its own label is read out only. Same as
+     .visually-hidden, which a class can't switch on from 768px. */
+  .ingredient-minor span {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+
+  .recipe-minor-form-note {
+    padding-top: 0;
+    border-top: 0;
   }
 }
 
