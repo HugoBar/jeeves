@@ -95,19 +95,30 @@ function dayPart(date: string, options: Intl.DateTimeFormatOptions): string {
   return new Date(`${date}T00:00:00Z`).toLocaleDateString("en", { ...options, timeZone: "UTC" });
 }
 
-// A week's dates for its planner header: "19-25 Oct", or "26 Oct-1 Nov" when
+// A week's dates for its planner header: "19–25 Oct", or "26 Oct–1 Nov" when
 // it runs into the next month.
 export function formatWeekRange(first: string, last: string): string {
   const day = (date: string) => dayPart(date, { day: "numeric" });
   const month = (date: string) => dayPart(date, { month: "short" });
   return month(first) === month(last)
-    ? `${day(first)}-${day(last)} ${month(last)}`
-    : `${day(first)} ${month(first)}-${day(last)} ${month(last)}`;
+    ? `${day(first)}–${day(last)} ${month(last)}`
+    : `${day(first)} ${month(first)}–${day(last)} ${month(last)}`;
+}
+
+// A planner day's weekday and day of the month, apart: "Sun" and "1".
+export function dayHeadingParts(date: string): { weekday: string; day: string } {
+  return { weekday: dayPart(date, { weekday: "short" }), day: dayPart(date, { day: "numeric" }) };
 }
 
 // A planner day's heading: "Sun 1".
 export function formatDayHeading(date: string): string {
-  return `${dayPart(date, { weekday: "short" })} ${dayPart(date, { day: "numeric" })}`;
+  const { weekday, day } = dayHeadingParts(date);
+  return `${weekday} ${day}`;
+}
+
+// A planner day's heading on phone: "Thursday 29".
+export function formatLongDayHeading(date: string): string {
+  return `${dayPart(date, { weekday: "long" })} ${dayPart(date, { day: "numeric" })}`;
 }
 
 // A Meal's date off the planner: "Mon 12 Oct".

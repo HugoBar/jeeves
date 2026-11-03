@@ -3,6 +3,7 @@ import {
   editingLabel,
   foodCategoryLabel,
   formatDayHeading,
+  formatLongDayHeading,
   formatDayMonth,
   formatList,
   formatMovementMeal,
@@ -100,11 +101,11 @@ describe("formatPackSizeNote", () => {
 
 describe("formatWeekRange", () => {
   it("names the month once when the week stays in it", () => {
-    expect(formatWeekRange("2026-10-19", "2026-10-25")).toBe("19-25 Oct");
+    expect(formatWeekRange("2026-10-19", "2026-10-25")).toBe("19–25 Oct");
   });
 
   it("names both months when the week runs into the next", () => {
-    expect(formatWeekRange("2026-10-26", "2026-11-01")).toBe("26 Oct-1 Nov");
+    expect(formatWeekRange("2026-10-26", "2026-11-01")).toBe("26 Oct–1 Nov");
   });
 });
 
@@ -126,6 +127,12 @@ describe("editingLabel", () => {
 describe("formatDayHeading", () => {
   it("shows the weekday and day of the month", () => {
     expect(formatDayHeading("2026-11-01")).toBe("Sun 1");
+  });
+});
+
+describe("formatLongDayHeading", () => {
+  it("spells out the weekday", () => {
+    expect(formatLongDayHeading("2026-10-29")).toBe("Thursday 29");
   });
 });
 
