@@ -300,6 +300,26 @@ export function isUnconfirmed(meal: { status: MealStatus; date: string }, today:
   return meal.status === "planned" && meal.date < today;
 }
 
+// What a Meal's card shows as its status; null for a Planned Meal, which
+// shows nothing. Skipped doesn't say whether the Meal is Untracked.
+export type MealCardStatus =
+  | "confirmed"
+  | "confirmedUntracked"
+  | "untracked"
+  | "unconfirmed"
+  | "unconfirmedUntracked"
+  | "skipped";
+
+export function mealCardStatus(
+  meal: { status: MealStatus; untracked: boolean; date: string },
+  today: string,
+): MealCardStatus | null {
+  if (meal.status === "skipped") return "skipped";
+  if (meal.status === "confirmed") return meal.untracked ? "confirmedUntracked" : "confirmed";
+  if (isUnconfirmed(meal, today)) return meal.untracked ? "unconfirmedUntracked" : "unconfirmed";
+  return meal.untracked ? "untracked" : null;
+}
+
 // The hour a day is closed on the day after it: late enough for a late Meal
 // still going past midnight, early enough to come before the next day's
 // first.

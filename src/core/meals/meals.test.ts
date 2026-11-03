@@ -3,6 +3,7 @@ import {
   canChangeMeal,
   canReopen,
   isUnconfirmed,
+  mealCardStatus,
   needingConfirmation,
   weekToClose,
   mustResolve,
@@ -518,5 +519,34 @@ describe("mustResolve", () => {
 
   it("is nothing while every earlier week is closed", () => {
     expect(mustResolve([lastConfirmed, thisMonday], { date: "2026-10-29", hour: "12:00" })).toEqual([]);
+  });
+});
+
+describe("mealCardStatus", () => {
+  const today = "2026-10-28";
+  const status = (meal: { status: "planned" | "confirmed" | "skipped"; untracked: boolean; date?: string }) =>
+    mealCardStatus({ date: today, ...meal }, today);
+
+  it("shows nothing for a Planned Meal", () => {
+    expect(status({ status: "planned", untracked: false })).toBeNull();
+  });
+
+  it("shows Untracked for a Planned Meal marked Untracked", () => {
+    expect(status({ status: "planned", untracked: true })).toBe("untracked");
+  });
+
+  it("shows Confirmed, or Confirmed · Untracked when it took nothing from Stock", () => {
+    expect(status({ status: "confirmed", untracked: false })).toBe("confirmed");
+    expect(status({ status: "confirmed", untracked: true })).toBe("confirmedUntracked");
+  });
+
+  it("shows Skipped, Untracked or not", () => {
+    expect(status({ status: "skipped", untracked: false })).toBe("skipped");
+    expect(status({ status: "skipped", untracked: true })).toBe("skipped");
+  });
+
+  it("shows Unconfirmed once a Planned Meal's day has passed, or Unconfirmed · Untracked", () => {
+    expect(status({ status: "planned", untracked: false, date: "2026-10-27" })).toBe("unconfirmed");
+    expect(status({ status: "planned", untracked: true, date: "2026-10-27" })).toBe("unconfirmedUntracked");
   });
 });
