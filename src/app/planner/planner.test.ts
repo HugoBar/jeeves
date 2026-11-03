@@ -1,6 +1,7 @@
 import { createElement, type ComponentProps } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
+import type { PlannerMeal } from "./meal-card";
 import { PlannerView } from "./planner";
 
 type Props = ComponentProps<typeof PlannerView>;
@@ -117,5 +118,119 @@ describe("each day", () => {
 
   it("says No Meals yet when it has none", () => {
     expect(day(render(), "2026-10-29")[1]).toContain('<p class="planner-empty">No Meals yet</p>');
+  });
+});
+
+describe("a Meal card", () => {
+  const meal = (overrides: Partial<PlannerMeal> = {}): PlannerMeal => ({
+    id: "meal-1",
+    date: today,
+    hour: "12:30",
+    createdAt: new Date("2026-10-20T10:00:00Z"),
+    name: "Weekday Lunch",
+    mealTypeLabel: "Lunch",
+    mealTypeArchived: false,
+    allowsLeftovers: true,
+    status: "planned",
+    untracked: false,
+    slots: [],
+    ...overrides,
+  });
+  const cards = (html: string) => [...html.matchAll(/<article [^>]*class="([^"]*meal-card[^"]*)"[^>]*>(.*?)<\/article>/g)];
+  const card = (overrides: Partial<PlannerMeal> = {}) => cards(render({ meals: [meal(overrides)] }))[0]!;
+  const text = (markup: string) => markup.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
+  const part = (markup: string, className: string) =>
+    new RegExp(`<[a-z0-9]+ [^>]*class="${className}"[^>]*>(.*?)</`).exec(markup)?.[1];
+
+  it("shows its Meal Type and hour above its name", () => {
+    const html = card()[2]!;
+    expect(text(part(html, "meal-card-eyebrow")!)).toBe("Lunch · 12:30");
+    expect(text(part(html, "meal-card-name")!)).toBe("Weekday Lunch");
+  });
+
+  it("shows its Meal Type as its name when it has none", () => {
+    expect(text(part(card({ name: null })[2]!, "meal-card-name")!)).toBe("Lunch");
+  });
+
+  it("keeps showing an Archived Meal Type's name", () => {
+    const html = card({ name: null, mealTypeArchived: true })[2]!;
+    expect(text(part(html, "meal-card-eyebrow")!)).toBe("Lunch · 12:30");
+    expect(text(part(html, "meal-card-name")!)).toBe("Lunch");
+  });
+
+  it("shows a day's Meals by hour, earliest first", () => {
+    const html = render({
+      meals: [
+        meal({ id: "dinner", hour: "19:30", name: "Dinner" }),
+        meal({ id: "breakfast", hour: "08:00", name: "Breakfast" }),
+        meal({ id: "lunch", hour: "12:30", name: "Lunch" }),
+      ],
+    });
+    expect(cards(html).map((found) => text(part(found[2]!, "meal-card-name")!))).toEqual(["Breakfast", "Lunch", "Dinner"]);
+  });
+
+  describe("its status", () => {
+    const status = (overrides: Partial<PlannerMeal>) => {
+      const found = /<p class="meal-status ([^"]*)">(.*?)<\/p>/.exec(card(overrides)[2]!);
+      return found && { className: found[1], icon: found[2]!.includes("<svg"), text: text(found[2]!) };
+    };
+
+    it.each([
+      [{ status: "confirmed" as const }, "Confirmed"],
+      [{ status: "confirmed" as const, untracked: true }, "Confirmed · Untracked"],
+      [{ untracked: true }, "Untracked"],
+      [{ date: "2026-10-27" }, "Unconfirmed"],
+      [{ date: "2026-10-27", untracked: true }, "Unconfirmed · Untracked"],
+      [{ status: "skipped" as const }, "Skipped"],
+    ])("shows %o as an icon and %s, never a pill", (overrides, expected) => {
+      const shown = status(overrides)!;
+      expect(shown.text).toBe(expected);
+      expect(shown.icon).toBe(true);
+      expect(shown.className).not.toMatch(/pill|tag/);
+    });
+
+    it("shows nothing for a Planned Meal", () => {
+      expect(status({})).toBeNull();
+    });
+  });
+
+  it("strikes through and greys a Skipped Meal's name", () => {
+    expect(card({ status: "skipped" })[1]).toContain("meal-card-skipped");
+    expect(card()[1]).not.toContain("meal-card-skipped");
+  });
+
+  it("tints an Unconfirmed Meal's card amber", () => {
+    expect(card({ date: "2026-10-27" })[1]).toContain("meal-card-unconfirmed");
+    expect(card({ date: "2026-10-27", untracked: true })[1]).toContain("meal-card-unconfirmed");
+    expect(card()[1]).not.toContain("meal-card-unconfirmed");
+  });
+
+  it("doesn't say it came from a Meal Template", () => {
+    expect(card()[2]).not.toMatch(/Template/);
+  });
+
+  describe("its foot", () => {
+    const foot = (overrides: Partial<PlannerMeal>) => {
+      const found = /<div class="meal-card-foot">(.*?)<\/div>/.exec(card(overrides)[2]!);
+      return found && [...found[1]!.matchAll(/<button [^>]*>(.*?)<\/button>/g)].map((button) => text(button[1]!));
+    };
+
+    it("shows + Slot and Confirm on a Planned Meal dated today", () => {
+      expect(foot({})).toEqual(["+ Slot", "Confirm"]);
+    });
+
+    it("shows only + Slot on a Meal dated after today", () => {
+      expect(foot({ date: "2026-10-30" })).toEqual(["+ Slot"]);
+    });
+
+    it("shows Confirm or skip in place of Confirm on an Unconfirmed Meal", () => {
+      expect(foot({ date: "2026-10-27" })).toEqual(["+ Slot", "Confirm or skip"]);
+      expect(foot({ date: "2026-10-27", untracked: true })).toEqual(["+ Slot", "Confirm or skip"]);
+    });
+
+    it("isn't shown on a Confirmed or Skipped Meal", () => {
+      expect(foot({ status: "confirmed" })).toBeNull();
+      expect(foot({ status: "skipped" })).toBeNull();
+    });
   });
 });

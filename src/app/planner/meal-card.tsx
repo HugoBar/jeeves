@@ -1,15 +1,17 @@
 "use client";
 
-import { Fragment, useActionState, useState } from "react";
+import { Fragment, useActionState, useState, type ReactNode } from "react";
 import {
   canChangeMeal,
   canReopen,
   canConfirmOrSkip,
   confirmOrSkipAsksFirst,
   isUnconfirmed,
+  mealCardStatus,
   pickableForSlot,
   slotCategoryChoices,
   slotFoodValue,
+  type MealCardStatus,
   type MealFieldError,
   type MealStatus,
 } from "@/core/meals";
@@ -148,43 +150,48 @@ export function MealCard({
   const [addingSlot, setAddingSlot] = useState(false);
   const label = meal.name ?? meal.mealTypeLabel;
   const changeable = canChangeMeal(meal);
+  const status = mealCardStatus(meal, today);
+  const unconfirmed = isUnconfirmed(meal, today);
 
-  if (editing) return <EditMealForm meal={meal} week={week} onDone={() => setEditing(false)} />;
+  if (editing) {
+    return (
+      <article className="meal-card">
+        <EditMealForm meal={meal} week={week} onDone={() => setEditing(false)} />
+      </article>
+    );
+  }
 
+  const tint = unconfirmed ? " meal-card-unconfirmed" : meal.status === "skipped" ? " meal-card-skipped" : "";
   return (
-    <div className="item-row planner-meal">
-      <span className="planner-meal-hour">{meal.hour}</span>
-      <span className="planner-meal-label">
-        {label}
-        {meal.mealTypeArchived && <span className="planner-tag">{t("planner.mealTypeArchived")}</span>}
-        {isUnconfirmed(meal, today) && <span className="planner-tag">{t("planner.unconfirmed")}</span>}
-        {meal.status === "confirmed" && <span className="planner-tag">{t("planner.confirmed")}</span>}
-        {meal.status === "skipped" && <span className="planner-tag">{t("planner.skipped")}</span>}
-        {meal.untracked && <span className="planner-tag">{t("planner.untracked")}</span>}
-      </span>
-      <span className="planner-meal-actions">
-        {changeable ? (
-          <>
-            <button type="button" onClick={() => setEditing(true)}>
-              {t("planner.edit")}
-            </button>
-            <form action={setMealUntrackedAction.bind(null, meal.id, !meal.untracked)}>
-              <button type="submit">{t(meal.untracked ? "planner.unmarkUntracked" : "planner.markUntracked")}</button>
-            </form>
-            <RemoveButton
-              action={removeMealAction.bind(null, meal.id)}
-              label={t("planner.remove")}
-              title={t("planner.removeConfirm", { name: label })}
-            />
-          </>
-        ) : (
-          canReopen(meal) && (
-            <form action={reopenMealAction.bind(null, meal.id)}>
-              <button type="submit">{t("planner.reopen")}</button>
-            </form>
-          )
+    <article className={`meal-card${tint}`}>
+      <div className="meal-card-head">
+        <div className="meal-card-title">
+          <p className="meal-card-eyebrow">{t("planner.mealEyebrow", { mealType: meal.mealTypeLabel, hour: meal.hour })}</p>
+          <h3 className="meal-card-name">{label}</h3>
+          {meal.mealTypeArchived && <span className="tag">{t("planner.mealTypeArchived")}</span>}
+        </div>
+        {status && <MealCardStatusLine status={status} />}
+        {canReopen(meal) && (
+          <form action={reopenMealAction.bind(null, meal.id)} className="meal-card-reopen">
+            <button type="submit">{t("planner.reopen")}</button>
+          </form>
         )}
-      </span>
+      </div>
+      {changeable && (
+        <div className="meal-card-actions">
+          <button type="button" onClick={() => setEditing(true)}>
+            {t("planner.edit")}
+          </button>
+          <form action={setMealUntrackedAction.bind(null, meal.id, !meal.untracked)}>
+            <button type="submit">{t(meal.untracked ? "planner.unmarkUntracked" : "planner.markUntracked")}</button>
+          </form>
+          <RemoveButton
+            action={removeMealAction.bind(null, meal.id)}
+            label={t("planner.remove")}
+            title={t("planner.removeConfirm", { name: label })}
+          />
+        </div>
+      )}
       {meal.slots.length > 0 && (
         <ol className="slot-list" aria-label={t("planner.slots")}>
           {meal.slots.map((slot) => (
@@ -221,28 +228,66 @@ export function MealCard({
             onDone={() => setAddingSlot(false)}
           />
         ) : (
-          <span className="planner-add">
-            <button type="button" className="button-list-add" onClick={() => setAddingSlot(true)}>
+          <div className="meal-card-foot">
+            <button type="button" className="meal-card-add" onClick={() => setAddingSlot(true)}>
               {t("planner.addSlot")}
             </button>
-          </span>
+            {canConfirmOrSkip(meal, today) && <ConfirmOrSkipMeal meal={meal} unconfirmed={unconfirmed} />}
+          </div>
         ))}
-      {canConfirmOrSkip(meal, today) && <ConfirmOrSkipMeal meal={meal} />}
-    </div>
+    </article>
   );
 }
+
+// "✓ Confirmed", "↗ Confirmed · Untracked", "↗ Untracked", "◷ Unconfirmed",
+// "◷ Unconfirmed · Untracked" or "⊘ Skipped": an icon and text, never a pill.
+function MealCardStatusLine({ status }: { status: MealCardStatus }) {
+  return (
+    <p className={`meal-status meal-status-${status}`}>
+      <svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+        {STATUS_ICONS[status]}
+      </svg>
+      {t(`planner.status.${status}`)}
+    </p>
+  );
+}
+
+const UNTRACKED_ICON = <path d="M7 17L17 7M8 7h9v9" />;
+
+const UNCONFIRMED_ICON = (
+  <>
+    <circle cx="12" cy="12" r="9" />
+    <path d="M12 7v5l3 2" />
+  </>
+);
+
+const STATUS_ICONS: Record<MealCardStatus, ReactNode> = {
+  confirmed: <path d="M5 12.5l4.5 4.5L19 7.5" />,
+  confirmedUntracked: UNTRACKED_ICON,
+  untracked: UNTRACKED_ICON,
+  unconfirmed: UNCONFIRMED_ICON,
+  unconfirmedUntracked: UNCONFIRMED_ICON,
+  skipped: (
+    <>
+      <circle cx="12" cy="12" r="9" />
+      <path d="M5.6 5.6l12.8 12.8" />
+    </>
+  ),
+};
 
 type ConfirmOrSkipError = ConfirmMealError | SkipMealError;
 
 // What each of the form's buttons sends as "outcome".
 const OUTCOME = { confirm: "confirm", confirmUntracked: "confirmUntracked", skip: "skip" } as const;
 
-// Confirm, Confirm as Untracked and Skip, for a Meal dated today or earlier.
-// A Meal later today may not have happened yet, so each asks first in a sheet,
-// holding what was submitted until it is answered; cancelling sends nothing.
-// An Untracked Meal deducts nothing either way. A refusal shows here, with
-// nothing written.
-function ConfirmOrSkipMeal({ meal }: { meal: PlannerMeal }) {
+// Confirm, or "Confirm or skip" once the Meal is Unconfirmed, for a Meal dated
+// today or earlier. It opens the three outcomes: Confirm, Confirm as
+// Untracked and Skip. A Meal later today may not have happened yet, so each
+// asks first in a sheet, holding what was submitted until it is answered;
+// cancelling sends nothing. An Untracked Meal deducts nothing either way. A
+// refusal shows here, with nothing written.
+function ConfirmOrSkipMeal({ meal, unconfirmed }: { meal: PlannerMeal; unconfirmed: boolean }) {
+  const [open, setOpen] = useState(false);
   const [asking, setAsking] = useState<FormData | null>(null);
   const [error, action, pending] = useActionState(
     (_previous: ConfirmOrSkipError | null, formData: FormData): Promise<ConfirmOrSkipError | null> => {
@@ -254,6 +299,17 @@ function ConfirmOrSkipMeal({ meal }: { meal: PlannerMeal }) {
   );
   const skipping = asking?.get("outcome") === OUTCOME.skip;
   const name = meal.name ?? meal.mealTypeLabel;
+  if (!open) {
+    return (
+      <button
+        type="button"
+        className={`${unconfirmed ? "button-warning" : "button-primary"} meal-card-confirm`}
+        onClick={() => setOpen(true)}
+      >
+        {t(unconfirmed ? "planner.confirmOrSkip" : "planner.confirm")}
+      </button>
+    );
+  }
   return (
     <>
       <form
@@ -274,6 +330,9 @@ function ConfirmOrSkipMeal({ meal }: { meal: PlannerMeal }) {
         </button>
         <button type="submit" name="outcome" value={OUTCOME.skip} disabled={pending}>
           {t("planner.skip")}
+        </button>
+        <button type="button" onClick={() => setOpen(false)} disabled={pending}>
+          {t("planner.cancel")}
         </button>
         {error && <FormError>{confirmOrSkipErrorMessage(error)}</FormError>}
       </form>
