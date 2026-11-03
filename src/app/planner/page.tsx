@@ -2,7 +2,6 @@ import { connection } from "next/server";
 import { plannerRange } from "@/core/planner";
 import { getDb } from "@/db";
 import { listMeals } from "@/db/meals";
-import { t } from "@/strings";
 import { Planner } from "./planner";
 import { loadPickers, toPlannerMeals } from "./planner-data";
 
@@ -18,8 +17,7 @@ export default async function PlannerPage() {
   const plannerMeals = await toPlannerMeals(db, meals, to);
 
   return (
-    <section>
-      <h1>{t("planner.title")}</h1>
+    <section className="page-wide planner">
       <Planner meals={plannerMeals} {...pickers} />
     </section>
   );

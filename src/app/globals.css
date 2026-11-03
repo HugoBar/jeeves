@@ -2330,50 +2330,176 @@ a.back-link {
   --week-ink: var(--color-accent-ink);
 }
 
-.planner-week {
-  margin-bottom: calc(var(--space) * 1.5);
-  border-left: 4px solid var(--week-accent);
-  padding-left: calc(var(--space) / 2);
-}
-
 .planner-week-next {
   --week-accent: var(--color-next);
   --week-soft: var(--color-next-soft);
   --week-ink: var(--color-next-ink);
 }
 
-.planner-week-header {
-  margin: 0 0 calc(var(--space) / 2);
-  padding: calc(var(--space) / 4) calc(var(--space) / 2);
-  background: var(--week-accent);
-  color: var(--color-on-accent);
-  font-size: var(--text-label);
+/* The Planner heading, the week tabs and the week bar: stacked on phone, one
+   row over the week's accent line on desktop. */
+/* On phone the Planner's title row sits close to the header. */
+.app-main:has(.planner) {
+  padding: 4px var(--space) 24px;
+}
+
+.planner-head {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  margin-bottom: 14px;
+}
+
+.planner-head h1 {
+  margin: 0;
+}
+
+.planner-tabs {
+  display: flex;
+  padding: 4px;
+  border-radius: 999px;
+  background: var(--color-track);
+}
+
+/* Each tab's dot keeps its own week's accent, whichever tab is selected. */
+.planner-tab {
+  --button-bg: transparent;
+  --button-line: transparent;
+  --button-ink: var(--color-ink-muted);
+  --tab-accent: var(--color-accent);
+  flex: 1;
+  gap: 8px;
+  font-weight: 500;
+}
+
+.planner-tab-next {
+  --tab-accent: var(--color-next);
+}
+
+.planner-tab[aria-selected="true"] {
+  --button-bg: var(--color-surface);
+  --button-ink: var(--color-ink);
+  box-shadow: 0 1px 3px var(--color-sheet-shadow);
   font-weight: 600;
+}
+
+.planner-tab-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--tab-accent);
+}
+
+.planner-week-bar {
+  padding: 14px 16px 16px;
+  border: 1px solid var(--color-border);
+  border-top: 3px solid var(--week-accent);
+  border-radius: 20px;
+  background: var(--color-surface);
+}
+
+.planner-week-label {
+  margin: 0 0 10px;
+  color: var(--week-ink);
+  font-size: var(--text-label);
+  font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
 }
 
-.planner-day {
-  padding: calc(var(--space) / 2);
-  border-radius: 6px;
+.planner-strip {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 4px;
 }
 
-.planner-day + .planner-day {
-  border-top: 1px solid var(--color-border);
+.planner-strip a {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 56px;
+  border-radius: 12px;
+  color: var(--color-ink);
+  font-size: var(--text-meta);
+  font-weight: 500;
+  line-height: 1.3;
+  text-decoration: none;
 }
 
-.planner-day-today {
-  background: var(--week-soft);
+.planner-strip strong {
+  font-size: var(--text-section);
+}
+
+.planner-strip a:hover {
+  background: var(--color-inset);
+  color: var(--color-ink);
+}
+
+.planner-strip a[aria-current="date"] {
+  background: var(--week-accent);
+  color: var(--color-on-accent);
+}
+
+.planner-strip a:focus-visible {
   outline: 2px solid var(--week-accent);
+  outline-offset: 2px;
 }
 
-.planner-day h3 {
+.planner-days {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+/* Clear of the sticky header (44px row, 14px above and below) when the day
+   strip scrolls to a day. */
+.planner-day {
+  scroll-margin-top: calc(env(safe-area-inset-top) + 72px + var(--space));
+}
+
+.planner-day-head {
   display: flex;
   align-items: center;
-  gap: calc(var(--space) / 2);
-  margin: 0 0 calc(var(--space) / 4);
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
 }
 
+.planner-day-head h2 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+}
+
+.planner-today {
+  padding: 1px 8px;
+  border-radius: 6px;
+  background: var(--week-accent);
+  color: var(--color-on-accent);
+  font-size: var(--text-meta);
+  font-weight: 600;
+}
+
+.planner-add {
+  --button-bg: transparent;
+  --button-line: transparent;
+  --button-ink: var(--week-ink);
+  padding: 0 4px;
+}
+
+.planner-day > .planner-empty {
+  margin: 0;
+  padding: 14px;
+  border: 1px dashed var(--color-line-strong);
+  border-radius: 12px;
+  color: var(--color-ink-muted);
+  font-size: var(--text-meta);
+  text-align: center;
+}
+
+/* Tag pills on a Meal and on Archived food. */
 .planner-tag {
   margin-left: calc(var(--space) / 2);
   padding: 0 calc(var(--space) / 4);
@@ -2399,6 +2525,140 @@ a.back-link {
   border-top: 1px solid var(--color-border);
 }
 
+/* On the Planner each Meal is a card of its own. */
+.planner-day .planner-meals {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.planner-day .planner-meals > li {
+  padding: 14px 16px;
+  border: 1px solid var(--color-border);
+  border-radius: 20px;
+  background: var(--color-surface);
+}
+
+@media (min-width: 768px) {
+  /* Undoes the phone's padding above. */
+  .app-main:has(.planner) {
+    padding: 24px 24px 48px;
+  }
+
+  .planner-head {
+    flex-direction: row;
+    align-items: center;
+    gap: 20px;
+    margin-bottom: 16px;
+    padding-bottom: 16px;
+    border-bottom: 3px solid var(--week-accent);
+  }
+
+  .planner-head h1 {
+    font-size: 30px;
+  }
+
+  .planner-tab {
+    flex: none;
+    min-height: 36px;
+    padding: 0 14px;
+  }
+
+  .planner-week-bar {
+    padding: 0;
+    border: none;
+    background: none;
+  }
+
+  .planner-week-label {
+    margin: 0;
+    font-size: var(--text-meta);
+  }
+
+  .planner-strip {
+    display: none;
+  }
+
+  /* Seven columns that always fit the window: what is in them wraps. */
+  .planner-days {
+    display: grid;
+    grid-template-columns: repeat(7, minmax(0, 1fr));
+    align-items: start;
+    gap: 10px;
+  }
+
+  .planner-day {
+    min-width: 0;
+    overflow-wrap: break-word;
+  }
+
+  .planner-day .planner-meal-label {
+    min-width: 0;
+  }
+
+  .planner-day :is(input, select) {
+    min-width: 0;
+  }
+
+  .planner-day :is(input, select, button, form) {
+    max-width: 100%;
+  }
+
+  .planner-day .planner-meals button {
+    padding-inline: 10px;
+  }
+
+  /* Today drops under the date when the column is narrow. */
+  .planner-day-head h2 {
+    flex-wrap: wrap;
+    gap: 2px 6px;
+  }
+
+  .planner-day-head h2 > span {
+    white-space: nowrap;
+  }
+
+  /* In a column too narrow for a row, each field takes the full width. */
+  .planner-day .item-form > :is(input, select) {
+    flex: 1 1 100%;
+  }
+
+  .planner-day-head {
+    min-height: 40px;
+    padding: 4px 4px 4px 10px;
+    border-radius: 10px;
+  }
+
+  .planner-day-today .planner-day-head {
+    background: var(--week-soft);
+  }
+
+  .planner-day-head h2 {
+    font-size: var(--text-body);
+  }
+
+  .planner-today {
+    font-size: var(--text-label);
+  }
+
+  .planner-add {
+    width: 28px;
+    min-height: 28px;
+    padding: 0;
+    font-size: 18px;
+    font-weight: 500;
+  }
+
+  .planner-day .planner-meals {
+    gap: 8px;
+  }
+
+  .planner-day .planner-meals > li {
+    padding: 10px;
+    border-radius: 14px;
+  }
+}
+
 /* Outranks .item-row > span:first-child, which would stretch the hour. */
 .planner-meal > span.planner-meal-hour {
   flex: none;
@@ -2412,8 +2672,7 @@ a.back-link {
   font-weight: 600;
 }
 
-.planner-meal-actions,
-.planner-add {
+.planner-meal-actions {
   display: flex;
   flex-wrap: wrap;
   gap: calc(var(--space) / 2);
