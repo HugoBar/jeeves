@@ -2902,7 +2902,8 @@ a.back-link {
   }
 }
 
-/* A Meal Slot's Slot Category, then its food and buttons, wrapping as needed. */
+/* A slot row, wrapping as needed. A Meal card's slots restyle it under
+   .slot-list below. */
 .slot-row {
   display: flex;
   flex-wrap: wrap;
@@ -2911,21 +2912,213 @@ a.back-link {
   padding: calc(var(--space) / 4) 0;
 }
 
-/* A slot's Shortfalls, under its food. Never blocks anything. */
-.slot-warnings {
+/* A Meal's slots, each on its own inset panel. */
+.slot-list {
   display: flex;
-  flex-basis: 100%;
   flex-direction: column;
+  gap: 10px;
+  list-style: none;
+  padding: 0;
+}
+
+/* Its pill, amount and chevron over its food; strips sit at its foot, edge
+   to edge. An empty slot, or one with an Archived Slot Category, is dashed. */
+.slot-list > .slot-row {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0;
+  padding: 0;
+  overflow: hidden;
+  border: 1px solid transparent;
+  border-radius: 16px;
+  background: var(--color-inset);
+}
+
+.slot-list > .slot-row-dashed {
+  border: 1px dashed var(--color-line-strong);
+  background: transparent;
+}
+
+.slot-row-main {
+  --button-bg: transparent;
+  --button-line: transparent;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 6px;
+  width: 100%;
+  padding: 12px 14px;
+  border-radius: 0;
+  font-weight: 400;
+  text-align: left;
+}
+
+.slot-row-main:focus-visible {
+  outline-offset: -2px;
+}
+
+/* In a narrow column the amount and chevron drop under the pill together. */
+.slot-row-top {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+}
+
+.slot-row-top > .pill {
+  white-space: nowrap;
+}
+
+.slot-row-end {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: auto;
+  white-space: nowrap;
+}
+
+.slot-row-amount {
+  color: var(--color-ink-muted);
+  font-size: var(--text-body);
+}
+
+.slot-row-chevron {
+  flex: none;
+  color: var(--color-icon-muted);
+}
+
+.slot-row-food {
+  color: var(--color-ink);
+  font-size: var(--text-item);
+  font-weight: 500;
+}
+
+/* "Category archived - pick another" and its button. */
+.slot-row-archived {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 0 14px 12px;
+}
+
+.slot-row-archived-note {
+  margin: 0;
+  color: var(--color-ink-soft);
+  font-size: var(--text-item);
+}
+
+/* A slot's Shortfalls, or a Product it can't project. Never blocks anything. */
+.slot-strip {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px 14px;
   font-size: var(--text-meta);
   font-weight: 600;
 }
 
-.slot-warnings-urgent {
+.slot-strip p {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  margin: 0;
+}
+
+.slot-strip svg {
+  flex: none;
+  width: 14px;
+  height: 14px;
+  margin-top: 0.1em;
+}
+
+.slot-strip-urgent {
+  background: var(--color-danger-soft);
   color: var(--color-danger);
 }
 
-.slot-warnings-upcoming {
+.slot-strip-upcoming {
+  background: var(--color-warning);
   color: var(--color-warning-ink);
+}
+
+.slot-strip-neutral {
+  background: var(--color-track);
+  color: var(--color-ink-soft);
+  font-weight: 500;
+}
+
+/* The slot picker, opened under its slot. */
+.slot-picker {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 0 14px 12px;
+}
+
+.slot-picker-more {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+/* Fits a day's narrow column: fields take a row each, buttons wrap. */
+.slot-picker .item-form {
+  padding: 0;
+}
+
+.slot-picker :is(select, input) {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.slot-picker .item-form > select,
+.slot-picker-more > form:has(select),
+.slot-picker-more select {
+  flex: 1 1 100%;
+  width: 100%;
+}
+
+.slot-picker button {
+  flex: 1 1 auto;
+}
+
+@media (min-width: 768px) {
+  .slot-list {
+    gap: 8px;
+  }
+
+  .slot-list > .slot-row {
+    border-radius: 10px;
+  }
+
+  .slot-row-main {
+    gap: 4px;
+    min-height: 0;
+    padding: 8px 9px;
+  }
+
+  .slot-row-top {
+    gap: 6px;
+  }
+
+  .slot-row-amount,
+  .slot-row-food,
+  .slot-row-archived-note {
+    font-size: var(--text-meta);
+  }
+
+  .slot-row-archived,
+  .slot-picker {
+    padding: 0 9px 8px;
+  }
+
+  .slot-strip {
+    padding: 5px 9px;
+    font-size: var(--text-label);
+  }
 }
 
 .planner-amount {

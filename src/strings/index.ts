@@ -45,9 +45,11 @@ export function formatRecipeCount(count: number): string {
   return count === 1 ? t("recipes.countOne") : t("recipes.count", { count });
 }
 
-// A Recipe's Portions in running text: "1 portion", "4 portions".
+// A Recipe's Portions in running text: "1 portion", "1,800 portions".
 export function formatPortions(portions: number): string {
-  return portions === 1 ? t("recipes.portionsAmountOne") : t("recipes.portionsAmount", { portions });
+  return portions === 1
+    ? t("recipes.portionsAmountOne")
+    : t("recipes.portionsAmount", { portions: quantityFormat.format(portions) });
 }
 
 const listFormat = new Intl.ListFormat("en", { type: "conjunction" });
