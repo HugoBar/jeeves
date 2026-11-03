@@ -1,6 +1,6 @@
 "use client";
 
-import { Fragment, useActionState, useState, type ReactNode } from "react";
+import { Fragment, useActionState, useEffect, useId, useRef, useState, type ReactNode } from "react";
 import {
   canChangeMeal,
   canReopen,
@@ -19,7 +19,7 @@ import type { CategoryKind } from "@/core/food-categories";
 import { localDate, localHour } from "@/core/planner";
 import { shortfallUrgency } from "@/core/projected-stock";
 import type { DefaultUnit } from "@/core/units";
-import { editingLabel, formatMealDate, formatQuantity, t } from "@/strings";
+import { editingLabel, formatDayHeading, formatMealDate, formatQuantity, t } from "@/strings";
 import { MEAL_ERROR_FIELDS, MEAL_SLOT_ERROR_FIELDS } from "../field-errors";
 import { FoodCategoryPill } from "../food-category-pill";
 import { FormError, useFieldErrors, type InvalidProps } from "../form-error";
@@ -171,6 +171,9 @@ export function MealCard({
           {meal.mealTypeArchived && <span className="tag">{t("planner.mealTypeArchived")}</span>}
         </div>
         {status && <MealCardStatusLine status={status} />}
+        {changeable && !unconfirmed && (
+          <MealMenu meal={meal} label={label} onEdit={() => setEditing(true)} onAddSlot={() => setAddingSlot(true)} />
+        )}
         {canReopen(meal) && (
           <form action={reopenMealAction.bind(null, meal.id)} className="meal-card-reopen">
             <button type="submit">{t("planner.reopen")}</button>
@@ -179,17 +182,9 @@ export function MealCard({
       </div>
       {changeable && (
         <div className="meal-card-actions">
-          <button type="button" onClick={() => setEditing(true)}>
-            {t("planner.edit")}
-          </button>
           <form action={setMealUntrackedAction.bind(null, meal.id, !meal.untracked)}>
             <button type="submit">{t(meal.untracked ? "planner.unmarkUntracked" : "planner.markUntracked")}</button>
           </form>
-          <RemoveButton
-            action={removeMealAction.bind(null, meal.id)}
-            label={t("planner.remove")}
-            title={t("planner.removeConfirm", { name: label })}
-          />
         </div>
       )}
       {meal.slots.length > 0 && (
@@ -236,6 +231,136 @@ export function MealCard({
           </div>
         ))}
     </article>
+  );
+}
+
+// ⋯ on a Planned Meal's card, opening what the card doesn't show itself: Edit
+// Meal, Add slot and Delete this Meal. It drops under the button on desktop
+// and rises from the foot of the screen on phone. Escape, a tap outside or
+// picking an item closes it. Delete asks first in a sheet, which stays open
+// once the menu has closed. An Unconfirmed Meal gets no menu: it is settled
+// by Confirm or Skip.
+function MealMenu({
+  meal,
+  label,
+  onEdit,
+  onAddSlot,
+}: {
+  meal: PlannerMeal;
+  label: string;
+  onEdit: () => void;
+  onAddSlot: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const root = useRef<HTMLDivElement>(null);
+  const button = useRef<HTMLButtonElement>(null);
+  const menuId = useId();
+
+  useEffect(() => {
+    if (!open) return;
+    root.current?.querySelector<HTMLElement>('[role="menuitem"]')?.focus();
+    function closeOutside(event: PointerEvent) {
+      if (!root.current?.contains(event.target as Node)) setOpen(false);
+    }
+    function closeOnEscape(event: KeyboardEvent) {
+      if (event.key !== "Escape") return;
+      setOpen(false);
+      button.current?.focus();
+    }
+    document.addEventListener("pointerdown", closeOutside);
+    document.addEventListener("keydown", closeOnEscape);
+    return () => {
+      document.removeEventListener("pointerdown", closeOutside);
+      document.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [open]);
+
+  // Focus goes back on ⋯ first, so the delete sheet returns it there.
+  const pick = (then: () => void) => () => {
+    button.current?.focus();
+    setOpen(false);
+    then();
+  };
+  return (
+    <div ref={root} className="meal-menu">
+      <button
+        ref={button}
+        type="button"
+        className="meal-menu-button"
+        aria-label={t("planner.menu.label")}
+        aria-haspopup="menu"
+        aria-expanded={open}
+        aria-controls={open ? menuId : undefined}
+        onClick={() => setOpen(!open)}
+      >
+        <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+          <circle cx="5" cy="12" r="1.8" />
+          <circle cx="12" cy="12" r="1.8" />
+          <circle cx="19" cy="12" r="1.8" />
+        </svg>
+      </button>
+      {open && (
+        <MealMenuList
+          id={menuId}
+          meal={meal}
+          label={label}
+          onEdit={pick(onEdit)}
+          onAddSlot={pick(onAddSlot)}
+          onDelete={pick(() => setDeleting(true))}
+        />
+      )}
+      {deleting && (
+        <ConfirmSheet
+          title={t("sheet.deleteTitle", { name: label })}
+          confirmLabel={t("sheet.delete")}
+          destructive
+          onConfirm={() => removeMealAction(meal.id)}
+          onClose={() => setDeleting(false)}
+        />
+      )}
+    </div>
+  );
+}
+
+// The Meal menu's items under "THU 29 · LUNCH · 12:30" and the Meal's name.
+export function MealMenuList({
+  id,
+  meal,
+  label,
+  onEdit,
+  onAddSlot,
+  onDelete,
+}: {
+  id?: string;
+  meal: PlannerMeal;
+  label: string;
+  onEdit: () => void;
+  onAddSlot: () => void;
+  onDelete: () => void;
+}) {
+  return (
+    <div id={id} role="menu" aria-label={t("planner.menu.label")} className="meal-menu-list">
+      <div className="meal-menu-head">
+        <p className="meal-menu-eyebrow">
+          {t("planner.menu.eyebrow", {
+            day: formatDayHeading(meal.date),
+            mealType: meal.mealTypeLabel,
+            hour: meal.hour,
+          })}
+        </p>
+        <p className="meal-menu-name">{label}</p>
+      </div>
+      <button type="button" role="menuitem" onClick={onEdit}>
+        {t("planner.menu.editMeal")}
+      </button>
+      <button type="button" role="menuitem" onClick={onAddSlot}>
+        {t("planner.menu.addSlot")}
+      </button>
+      <button type="button" role="menuitem" className="meal-menu-delete" onClick={onDelete}>
+        {t("planner.menu.deleteMeal")}
+      </button>
+    </div>
   );
 }
 

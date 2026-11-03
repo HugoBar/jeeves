@@ -2764,7 +2764,9 @@ a.back-link {
 }
 
 @media (min-width: 768px) {
+  /* Holds ⋯ at its top right. */
   .meal-card {
+    position: relative;
     gap: 8px;
     padding: 10px;
     border-radius: 14px;
@@ -2797,6 +2799,106 @@ a.back-link {
   /* In a day's narrow column, + Slot and Confirm each take a row. */
   .planner-day .meal-card-foot > * {
     flex: 1 1 100%;
+  }
+}
+
+/* ⋯ at the top right of a Planned Meal's card. On phone its menu rises from
+   the foot of the screen; from 768px it drops under the button. */
+.meal-menu {
+  position: relative;
+  align-self: flex-start;
+  margin-left: auto;
+}
+
+.meal-menu-button {
+  --button-bg: transparent;
+  --button-line: transparent;
+  --button-ink: var(--color-ink-muted);
+  width: 44px;
+  margin: -10px -12px -10px 0;
+  padding: 0;
+}
+
+.meal-menu-list {
+  position: fixed;
+  right: var(--space);
+  bottom: max(var(--space), env(safe-area-inset-bottom));
+  left: var(--space);
+  z-index: 3;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px;
+  border: 1px solid var(--color-border);
+  border-radius: 20px;
+  background: var(--color-surface);
+  box-shadow: 0 24px 64px var(--color-dialog-shadow);
+}
+
+.meal-menu-head {
+  margin: 0 8px 6px;
+  padding: 8px 4px 10px;
+  border-bottom: 1px solid var(--color-line-soft);
+}
+
+.meal-menu-eyebrow {
+  margin: 0;
+  color: var(--color-ink-muted);
+  font-size: var(--text-label);
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.meal-menu-name {
+  margin: 2px 0 0;
+  font-size: var(--text-section);
+  font-weight: 700;
+}
+
+.meal-menu-list [role="menuitem"] {
+  --button-line: transparent;
+  justify-content: flex-start;
+  min-height: 48px;
+  border-radius: 12px;
+  font-size: var(--text-item);
+  font-weight: 500;
+  text-align: left;
+}
+
+.meal-menu-list [role="menuitem"]:focus-visible {
+  outline-offset: -2px;
+}
+
+.meal-menu-delete {
+  --button-ink: var(--color-danger);
+}
+
+@media (min-width: 768px) {
+  .meal-menu-button {
+    width: 32px;
+    min-height: 32px;
+    margin: -6px -6px -6px 0;
+  }
+
+  /* The column's card head stacks, so ⋯ sits over the name's right edge. */
+  .meal-card-head > .meal-menu {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+  }
+
+  .meal-card-head:has(> .meal-menu) .meal-card-title {
+    padding-right: 28px;
+  }
+
+  .meal-menu-list {
+    position: absolute;
+    top: calc(100% + 4px);
+    right: 0;
+    bottom: auto;
+    left: auto;
+    width: 240px;
   }
 }
 
