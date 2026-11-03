@@ -1,7 +1,7 @@
 import { createElement, type ComponentProps } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
-import { MealMenuList, type PlannerMeal } from "./meal-card";
+import { MealMenuList, type PlannerMeal, type PlannerMealSlot, type SlotWarnings } from "./meal-card";
 import { PlannerView } from "./planner";
 
 type Props = ComponentProps<typeof PlannerView>;
@@ -21,7 +21,8 @@ const render = (props: Partial<Props> = {}) =>
     createElement(PlannerView, { today, week: "this", meals: [], pickers, onWeekChange: () => {}, ...props }),
   );
 
-const text = (markup: string) => markup.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
+const text = (markup: string) =>
+  markup.replace(/<[^>]+>/g, " ").replace(/&#x27;/g, "'").replace(/\s+/g, " ").trim();
 
 const meal = (overrides: Partial<PlannerMeal> = {}): PlannerMeal => ({
   id: "meal-1",
@@ -263,6 +264,139 @@ describe("a Meal card", () => {
       expect(buttons).not.toContain("Edit");
       expect(buttons).not.toContain("Remove");
     });
+  });
+});
+
+describe("a slot on a Meal card", () => {
+  const slot = (overrides: Partial<PlannerMealSlot> = {}): PlannerMealSlot => ({
+    id: "slot-1",
+    slotCategoryId: "main",
+    slotCategoryLabel: "Main Dish",
+    slotCategoryArchived: false,
+    food: { content: "recipe", id: "salmon", label: "Grilled salmon", portions: 2, archived: false },
+    warnings: null,
+    ...overrides,
+  });
+  const rows = (mealOverrides: Partial<PlannerMeal>, ...slots: PlannerMealSlot[]) =>
+    [...render({ meals: [meal({ ...mealOverrides, slots })] }).matchAll(/<li class="(slot-row[^"]*)"[^>]*>(.*?)<\/li>/g)];
+  const row = (overrides: Partial<PlannerMealSlot> = {}, mealOverrides: Partial<PlannerMeal> = {}) => {
+    const found = rows(mealOverrides, slot(overrides))[0]!;
+    return { className: found[1]!, html: found[2]! };
+  };
+  const part = (markup: string, className: string) =>
+    new RegExp(`<[a-z0-9]+ [^>]*class="${className}"[^>]*>(.*?)</(span|p|div)>`).exec(markup)?.[1];
+
+  it("shows its Slot Category pill, its food, its Portions and a chevron", () => {
+    const { html } = row();
+    expect(text(part(html, "pill")!)).toBe("Main Dish");
+    expect(text(part(html, "slot-row-food")!)).toBe("Grilled salmon");
+    expect(text(part(html, "slot-row-amount")!)).toBe("2 portions");
+    expect(html).toContain("slot-row-chevron");
+  });
+
+  it.each([
+    [1, "1 portion"],
+    [1800, "1,800 portions"],
+  ])("shows %i Portions as %s", (portions, expected) => {
+    const { html } = row({ food: { content: "recipe", id: "salmon", label: "Grilled salmon", portions, archived: false } });
+    expect(text(part(html, "slot-row-amount")!)).toBe(expected);
+  });
+
+  it.each([
+    [250, "g" as const, "250 g"],
+    [1800, "g" as const, "1,800 g"],
+    [2, "pc" as const, "2 pc"],
+  ])("shows a Product's quantity %i %s as %s", (quantity, defaultUnit, expected) => {
+    const { html } = row({ food: { content: "product", id: "spinach", label: "Spinach", quantity, defaultUnit, archived: false } });
+    expect(text(part(html, "slot-row-food")!)).toBe("Spinach");
+    expect(text(part(html, "slot-row-amount")!)).toBe(expected);
+  });
+
+  it("shows Leftovers and that it deducts nothing", () => {
+    const { html } = row({ food: { content: "leftovers" } });
+    expect(text(part(html, "slot-row-food")!)).toBe("Leftovers");
+    expect(text(part(html, "slot-row-amount")!)).toBe("Deducts nothing");
+  });
+
+  it("dashes an empty slot and says Not chosen yet", () => {
+    const { className, html } = row({ food: { content: "empty" } });
+    expect(className).toContain("slot-row-dashed");
+    expect(text(part(html, "slot-row-amount")!)).toBe("Not chosen yet");
+    expect(part(html, "slot-row-food")).toBeUndefined();
+    expect(row().className).not.toContain("slot-row-dashed");
+  });
+
+  describe("its warnings", () => {
+    const strips = (warnings: SlotWarnings, date = today) =>
+      [...row({ warnings }, { date }).html.matchAll(/<div class="slot-strip ([^"]*)"[^>]*>(.*?)<\/div>/g)].map(
+        (strip) => ({ tone: strip[1], text: text(strip[2]!) }),
+      );
+    const spinach = { name: "Spinach", amount: 100, defaultUnit: "g" as const };
+
+    it.each([
+      ["today", today, "slot-strip-urgent"],
+      ["a day away", "2026-10-30", "slot-strip-urgent"],
+      ["two days away", "2026-10-31", "slot-strip-upcoming"],
+    ])("shows a Shortfall at the foot of the slot, for a Meal %s", (_case, date, tone) => {
+      expect(strips({ shortfalls: [spinach], unprojectable: [] }, date)).toEqual([{ tone, text: "Short 100 g Spinach" }]);
+    });
+
+    it("shows each Product short of, with numbers as 1,800 g", () => {
+      const rice = { name: "Basmati rice", amount: 1800, defaultUnit: "g" as const };
+      expect(strips({ shortfalls: [spinach, rice], unprojectable: [] })[0]!.text).toBe(
+        "Short 100 g Spinach Short 1,800 g Basmati rice",
+      );
+    });
+
+    it("shows a Product that can't be projected as a grey strip", () => {
+      expect(strips({ shortfalls: [], unprojectable: ["Olive oil"] })).toEqual([
+        { tone: "slot-strip-neutral", text: "Can't project Olive oil: its unit does not convert" },
+      ]);
+    });
+
+    it("shows a Shortfall and a Product that can't be projected as two strips", () => {
+      expect(strips({ shortfalls: [spinach], unprojectable: ["Olive oil"] }).map((strip) => strip.tone)).toEqual([
+        "slot-strip-urgent",
+        "slot-strip-neutral",
+      ]);
+    });
+  });
+
+  describe("with an Archived Slot Category", () => {
+    const archived = { slotCategoryLabel: "Red Meat", slotCategoryArchived: true };
+    const buttons = (html: string) => [...html.matchAll(/<button [^>]*>(.*?)<\/button>/g)].map((button) => text(button[1]!));
+
+    it("strikes through and dashes its pill, and asks to pick another category", () => {
+      const { className, html } = row(archived);
+      expect(html).toMatch(/<span class="pill pill-archived">Red Meat<\/span>/);
+      expect(className).toContain("slot-row-dashed");
+      expect(text(part(html, "slot-row-archived-note")!)).toBe("Category archived - pick another");
+      expect(buttons(html)).toEqual(["Pick another category"]);
+    });
+
+    it("shows its pill struck through on a Confirmed Meal, with nothing to pick", () => {
+      const { html } = row(archived, { status: "confirmed" });
+      expect(html).toContain("pill-archived");
+      expect(html).not.toContain("slot-row-archived-note");
+      expect(buttons(html)).toEqual([]);
+    });
+  });
+
+  it("opens the slot picker on a tap, on a Planned Meal", () => {
+    const button = /<button [^>]*class="slot-row-main"[^>]*>/.exec(row().html)?.[0];
+    expect(button).toContain('aria-expanded="false"');
+  });
+
+  it.each([
+    ["a Confirmed Meal", { status: "confirmed" as const }],
+    ["a Skipped Meal", { status: "skipped" as const }],
+  ])("shows a slot on %s as it was, with nothing to tap", (_case, mealOverrides) => {
+    const { html } = row({}, mealOverrides);
+    expect(text(part(html, "pill")!)).toBe("Main Dish");
+    expect(text(part(html, "slot-row-food")!)).toBe("Grilled salmon");
+    expect(text(part(html, "slot-row-amount")!)).toBe("2 portions");
+    expect(html).not.toMatch(/<button/);
+    expect(html).not.toContain("slot-row-chevron");
   });
 });
 

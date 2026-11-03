@@ -19,10 +19,10 @@ import type { CategoryKind } from "@/core/food-categories";
 import { localDate, localHour } from "@/core/planner";
 import { shortfallUrgency } from "@/core/projected-stock";
 import type { DefaultUnit } from "@/core/units";
-import { editingLabel, formatDayHeading, formatMealDate, formatQuantity, t } from "@/strings";
+import { editingLabel, formatDayHeading, formatMealDate, formatPortions, formatQuantity, t } from "@/strings";
 import { MEAL_ERROR_FIELDS, MEAL_SLOT_ERROR_FIELDS } from "../field-errors";
 import { FoodCategoryPill } from "../food-category-pill";
-import { FormError, useFieldErrors, type InvalidProps } from "../form-error";
+import { AlertIcon, FormError, useFieldErrors, type InvalidProps } from "../form-error";
 import { RemoveButton } from "../remove-button";
 import { ConfirmSheet } from "../sheet";
 import { viewerToday } from "../viewer-clock";
@@ -120,6 +120,9 @@ export interface Pickers {
   slotFoods: SlotFoods;
 }
 
+// What a slot's picker offers: Slot Categories and food.
+type SlotPickers = Pick<Pickers, "slotCategories" | "slotFoods">;
+
 // Which planner week a Meal is shown in; null off the planner.
 export type Week = "this" | "next" | null;
 
@@ -144,7 +147,7 @@ export function MealCard({
   meal: PlannerMeal;
   week: Week;
   today: string;
-  pickers: Pick<Pickers, "slotCategories" | "slotFoods">;
+  pickers: SlotPickers;
 }) {
   const [editing, setEditing] = useState(false);
   const [addingSlot, setAddingSlot] = useState(false);
@@ -190,27 +193,16 @@ export function MealCard({
       {meal.slots.length > 0 && (
         <ol className="slot-list" aria-label={t("planner.slots")}>
           {meal.slots.map((slot) => (
-            // A new key once a Slot Category change is saved, so the picker
-            // mounts with it.
-            <li key={`${slot.id}:${slot.slotCategoryId}`} className="slot-row">
-              {changeable ? (
-                <>
-                  <SlotCategoryPicker slot={slot} slotCategories={pickers.slotCategories} />
-                  <SlotFood slot={slot} allowsLeftovers={meal.allowsLeftovers} foods={pickers.slotFoods} />
-                  <RemoveButton
-                    action={() => removeMealSlotAction(slot.id)}
-                    label={t("planner.removeSlot")}
-                    title={t("planner.removeSlotConfirm", { category: slot.slotCategoryLabel })}
-                  />
-                </>
-              ) : (
-                <>
-                  <FoodCategoryPill label={slot.slotCategoryLabel} />
-                  <SlotFoodLabel food={slot.food} />
-                </>
-              )}
-              {slot.warnings && <SlotWarningList warnings={slot.warnings} mealDate={meal.date} today={today} />}
-            </li>
+            // A new key once a Slot Category change is saved, so the row
+            // mounts with it, closed.
+            <SlotRow
+              key={`${slot.id}:${slot.slotCategoryId}`}
+              slot={slot}
+              meal={meal}
+              today={today}
+              changeable={changeable}
+              pickers={pickers}
+            />
           ))}
         </ol>
       )}
@@ -486,34 +478,38 @@ export function confirmOrSkipErrorMessage(error: ConfirmOrSkipError): string {
   });
 }
 
-// "Short: Rice 300 g, Eggs 2 pc" and "Can't project Milk", red when the Meal
-// is 1 day away or less, amber otherwise. They never block saving.
-function SlotWarningList({ warnings, mealDate, today }: { warnings: SlotWarnings; mealDate: string; today: string }) {
-  const className = `slot-warnings slot-warnings-${shortfallUrgency(mealDate, today)}`;
+// Strips at the foot of a slot: "Short 100 g Spinach", red when the Meal is
+// a day away or less, amber otherwise, and a grey "Can't project Olive oil:
+// its unit does not convert". They never block saving.
+function SlotWarningStrips({ warnings, mealDate, today }: { warnings: SlotWarnings; mealDate: string; today: string }) {
   return (
-    <span className={className} role="status">
+    <>
       {warnings.shortfalls.length > 0 && (
-        <span>
-          {t("planner.shortfall", {
-            items: warnings.shortfalls
-              .map(({ name, amount, defaultUnit }) =>
-                t("planner.shortfallItem", { name, quantity: formatQuantity(amount, defaultUnit) }),
-              )
-              .join(", "),
-          })}
-        </span>
+        <div className={`slot-strip slot-strip-${shortfallUrgency(mealDate, today)}`} role="status">
+          {warnings.shortfalls.map(({ name, amount, defaultUnit }) => (
+            <p key={name}>
+              <AlertIcon />
+              {t("planner.shortfall", { quantity: formatQuantity(amount, defaultUnit), name })}
+            </p>
+          ))}
+        </div>
       )}
-      {warnings.unprojectable.map((name) => (
-        <span key={name}>{t("planner.cannotProject", { name })}</span>
-      ))}
-    </span>
+      {warnings.unprojectable.length > 0 && (
+        <div className="slot-strip slot-strip-neutral" role="status">
+          {warnings.unprojectable.map((name) => (
+            <p key={name}>
+              <AlertIcon />
+              {t("planner.cannotProject", { name })}
+            </p>
+          ))}
+        </div>
+      )}
+    </>
   );
 }
 
-// A slot's Slot Category, saved as soon as one is picked; a Confirmed or
-// Skipped Meal's slots only show theirs as it was. The picker offers only
-// non-Archived Food Categories, plus the slot's own if it is Archived, which
-// it warns about until it is changed.
+// A slot's Slot Category, saved as soon as one is picked. The picker offers
+// only non-Archived Food Categories, plus the slot's own if it is Archived.
 function SlotCategoryPicker({ slot, slotCategories }: { slot: PlannerMealSlot; slotCategories: SlotCategoryOption[] }) {
   const [state, action, pending] = useActionState(
     (previous: MealSlotCategoryFormState, formData: FormData) =>
@@ -538,58 +534,152 @@ function SlotCategoryPicker({ slot, slotCategories }: { slot: PlannerMealSlot; s
           </option>
         ))}
       </select>
-      {slot.slotCategoryArchived && <p className="banner banner-neutral">{t("planner.slotArchived")}</p>}
       {allMessages()}
     </form>
   );
 }
 
-// A slot's food, before its Meal is Confirmed or Skipped: what it holds, with
-// buttons to fill, change or empty it.
-function SlotFood({ slot, allowsLeftovers, foods }: { slot: PlannerMealSlot; allowsLeftovers: boolean; foods: SlotFoods }) {
-  const [filling, setFilling] = useState(false);
-  if (filling) {
-    return <SlotFillForm slot={slot} allowsLeftovers={allowsLeftovers} foods={foods} onDone={() => setFilling(false)} />;
-  }
-  if (slot.food.content === "empty") {
-    return (
-      <button type="button" onClick={() => setFilling(true)}>
-        {t("planner.fillSlot")}
-      </button>
-    );
-  }
-  return (
+// A slot on its Meal's card: its Slot Category pill, its Portions or quantity
+// and a chevron, over its food. On a Planned Meal a tap opens the slot
+// picker under it; a Confirmed or Skipped Meal's slots show as they were. An
+// Archived Slot Category is struck through and asks for another, which opens
+// the picker without its food, since nothing can be picked for it.
+function SlotRow({
+  slot,
+  meal,
+  today,
+  changeable,
+  pickers,
+}: {
+  slot: PlannerMealSlot;
+  meal: PlannerMeal;
+  today: string;
+  changeable: boolean;
+  pickers: SlotPickers;
+}) {
+  const [open, setOpen] = useState(false);
+  const archived = slot.slotCategoryArchived;
+  const asksForCategory = changeable && archived;
+  const tappable = changeable && !archived;
+  const summary = (
     <>
-      <SlotFoodLabel food={slot.food} />
-      <button type="button" onClick={() => setFilling(true)}>
-        {t("planner.changeSlot")}
-      </button>
-      <form action={() => emptyMealSlotAction(slot.id)}>
-        <button type="submit">{t("planner.emptySlot")}</button>
-      </form>
+      <span className="slot-row-top">
+        <FoodCategoryPill label={slot.slotCategoryLabel} archived={archived} />
+        {!asksForCategory && (
+          <span className="slot-row-end">
+            <span className="slot-row-amount">{slotAmount(slot.food)}</span>
+            {tappable && <SlotChevron />}
+          </span>
+        )}
+      </span>
+      <SlotFoodName food={slot.food} />
     </>
+  );
+  const dashed = slot.food.content === "empty" || archived;
+  return (
+    <li className={dashed ? "slot-row slot-row-dashed" : "slot-row"}>
+      {tappable ? (
+        <button type="button" className="slot-row-main" aria-expanded={open} onClick={() => setOpen(!open)}>
+          {summary}
+        </button>
+      ) : (
+        <div className="slot-row-main">{summary}</div>
+      )}
+      {asksForCategory && (
+        <div className="slot-row-archived">
+          <p className="slot-row-archived-note">{t("planner.slotArchived")}</p>
+          <button type="button" aria-expanded={open} onClick={() => setOpen(!open)}>
+            {t("planner.pickAnotherCategory")}
+          </button>
+        </div>
+      )}
+      {open && (
+        <SlotPicker
+          slot={slot}
+          allowsLeftovers={meal.allowsLeftovers}
+          pickers={pickers}
+          onDone={() => setOpen(false)}
+        />
+      )}
+      {slot.warnings && <SlotWarningStrips warnings={slot.warnings} mealDate={meal.date} today={today} />}
+    </li>
   );
 }
 
-// What a slot holds: "Risotto · 3 Portions", "Bread · 120 g" or "Leftovers".
-// A Recipe or Product removed since stays, tagged Archived.
-function SlotFoodLabel({ food }: { food: PlannerSlotFood }) {
+function SlotChevron() {
+  return (
+    <svg className="slot-row-chevron" aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M9 6l6 6-6 6" />
+    </svg>
+  );
+}
+
+// "2 portions", "250 g", "Deducts nothing" or "Not chosen yet" beside the pill.
+function slotAmount(food: PlannerSlotFood): string {
+  switch (food.content) {
+    case "recipe":
+      return formatPortions(food.portions);
+    case "product":
+      return formatQuantity(food.quantity, food.defaultUnit);
+    case "leftovers":
+      return t("planner.deductsNothing");
+    case "empty":
+      return t("planner.notChosen");
+  }
+}
+
+// What a slot holds, under its pill. A Recipe or Product removed since stays,
+// tagged Archived.
+function SlotFoodName({ food }: { food: PlannerSlotFood }) {
   switch (food.content) {
     case "empty":
-      return <span className="planner-empty">{t("planner.slotIsEmpty")}</span>;
+      return null;
     case "leftovers":
-      return <span>{t("planner.leftovers")}</span>;
+      return <span className="slot-row-food">{t("planner.leftovers")}</span>;
     case "recipe":
     case "product":
       return (
-        <span>
-          {food.content === "recipe"
-            ? t("planner.slotRecipe", { name: food.label, portions: food.portions })
-            : t("planner.slotProduct", { name: food.label, quantity: formatQuantity(food.quantity, food.defaultUnit) })}
+        <span className="slot-row-food">
+          {food.label}
           {food.archived && <span className="planner-tag">{t("planner.foodArchived")}</span>}
         </span>
       );
   }
+}
+
+// The slot picker, opened from its slot: what the slot holds, unless its Slot
+// Category is Archived, then its Slot Category, Empty and Remove Slot.
+function SlotPicker({
+  slot,
+  allowsLeftovers,
+  pickers,
+  onDone,
+}: {
+  slot: PlannerMealSlot;
+  allowsLeftovers: boolean;
+  pickers: SlotPickers;
+  onDone: () => void;
+}) {
+  return (
+    <div className="slot-picker">
+      {!slot.slotCategoryArchived && (
+        <SlotFillForm slot={slot} allowsLeftovers={allowsLeftovers} foods={pickers.slotFoods} onDone={onDone} />
+      )}
+      <div className="slot-picker-more">
+        <SlotCategoryPicker slot={slot} slotCategories={pickers.slotCategories} />
+        {slot.food.content !== "empty" && (
+          <form action={() => emptyMealSlotAction(slot.id)}>
+            <button type="submit">{t("planner.emptySlot")}</button>
+          </form>
+        )}
+        <RemoveButton
+          action={() => removeMealSlotAction(slot.id)}
+          label={t("planner.removeSlot")}
+          title={t("planner.removeSlotConfirm", { category: slot.slotCategoryLabel })}
+        />
+      </div>
+    </div>
+  );
 }
 
 // The picker's value for what the slot holds, if the picker still offers it:
