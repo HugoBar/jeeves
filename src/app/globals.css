@@ -101,6 +101,12 @@ body {
   margin: 0;
 }
 
+/* Room for the scrollbar on every page, so a page long enough to scroll
+   doesn't shift everything sideways. */
+html {
+  scrollbar-gutter: stable;
+}
+
 body {
   display: flex;
   flex-direction: column;
@@ -531,7 +537,7 @@ a.app-badge {
   .app-header-bar {
     flex-wrap: wrap;
     gap: 8px 24px;
-    max-width: 1280px;
+    max-width: 1440px;
     margin: 0 auto;
     padding: 12px 24px;
   }
@@ -1343,9 +1349,8 @@ html:has(.sheet[open]) {
   /* A page with room for columns. It lines up with the header. */
   .app-main:has(.page-wide),
   .app-main:has(.page-form) {
-    max-width: 1280px;
-    padding-top: 28px;
-    padding-inline: 24px;
+    max-width: 1440px;
+    padding: 24px 24px 48px;
   }
 
   /* A form in two columns of cards. */
