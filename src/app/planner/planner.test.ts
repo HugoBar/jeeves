@@ -257,6 +257,12 @@ describe("a Meal card", () => {
     ])("isn't shown on %s", (_case, overrides) => {
       expect(menuButton(overrides)).toBeUndefined();
     });
+
+    it("takes Edit and Remove off the card itself", () => {
+      const buttons = [...card()[2]!.matchAll(/<button [^>]*>(.*?)<\/button>/g)].map((button) => text(button[1]!));
+      expect(buttons).not.toContain("Edit");
+      expect(buttons).not.toContain("Remove");
+    });
   });
 });
 

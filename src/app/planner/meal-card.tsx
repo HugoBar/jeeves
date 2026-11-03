@@ -182,17 +182,9 @@ export function MealCard({
       </div>
       {changeable && (
         <div className="meal-card-actions">
-          <button type="button" onClick={() => setEditing(true)}>
-            {t("planner.edit")}
-          </button>
           <form action={setMealUntrackedAction.bind(null, meal.id, !meal.untracked)}>
             <button type="submit">{t(meal.untracked ? "planner.unmarkUntracked" : "planner.markUntracked")}</button>
           </form>
-          <RemoveButton
-            action={removeMealAction.bind(null, meal.id)}
-            label={t("planner.remove")}
-            title={t("planner.removeConfirm", { name: label })}
-          />
         </div>
       )}
       {meal.slots.length > 0 && (
