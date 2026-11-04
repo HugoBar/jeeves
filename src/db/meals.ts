@@ -167,8 +167,12 @@ export async function getMeal(db: Db, id: string): Promise<Meal | undefined> {
   return meal;
 }
 
-// A Meal made from scratch: Planned, tracked, with no Meal Slots.
-export async function createMeal(db: Db, fields: NewMealFields): Promise<{ id: string }> {
+// A Meal made from scratch: Planned, with no Meal Slots, and tracked unless
+// `untracked` says otherwise.
+export async function createMeal(
+  db: Db,
+  fields: Omit<NewMealFields, "untracked"> & Partial<Pick<NewMealFields, "untracked">>,
+): Promise<{ id: string }> {
   const [row] = await db.insert(meals).values(fields).returning({ id: meals.id });
   return row!;
 }

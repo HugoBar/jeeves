@@ -450,7 +450,7 @@ function AddMealForm({
       if (next.errors.length === 0) onDone();
       return { ...next, submits: submits + 1 };
     },
-    { errors: [], values: { mealTypeId: "", hour: "", name: "" }, submits: 0 },
+    { errors: [], values: { mealTypeId: "", hour: "", name: "", untracked: false }, submits: 0 },
   );
   return (
     <form action={action} className="form-cards" noValidate>

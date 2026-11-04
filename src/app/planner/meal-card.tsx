@@ -1031,9 +1031,11 @@ export interface MealFormValues {
   mealTypeId?: string;
   hour: string;
   name: string;
+  untracked: boolean;
 }
 
-// The Meal form's cards, without its buttons: Basics and Slots, under a banner
+// The Meal form's cards, without its buttons: Basics, Slots, and Tracking and
+// repeat, under a banner
 // counting the errors once a submit is rejected. Adding offers `mealTypes` as
 // chips; `editing` shows its Meal Type locked and lists its slots. Mounted
 // again on every submit, so it starts from what was sent.
@@ -1143,7 +1145,35 @@ export function MealFormFields({
           <p className="meal-form-no-slots">{t("planner.noSlots")}</p>
         )}
       </FormCard>
+      <FormCard title={t("planner.trackingAndRepeat")}>
+        <UntrackedSwitch untracked={values.untracked} />
+      </FormCard>
     </>
+  );
+}
+
+// Untracked as a switch: a checkbox named by "Untracked", with what it means
+// under it. The whole row is its label, so a tap anywhere on it flips it.
+function UntrackedSwitch({ untracked }: { untracked: boolean }) {
+  const id = useId();
+  return (
+    <label className="meal-form-switch">
+      <span id={`${id}-name`} className="meal-form-switch-name">
+        <StatusIcon status="untracked" />
+        {t("planner.untracked")}
+      </span>
+      <span id={`${id}-hint`} className="field-hint">
+        {t("planner.untrackedHint")}
+      </span>
+      <input
+        type="checkbox"
+        role="switch"
+        name="untracked"
+        defaultChecked={untracked}
+        aria-labelledby={`${id}-name`}
+        aria-describedby={`${id}-hint`}
+      />
+    </label>
   );
 }
 
@@ -1167,7 +1197,7 @@ function EditMealForm({ meal, onDone }: { meal: PlannerMeal; onDone: () => void 
       if (next.errors.length === 0) onDone();
       return { ...next, submits: submits + 1 };
     },
-    { errors: [], values: { hour: meal.hour, name: meal.name ?? "" }, submits: 0 },
+    { errors: [], values: { hour: meal.hour, name: meal.name ?? "", untracked: meal.untracked }, submits: 0 },
   );
   return (
     <form action={action} className="form-cards" noValidate>

@@ -2,7 +2,7 @@ import { beforeAll, describe, expect, it } from "vitest";
 import { listActiveCategories } from "./food-categories";
 import { listActiveMealTypes } from "./meal-types";
 import { createMealTemplate } from "./meal-templates";
-import { addMealSlot, createMeal, createMealFromTemplate, fillMealSlot, getMeal, setMealUntracked } from "./meals";
+import { addMealSlot, createMeal, createMealFromTemplate, fillMealSlot, getMeal } from "./meals";
 import { createProduct, removeProduct } from "./products";
 import { loadStockProjection } from "./projected-stock";
 import { createRecipe, removeRecipe } from "./recipes";
@@ -53,8 +53,7 @@ describe("loadStockProjection", () => {
       slotCategoryId,
       fill: { content: "recipe", recipeId: recipe.id, portions: 2 },
     });
-    const eatenOut = await meal("2026-11-10");
-    await setMealUntracked(db, eatenOut.id, true);
+    const eatenOut = await createMeal(db, { date: "2026-11-10", hour: "12:30", name: null, mealTypeId: lunch.id, untracked: true });
     const afterRange = await meal("2026-12-01");
     // Both are used by slots, so removing them Archives them: still projected.
     await removeRecipe(db, recipe.id);

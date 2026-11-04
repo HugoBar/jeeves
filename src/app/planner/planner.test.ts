@@ -658,10 +658,10 @@ describe("the Meal form", () => {
   type FormProps = ComponentProps<typeof MealFormFields>;
   const renderForm = (props: Partial<FormProps> = {}) =>
     renderToStaticMarkup(
-      createElement(MealFormFields, { errors: [], values: { mealTypeId: "", hour: "", name: "" }, mealTypes, ...props }),
+      createElement(MealFormFields, { errors: [], values: { mealTypeId: "", hour: "", name: "", untracked: false }, mealTypes, ...props }),
     );
   const renderEditForm = (props: Partial<FormProps> = {}) =>
-    renderForm({ mealTypes: [], editing: meal(), values: { hour: "12:30", name: "Weekday Lunch" }, ...props });
+    renderForm({ mealTypes: [], editing: meal(), values: { hour: "12:30", name: "Weekday Lunch", untracked: false }, ...props });
   const banner = (html: string) => text(/<div role="alert" class="banner banner-error">(.*?)<\/div>/.exec(html)?.[1] ?? "");
   const errorTexts = (html: string) => [...html.matchAll(/<p class="form-error">(.*?)<\/p>/g)].map((m) => text(m[1]!));
   const input = (html: string, name: string) => new RegExp(`<input [^>]*name="${name}"[^>]*>`).exec(html)?.[0] ?? "";
@@ -691,7 +691,7 @@ describe("the Meal form", () => {
   it("marks the name optional, and says what an empty one shows", () => {
     expect(text(renderForm())).toContain("Name · optional");
     expect(input(renderForm(), "name")).toContain('placeholder="Leave empty to show the Meal Type"');
-    expect(input(renderForm({ values: { mealTypeId: "dinner", hour: "", name: "" } }), "name")).toContain(
+    expect(input(renderForm({ values: { mealTypeId: "dinner", hour: "", name: "", untracked: false } }), "name")).toContain(
       "placeholder=\"Leave empty to show &quot;Dinner&quot;\"",
     );
     expect(input(renderEditForm(), "name")).toContain("placeholder=\"Leave empty to show &quot;Lunch&quot;\"");
@@ -727,5 +727,29 @@ describe("the Meal form", () => {
     const html = renderEditForm({ editing: meal({ slots: [slot] }) });
     expect(text(html)).not.toContain("No slots yet");
     expect(text(html)).toMatch(/Main Dish 4 portions Chicken curry/);
+  });
+
+  describe("its Tracking and repeat card", () => {
+    const card = (html: string) => /<section class="card form-card ?">\s*<div><h2>Tracking and repeat<\/h2>.*?<\/section>/s.exec(html)?.[0] ?? "";
+    const untracked = (html: string) => /<input [^>]*name="untracked"[^>]*>/.exec(html)?.[0] ?? "";
+
+    it("has an Untracked switch saying what it means", () => {
+      const html = card(renderForm());
+      expect(text(html)).toContain("Untracked Eating out or food from outside. Nothing is deducted from Stock.");
+    });
+
+    // A real checkbox with its label around it, so a tap on the words flips it.
+    it("is a checkbox with a label", () => {
+      const html = card(renderForm());
+      expect(untracked(html)).toMatch(/type="checkbox"/);
+      const label = /<label [^>]*>(.*?)<\/label>/s.exec(html)?.[1] ?? "";
+      expect(label).toContain('name="untracked"');
+      expect(text(label)).toMatch(/^Untracked /);
+    });
+
+    it("starts off for a New Meal, and shows an edited Meal's setting", () => {
+      expect(untracked(renderForm())).not.toContain("checked");
+      expect(untracked(renderEditForm({ values: { hour: "12:30", name: "", untracked: true } }))).toContain('checked=""');
+    });
   });
 });

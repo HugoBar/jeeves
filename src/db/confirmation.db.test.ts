@@ -3,7 +3,7 @@ import type { MealSlotFill } from "@/core/meals";
 import { confirmMeal, confirmMealsAsPlanned, listReopenAddsBack, reopenMeal, skipMeal } from "./confirmation";
 import { listActiveCategories } from "./food-categories";
 import { listActiveMealTypes } from "./meal-types";
-import { createMeal, deleteMeal, getMeal, setMealUntracked, updateMeal } from "./meals";
+import { createMeal, deleteMeal, getMeal, updateMeal } from "./meals";
 import { createProduct, getProduct, removeProduct } from "./products";
 import { loadStockProjection } from "./projected-stock";
 import { createRecipe, removeRecipe } from "./recipes";
@@ -128,7 +128,7 @@ describe("confirmMeal", () => {
   it("writes nothing for a Meal already Untracked", async () => {
     const cheese = await aProduct("Cheese", 500, { defaultUnit: "g", density: null });
     const meal = await aMeal(TODAY, [{ content: "product", productId: cheese.id, quantity: 100 }]);
-    await setMealUntracked(db, meal.id, true);
+    await updateMeal(db, meal.id, { hour: "12:30", name: null, untracked: true });
 
     await confirmMeal(db, meal.id, { untracked: false, today: TODAY });
 
@@ -195,8 +195,7 @@ describe("confirmMeal", () => {
     const meal = await aMeal(TODAY, []);
     await confirmMeal(db, meal.id, { untracked: false, today: TODAY });
 
-    await updateMeal(db, meal.id, { hour: "20:00", name: "Changed" });
-    await setMealUntracked(db, meal.id, true);
+    await updateMeal(db, meal.id, { hour: "20:00", name: "Changed", untracked: true });
     await deleteMeal(db, meal.id);
 
     expect(await getMeal(db, meal.id)).toMatchObject({ hour: "12:30", name: null, untracked: false });
@@ -218,7 +217,7 @@ describe("confirmMealsAsPlanned", () => {
     });
     const planned = await aMeal("2026-10-26", [{ content: "product", productId: beans.id, quantity: 200 }]);
     const untracked = await aMeal("2026-10-26", [{ content: "product", productId: beans.id, quantity: 100 }]);
-    await setMealUntracked(db, untracked.id, true);
+    await updateMeal(db, untracked.id, { hour: "12:30", name: null, untracked: true });
     const unconvertible = await aMeal("2026-10-27", [{ content: "recipe", recipeId: recipe.id, portions: 4 }]);
     const tomorrow = await aMeal("2026-10-29", []);
 
@@ -289,8 +288,7 @@ describe("skipMeal", () => {
     const meal = await aMeal(TODAY, []);
     await skipMeal(db, meal.id, TODAY);
 
-    await updateMeal(db, meal.id, { hour: "20:00", name: "Changed" });
-    await setMealUntracked(db, meal.id, true);
+    await updateMeal(db, meal.id, { hour: "20:00", name: "Changed", untracked: true });
     await deleteMeal(db, meal.id);
 
     expect(await getMeal(db, meal.id)).toMatchObject({ hour: "12:30", name: null, untracked: false });
