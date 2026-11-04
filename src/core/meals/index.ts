@@ -293,6 +293,12 @@ export function canReopen(meal: { status: MealStatus }): boolean {
   return meal.status === "confirmed" || meal.status === "skipped";
 }
 
+// Where a Reopened Meal goes: back to Planned, so Unconfirmed once its day is
+// before `today`, the viewer's date.
+export function reopensAs(meal: { date: string }, today: string): "planned" | "unconfirmed" {
+  return isUnconfirmed({ status: "planned", date: meal.date }, today) ? "unconfirmed" : "planned";
+}
+
 // Unconfirmed is never stored: a Meal is Unconfirmed while it is still
 // "planned" and its day is before `today`, the viewer's date (spec
 // "Platform").
