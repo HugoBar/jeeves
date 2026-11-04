@@ -138,6 +138,63 @@ describe("each day", () => {
   });
 });
 
+describe("the Earlier this week row on phone", () => {
+  const row = (html: string) => /<button [^>]*class="planner-earlier[^"]*"[^>]*>(.*?)<\/button>/.exec(html);
+
+  it("names the days before today", () => {
+    expect(text(/<strong>(.*?)<\/strong>/.exec(row(render())![1]!)![1]!)).toBe("Earlier this week · Mon 26 to Wed 28");
+  });
+
+  it("names the one day before today on Tuesday", () => {
+    const html = render({ today: "2026-10-27" });
+    expect(text(/<strong>(.*?)<\/strong>/.exec(row(html)![1]!)![1]!)).toBe("Earlier this week · Mon 26");
+  });
+
+  const counts = (html: string) => text(row(html)![1]!.replace(/<strong>.*?<\/strong>/, ""));
+  const unconfirmed = (html: string) => /<span class="planner-earlier-unconfirmed">(.*?)<\/span>/.exec(row(html)![1]!);
+
+  it("counts the Meals on those days, and only those", () => {
+    const meals = [
+      meal({ id: "mon", date: "2026-10-26", status: "confirmed" }),
+      meal({ id: "wed", date: "2026-10-28", status: "skipped" }),
+      meal({ id: "thu", date: "2026-10-29" }),
+    ];
+    expect(counts(render({ meals }))).toBe("2 Meals");
+    expect(counts(render({ meals: meals.slice(0, 1) }))).toBe("1 Meal");
+    expect(counts(render())).toBe("0 Meals");
+    expect(unconfirmed(render({ meals }))).toBeNull();
+  });
+
+  it("adds how many are Unconfirmed, with the clock icon", () => {
+    const meals = [
+      meal({ id: "mon", date: "2026-10-26" }),
+      meal({ id: "tue", date: "2026-10-27", untracked: true }),
+      meal({ id: "wed", date: "2026-10-28", status: "confirmed" }),
+    ];
+    const html = render({ meals });
+    expect(counts(html)).toBe("3 Meals · 2 Unconfirmed");
+    expect(unconfirmed(html)![1]).toContain("<svg");
+  });
+
+  it("starts folded, folding away those days on phone only", () => {
+    const html = render();
+    expect(row(html)![0]).toContain('aria-expanded="false"');
+    expect(row(html)![0]).toContain('class="planner-earlier phone-only"');
+    const folded = [...html.matchAll(/<section id="planner-day-([^"]*)" class="([^"]*)"/g)]
+      .filter((found) => found[2]!.split(" ").includes("planner-day-folded"))
+      .map((found) => found[1]);
+    expect(folded).toEqual(["2026-10-26", "2026-10-27", "2026-10-28"]);
+  });
+
+  it("is not shown on Monday, which has no earlier days", () => {
+    expect(row(render({ today: "2026-10-26" }))).toBeNull();
+  });
+
+  it("is never shown in Next week", () => {
+    expect(row(render({ week: "next" }))).toBeNull();
+  });
+});
+
 describe("a Meal card", () => {
   const cards = (html: string) => [...html.matchAll(/<article [^>]*class="([^"]*meal-card[^"]*)"[^>]*>(.*?)<\/article>/g)];
   const card = (overrides: Partial<PlannerMeal> = {}) => cards(render({ meals: [meal(overrides)] }))[0]!;

@@ -361,13 +361,22 @@ export function MealMenuList({
 function MealCardStatusLine({ status }: { status: MealCardStatus }) {
   return (
     <p className={`meal-status meal-status-${status}`}>
-      <svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-        {STATUS_ICONS[status]}
-      </svg>
+      <StatusIcon status={status} />
       {t(`planner.status.${status}`)}
     </p>
   );
 }
+
+function StatusIcon({ status }: { status: MealCardStatus }) {
+  return (
+    <svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+      {STATUS_ICONS[status]}
+    </svg>
+  );
+}
+
+// The clock an Unconfirmed Meal's status shows, for counts of them elsewhere.
+export const UnconfirmedIcon = () => <StatusIcon status="unconfirmed" />;
 
 const UNTRACKED_ICON = <path d="M7 17L17 7M8 7h9v9" />;
 
