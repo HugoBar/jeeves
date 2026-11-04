@@ -4,6 +4,7 @@ import { sortMealTemplates } from "@/core/meal-templates";
 import { sortMealTypes } from "@/core/meal-types";
 import { projectStock, type SlotProjection } from "@/core/projected-stock";
 import type { Db } from "@/db";
+import { listReopenAddsBack } from "@/db/confirmation";
 import { listActiveCategories } from "@/db/food-categories";
 import { listMealTemplates } from "@/db/meal-templates";
 import { listActiveMealTypes } from "@/db/meal-types";
@@ -19,6 +20,11 @@ export async function toPlannerMeals(db: Db, meals: Meal[], to: string): Promise
   // Worked out on every request, so a change to Stock, a Meal Priority, a
   // Recipe or a slot shows in the warnings as soon as the planner does.
   const projection = projectStock(projectionInput.meals, projectionInput.products);
+  // Only a Confirmed Meal took anything for a Reopen to add back.
+  const addsBack = await listReopenAddsBack(
+    db,
+    meals.filter((meal) => meal.status === "confirmed").map((meal) => meal.id),
+  );
   return meals.map((meal) => ({
     id: meal.id,
     date: meal.date,
@@ -38,6 +44,7 @@ export async function toPlannerMeals(db: Db, meals: Meal[], to: string): Promise
       food: toPlannerSlotFood(slot),
       warnings: toSlotWarnings(projection.get(slot.id), projectionInput.products),
     })),
+    addsBack: addsBack.get(meal.id) ?? [],
   }));
 }
 
