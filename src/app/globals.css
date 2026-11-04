@@ -2782,6 +2782,18 @@ a.back-link {
   color: var(--color-warning-ink);
 }
 
+/* Reopen, small, on a Confirmed or Skipped Meal: beside its status on
+   phone, at the row's right end when it wraps. */
+.meal-card-reopen-form {
+  margin-left: auto;
+}
+
+.meal-card-reopen {
+  padding: 0 14px;
+  font-size: var(--text-meta);
+  font-weight: 500;
+}
+
 .meal-card-actions {
   display: flex;
   flex-wrap: wrap;
@@ -2837,8 +2849,13 @@ a.back-link {
     width: 100%;
   }
 
+  .meal-card-reopen-form {
+    margin: 6px 0 0;
+  }
+
   .meal-card-reopen {
-    margin-top: 6px;
+    min-height: 30px;
+    font-size: var(--text-label);
   }
 
   .meal-card-name {
