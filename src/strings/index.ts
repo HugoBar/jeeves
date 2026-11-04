@@ -45,6 +45,11 @@ export function formatRecipeCount(count: number): string {
   return count === 1 ? t("recipes.countOne") : t("recipes.count", { count });
 }
 
+// How many Meals there are: "1 Meal", "9 Meals".
+export function formatMealCount(count: number): string {
+  return count === 1 ? t("planner.mealCountOne") : t("planner.mealCount", { count });
+}
+
 // A Recipe's Portions in running text: "1 portion", "1,800 portions".
 export function formatPortions(portions: number): string {
   return portions === 1

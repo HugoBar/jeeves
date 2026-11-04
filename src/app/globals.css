@@ -2463,6 +2463,59 @@ a.back-link {
   scroll-margin-top: calc(env(safe-area-inset-top) + 72px + var(--space));
 }
 
+/* Phone only: this week's days before today, folded into one row. Desktop
+   shows every day as a column, so it has neither the row nor the fold. */
+@media (max-width: 767px) {
+  .planner-earlier {
+    justify-content: space-between;
+    gap: 12px;
+    width: 100%;
+    min-height: 64px;
+    padding: 12px var(--space);
+    border-radius: 20px;
+    font-weight: 400;
+    text-align: left;
+  }
+
+  .planner-earlier-text {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+  }
+
+  .planner-earlier strong {
+    font-weight: 600;
+  }
+
+  .planner-earlier-counts {
+    color: var(--color-ink-muted);
+    font-size: var(--text-meta);
+  }
+
+  .planner-earlier-unconfirmed {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    color: var(--color-warning-ink);
+    font-weight: 500;
+  }
+
+  .planner-earlier-chevron {
+    flex: none;
+    color: var(--color-icon-muted);
+    transition: transform 0.15s;
+  }
+
+  .planner-earlier[aria-expanded="true"] .planner-earlier-chevron {
+    transform: rotate(180deg);
+  }
+
+  .planner-day-folded {
+    display: none;
+  }
+}
+
 .planner-day-head {
   display: flex;
   align-items: center;

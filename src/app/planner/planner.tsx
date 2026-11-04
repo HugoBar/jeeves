@@ -1,9 +1,18 @@
 "use client";
 
 import { Fragment, useActionState, useState } from "react";
-import { sortMeals, sortMealsByDay, weekToClose } from "@/core/meals";
+import { flushSync } from "react-dom";
+import { isUnconfirmed, sortMeals, sortMealsByDay, weekToClose } from "@/core/meals";
 import { plannerWeeks } from "@/core/planner";
-import { dayHeadingParts, editingLabel, formatDayHeading, formatLongDayHeading, formatWeekRange, t } from "@/strings";
+import {
+  dayHeadingParts,
+  editingLabel,
+  formatDayHeading,
+  formatLongDayHeading,
+  formatMealCount,
+  formatWeekRange,
+  t,
+} from "@/strings";
 import { MEAL_FROM_TEMPLATE_ERROR_FIELDS } from "../field-errors";
 import { useFieldErrors } from "../form-error";
 import { useViewerNow } from "../viewer-clock";
@@ -17,6 +26,7 @@ import {
   type PlannerMeal,
   type Submitted,
   type Week,
+  UnconfirmedIcon,
 } from "./meal-card";
 
 // "Today" is the date in the viewer's time zone (spec "Platform"). The server
@@ -50,22 +60,48 @@ export function PlannerView({
 }) {
   const weeks = plannerWeeks(today);
   const days = week === "next" ? weeks.nextWeek : weeks.thisWeek;
+  // On phone, this week's days before today fold into one row.
+  const earlier = week === "this" ? days.filter((date) => date < today) : [];
+  const [earlierOpen, setEarlierOpen] = useState(false);
+  const foldedDays = earlierOpen ? [] : earlier;
   return (
     <div className={week === "next" ? "planner-week planner-week-next" : "planner-week"}>
       <div className="planner-head">
         <h1>{t("planner.title")}</h1>
         <WeekTabs week={week} onWeekChange={onWeekChange} />
-        <WeekBar week={week} days={days} today={today} />
+        <WeekBar week={week} days={days} today={today} foldedDays={foldedDays} onUnfold={() => setEarlierOpen(true)} />
       </div>
       <CloseWeekBanner meals={weekToClose(meals, today)} />
-      <PlannerWeek week={week} days={days} today={today} meals={meals} pickers={pickers} />
+      <PlannerWeek
+        week={week}
+        days={days}
+        today={today}
+        meals={meals}
+        pickers={pickers}
+        earlier={earlier}
+        foldedDays={foldedDays}
+        onEarlierToggle={() => setEarlierOpen(!earlierOpen)}
+      />
     </div>
   );
 }
 
 // The week's name and dates, and on phone a strip of its days. Each day links
-// to its heading below, so a tap scrolls to it.
-function WeekBar({ week, days, today }: { week: Week; days: string[]; today: string }) {
+// to its heading below, so a tap scrolls to it, first unfolding it when it is
+// folded into Earlier this week.
+function WeekBar({
+  week,
+  days,
+  today,
+  foldedDays,
+  onUnfold,
+}: {
+  week: Week;
+  days: string[];
+  today: string;
+  foldedDays: string[];
+  onUnfold: () => void;
+}) {
   const dates = formatWeekRange(days[0]!, days[6]!);
   return (
     <div className="planner-week-bar">
@@ -74,7 +110,13 @@ function WeekBar({ week, days, today }: { week: Week; days: string[]; today: str
         {days.map((date) => {
           const { weekday, day } = dayHeadingParts(date);
           return (
-            <a key={date} href={`#${dayId(date)}`} aria-current={date === today ? "date" : undefined}>
+            <a
+              key={date}
+              href={`#${dayId(date)}`}
+              aria-current={date === today ? "date" : undefined}
+              // Shown before the link scrolls, or there is nothing to scroll to.
+              onClick={foldedDays.includes(date) ? () => flushSync(onUnfold) : undefined}
+            >
               <span>{weekday}</span>
               <strong>{day}</strong>
             </a>
@@ -156,15 +198,30 @@ function PlannerWeek({
   today,
   meals,
   pickers,
+  earlier,
+  foldedDays,
+  onEarlierToggle,
 }: {
   week: Week;
   days: string[];
   today: string;
   meals: PlannerMeal[];
   pickers: Pickers;
+  earlier: string[];
+  foldedDays: string[];
+  onEarlierToggle: () => void;
 }) {
   return (
     <div role="tabpanel" id="planner-days" aria-labelledby={`planner-tab-${week}`} className="planner-days">
+      {earlier.length > 0 && (
+        <EarlierRow
+          days={earlier}
+          today={today}
+          meals={meals.filter((meal) => earlier.includes(meal.date))}
+          open={foldedDays.length === 0}
+          onToggle={onEarlierToggle}
+        />
+      )}
       {days.map((date) => (
         <PlannerDay
           key={date}
@@ -173,9 +230,60 @@ function PlannerWeek({
           today={today}
           meals={sortMeals(meals.filter((meal) => meal.date === date))}
           pickers={pickers}
+          folded={foldedDays.includes(date)}
         />
       ))}
     </div>
+  );
+}
+
+// On phone, this week's days before today, folded into one row so the
+// Planner opens on today. A tap opens them above today and another folds
+// them. Desktop shows every day as a column, so it has no row.
+function EarlierRow({
+  days,
+  today,
+  meals,
+  open,
+  onToggle,
+}: {
+  days: string[];
+  today: string;
+  meals: PlannerMeal[];
+  open: boolean;
+  onToggle: () => void;
+}) {
+  const unconfirmed = meals.filter((meal) => isUnconfirmed(meal, today)).length;
+  const first = formatDayHeading(days[0]!);
+  const last = formatDayHeading(days.at(-1)!);
+  const range = days.length === 1 ? first : t("planner.earlierDays", { first, last });
+  return (
+    <button
+      type="button"
+      className="planner-earlier phone-only"
+      aria-expanded={open}
+      aria-controls={days.map(dayId).join(" ")}
+      onClick={onToggle}
+    >
+      <span className="planner-earlier-text">
+        <strong>{t("planner.earlier", { days: range })}</strong>
+        <span className="planner-earlier-counts">
+          {formatMealCount(meals.length)}
+          {unconfirmed > 0 && (
+            <>
+              {t("planner.earlierUnconfirmedPrefix")}
+              <span className="planner-earlier-unconfirmed">
+                <UnconfirmedIcon />
+                {t("planner.unconfirmedCount", { count: unconfirmed })}
+              </span>
+            </>
+          )}
+        </span>
+      </span>
+      <svg className="planner-earlier-chevron" aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M6 9l6 6 6-6" />
+      </svg>
+    </button>
   );
 }
 
@@ -185,12 +293,14 @@ function PlannerDay({
   today,
   meals,
   pickers,
+  folded,
 }: {
   date: string;
   week: Week;
   today: string;
   meals: PlannerMeal[];
   pickers: Pickers;
+  folded: boolean;
 }) {
   const [adding, setAdding] = useState<"scratch" | "template" | null>(null);
   const isToday = date === today;
@@ -199,7 +309,7 @@ function PlannerDay({
   return (
     <section
       id={dayId(date)}
-      className={isToday ? "planner-day planner-day-today" : "planner-day"}
+      className={`planner-day${isToday ? " planner-day-today" : ""}${folded ? " planner-day-folded" : ""}`}
       aria-current={isToday ? "date" : undefined}
     >
       <div className="planner-day-head">
