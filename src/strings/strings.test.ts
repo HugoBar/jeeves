@@ -10,6 +10,7 @@ import {
   formatPackSize,
   formatPackSizeNote,
   formatWeekRange,
+  mealPanelLabel,
   mealTypeLabel,
   t,
 } from "./index";
@@ -121,6 +122,21 @@ describe("editingLabel", () => {
   // Off the planner, a weekday alone could be any week.
   it("names the date when no week is given", () => {
     expect(editingLabel("2026-10-12", null)).toBe("Editing: Mon 12 Oct");
+  });
+});
+
+describe("mealPanelLabel", () => {
+  it("says this and the date for a day of this week", () => {
+    expect(mealPanelLabel("2026-10-30", "this", "adding")).toBe("Adding to: this Friday · 30 Oct");
+  });
+
+  it("says next and the date for a day of next week", () => {
+    expect(mealPanelLabel("2026-11-03", "next", "editing")).toBe("Editing: next Tuesday · 3 Nov");
+  });
+
+  // Off the planner, a weekday alone could be any week.
+  it("names the date when no week is given", () => {
+    expect(mealPanelLabel("2026-10-12", null, "editing")).toBe("Editing: Mon 12 Oct");
   });
 });
 

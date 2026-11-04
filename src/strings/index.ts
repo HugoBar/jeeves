@@ -1,5 +1,6 @@
 import type { CategorySeedKey } from "@/core/food-categories";
 import type { MealTypeSeedKey } from "@/core/meal-types";
+import type { Week } from "@/core/planner";
 import type { PackSize } from "@/core/products";
 import type { DefaultUnit, Unit } from "@/core/units";
 import { en } from "./en";
@@ -154,4 +155,16 @@ export function editingLabel(date: string, week: "this" | "next" | null): string
   if (week === null) return t("planner.editing", { day: formatMealDate(date) });
   const day = dayPart(date, { weekday: "long" });
   return t(week === "next" ? "planner.editingNext" : "planner.editing", { day });
+}
+
+// Which day the Meal panel adds to or edits, saying "this" or "next" for a
+// day of the planner's weeks (spec "Planning"): "Adding to: this Friday · 30
+// Oct". With no week, as off the planner, it names the date alone.
+export function mealPanelLabel(date: string, week: Week, action: "adding" | "editing"): string {
+  if (week === null) return t(`planner.panel.${action}On`, { day: formatMealDate(date) });
+  const params = {
+    weekday: dayPart(date, { weekday: "long" }),
+    date: `${dayPart(date, { day: "numeric" })} ${dayPart(date, { month: "short" })}`,
+  };
+  return t(`planner.panel.${action}${week === "next" ? "Next" : "This"}`, params);
 }
