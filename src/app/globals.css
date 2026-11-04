@@ -3253,3 +3253,98 @@ a.back-link {
   color: var(--week-ink);
   font-weight: 600;
 }
+
+/* The side panel, for a form beside the page: filling the screen on phone,
+   from 768px a column on the right with the page narrowed beside it. */
+.side-panel {
+  position: fixed;
+  inset: 0;
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: calc(12px + env(safe-area-inset-top)) var(--space) calc(24px + env(safe-area-inset-bottom));
+  background: var(--color-ground);
+}
+
+.side-panel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.side-panel-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  padding: 6px 12px;
+  border-radius: 999px;
+  background: var(--week-soft, var(--color-accent-soft));
+  color: var(--week-ink, var(--color-accent-ink));
+  font-size: var(--text-meta);
+  font-weight: 600;
+}
+
+.side-panel-close {
+  --button-bg: var(--color-surface);
+  --button-line: var(--color-border);
+  --button-ink: var(--color-ink-soft);
+  flex: none;
+  width: 44px;
+  padding: 0;
+}
+
+.side-panel > h2 {
+  margin: 0;
+  font-size: var(--text-title);
+  letter-spacing: -0.02em;
+  line-height: 1.15;
+}
+
+.side-panel > h2:focus {
+  outline: none;
+}
+
+/* Cancel narrower than the main button beside it. */
+.side-panel .form-cards .form-actions button {
+  flex: 1;
+}
+
+.side-panel .form-cards .form-actions button:last-child {
+  flex: 1.35;
+}
+
+@media (max-width: 767px) {
+  /* The page behind a full-screen panel doesn't scroll with it. */
+  html:has(.side-panel) {
+    overflow: hidden;
+  }
+}
+
+@media (min-width: 768px) {
+  :root {
+    --side-panel-width: min(600px, 45vw);
+  }
+
+  body:has(.side-panel) {
+    padding-right: var(--side-panel-width);
+  }
+
+  .side-panel {
+    left: auto;
+    width: var(--side-panel-width);
+    padding: 16px 24px 32px;
+    border-left: 1px solid var(--color-border);
+    box-shadow: -12px 0 32px var(--color-sheet-shadow);
+  }
+
+  /* The panel is narrow, so its buttons fill the row as on phone. */
+  .side-panel .form-cards .form-actions button {
+    flex: 1;
+    min-height: 48px;
+  }
+}
