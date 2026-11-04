@@ -2379,13 +2379,16 @@ a.back-link {
 /* Planner: each week carries its own colors, set as --week-*. "Needs
    confirmation" lists Meals off the planner with the same colors. */
 .planner-week,
-.needs-confirmation {
+.needs-confirmation,
+.meal-panel {
   --week-accent: var(--color-accent);
   --week-soft: var(--color-accent-soft);
   --week-ink: var(--color-accent-ink);
 }
 
-.planner-week-next {
+/* A Meal panel takes its week's accent too. */
+.planner-week-next,
+.meal-panel-next {
   --week-accent: var(--color-next);
   --week-soft: var(--color-next-soft);
   --week-ink: var(--color-next-ink);
@@ -3347,4 +3350,22 @@ a.back-link {
     flex: 1;
     min-height: 48px;
   }
+}
+
+.meal-panel-delete {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+/* Direct children only, as the Delete sheet opens inside the card. */
+.meal-panel-delete > h3 {
+  margin: 0;
+  color: var(--color-danger);
+  font-size: var(--text-body);
+}
+
+.meal-panel-delete > p {
+  margin: 0;
+  color: var(--color-ink-soft);
 }

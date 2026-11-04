@@ -1,6 +1,5 @@
 import { describe, expect, it } from "vitest";
 import {
-  editingLabel,
   foodCategoryLabel,
   formatDayHeading,
   formatLongDayHeading,
@@ -21,7 +20,7 @@ describe("t", () => {
   });
 
   it("fills placeholders from params", () => {
-    expect(t("planner.editingNext", { day: "Tuesday" })).toBe("Editing: next Tuesday");
+    expect(t("planner.addMealOn", { day: "Tuesday" })).toBe("Add Meal on Tuesday");
   });
 });
 
@@ -107,21 +106,6 @@ describe("formatWeekRange", () => {
 
   it("names both months when the week runs into the next", () => {
     expect(formatWeekRange("2026-10-26", "2026-11-01")).toBe("26 Oct–1 Nov");
-  });
-});
-
-describe("editingLabel", () => {
-  it("names a day of this week by its weekday", () => {
-    expect(editingLabel("2026-10-22", "this")).toBe("Editing: Thursday");
-  });
-
-  it("says next for a day of next week", () => {
-    expect(editingLabel("2026-10-27", "next")).toBe("Editing: next Tuesday");
-  });
-
-  // Off the planner, a weekday alone could be any week.
-  it("names the date when no week is given", () => {
-    expect(editingLabel("2026-10-12", null)).toBe("Editing: Mon 12 Oct");
   });
 });
 

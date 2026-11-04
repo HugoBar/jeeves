@@ -1,8 +1,8 @@
 import { createElement, type ComponentProps } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
-import { MealMenuList, ReopenSheet, type PlannerMeal, type PlannerMealSlot, type SlotWarnings } from "./meal-card";
-import { PlannerView } from "./planner";
+import { EditMealPanel, MealMenuList, ReopenSheet, type PlannerMeal, type PlannerMealSlot, type SlotWarnings } from "./meal-card";
+import { AddMealPanel, PlannerView } from "./planner";
 
 type Props = ComponentProps<typeof PlannerView>;
 
@@ -602,5 +602,50 @@ describe("the Meal menu", () => {
 
   it("is a menu", () => {
     expect(renderMenu()).toMatch(/^<div [^>]*role="menu"/);
+  });
+});
+
+describe("the Meal panel", () => {
+  const renderAdd = (date: string, week: "this" | "next") =>
+    renderToStaticMarkup(createElement(AddMealPanel, { date, week, pickers, onClose: () => {} }));
+  const renderEdit = (week: "this" | "next") =>
+    renderToStaticMarkup(createElement(EditMealPanel, { meal: meal({ date: "2026-11-03" }), week, onClose: () => {} }));
+  const label = (html: string) => text(/<p class="side-panel-label">(.*?)<\/p>/.exec(html)![1]!);
+  const title = (html: string) => text(/<h2 [^>]*>(.*?)<\/h2>/.exec(html)![1]!);
+  const buttons = (html: string) => [...html.matchAll(/<button [^>]*>(.*?)<\/button>/g)].map((b) => text(b[1]!));
+
+  it("says which day a New Meal is added to, and is titled New Meal", () => {
+    const html = renderAdd("2026-10-30", "this");
+    expect(label(html)).toBe("Adding to: this Friday · 30 Oct");
+    expect(title(html)).toBe("New Meal");
+  });
+
+  it("says which day a Meal is edited on, and is titled with its name", () => {
+    const html = renderEdit("next");
+    expect(label(html)).toBe("Editing: next Tuesday · 3 Nov");
+    expect(title(html)).toBe("Edit Weekday Lunch");
+  });
+
+  it("takes the week's accent", () => {
+    expect(renderAdd("2026-10-30", "this")).not.toMatch(/side-panel[^"]*meal-panel-next/);
+    expect(renderEdit("next")).toMatch(/class="side-panel[^"]*meal-panel-next/);
+  });
+
+  it("can be closed by its close button or by Cancel", () => {
+    for (const html of [renderAdd("2026-10-30", "this"), renderEdit("this")]) {
+      expect(html).toMatch(/<button [^>]*aria-label="Close"/);
+      expect(buttons(html)).toContain("Cancel");
+    }
+  });
+
+  it("ends Edit Meal with a Delete card, and New Meal without one", () => {
+    const edit = renderEdit("this");
+    expect(text(/<section class="card meal-panel-delete">(.*?)<\/section>/.exec(edit)![1]!)).toMatch(/^Delete .*Delete this Meal$/);
+    expect(renderAdd("2026-10-30", "this")).not.toContain("meal-panel-delete");
+  });
+
+  it("names its main button for what it does", () => {
+    expect(buttons(renderAdd("2026-10-30", "this"))).toContain("Add Meal");
+    expect(buttons(renderEdit("this"))).toContain("Save");
   });
 });

@@ -1,12 +1,19 @@
 "use client";
 
 import Link from "next/link";
-import { useActionState } from "react";
+import { useActionState, useState } from "react";
 import { mustResolve, needingConfirmation, sortMealsByDay } from "@/core/meals";
 import { formatMealDate, t } from "@/strings";
 import { FormError } from "../form-error";
 import { confirmMealsAsPlannedAction, type RefusedMeal } from "../planner/actions";
-import { confirmOrSkipErrorMessage, MealCard, mealOnLabel, type Pickers, type PlannerMeal } from "../planner/meal-card";
+import {
+  confirmOrSkipErrorMessage,
+  EditMealPanel,
+  MealCard,
+  mealOnLabel,
+  type Pickers,
+  type PlannerMeal,
+} from "../planner/meal-card";
 import { useViewerNow, viewerToday } from "../viewer-clock";
 
 // The "Needs confirmation" list (#1): each Meal with Confirm, slot editing
@@ -17,7 +24,10 @@ import { useViewerNow, viewerToday } from "../viewer-clock";
 // nothing and the browser fills the list in after hydration.
 export function NeedsConfirmation({ meals, ...pickers }: { meals: PlannerMeal[] } & Pickers) {
   const now = useViewerNow();
+  // The Meal open in Edit Meal; gone once it is deleted, which closes it.
+  const [editingId, setEditingId] = useState<string | null>(null);
   if (!now) return null;
+  const editing = meals.find((meal) => meal.id === editingId);
 
   const overdue = mustResolve(meals, now);
   const resolving = overdue.length > 0;
@@ -36,12 +46,13 @@ export function NeedsConfirmation({ meals, ...pickers }: { meals: PlannerMeal[] 
             {shown.map((meal) => (
               <li key={meal.id}>
                 <p className="planner-editing">{formatMealDate(meal.date)}</p>
-                <MealCard meal={meal} week={null} today={now.date} pickers={pickers} />
+                <MealCard meal={meal} today={now.date} pickers={pickers} onEdit={() => setEditingId(meal.id)} />
               </li>
             ))}
           </ul>
         </>
       )}
+      {editing && <EditMealPanel key={editing.id} meal={editing} week={null} onClose={() => setEditingId(null)} />}
       {!resolving && (
         <p>
           <Link href="/planner" className="button button-quiet">

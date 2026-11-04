@@ -6,20 +6,25 @@ import { isUnconfirmed, sortMeals, sortMealsByDay, weekToClose } from "@/core/me
 import { plannerWeeks } from "@/core/planner";
 import {
   dayHeadingParts,
-  editingLabel,
   formatDayHeading,
   formatLongDayHeading,
   formatMealCount,
   formatWeekRange,
+  mealPanelLabel,
   t,
 } from "@/strings";
 import { MEAL_FROM_TEMPLATE_ERROR_FIELDS } from "../field-errors";
 import { useFieldErrors } from "../form-error";
+import { SidePanel } from "../side-panel";
 import { useViewerNow } from "../viewer-clock";
 import { createMealAction, createMealFromTemplateAction, type MealFromTemplateFormState, type NewMealFormState } from "./actions";
 import {
+  EditMealPanel,
   MealCard,
+  MealPanelActions,
+  MealPanelIcon,
   mealOnLabel,
+  mealPanelClass,
   useMealErrors,
   type PickerOption,
   type Pickers,
@@ -64,6 +69,10 @@ export function PlannerView({
   const earlier = week === "this" ? days.filter((date) => date < today) : [];
   const [earlierOpen, setEarlierOpen] = useState(false);
   const foldedDays = earlierOpen ? [] : earlier;
+  const [panel, setPanel] = useState<MealPanel>(null);
+  const weekOf = (date: string): Week => (weeks.nextWeek.includes(date) ? "next" : "this");
+  // Gone once it is deleted, which closes its panel.
+  const editing = panel?.kind === "edit" ? meals.find((meal) => meal.id === panel.mealId) : undefined;
   return (
     <div className={week === "next" ? "planner-week planner-week-next" : "planner-week"}>
       <div className="planner-head">
@@ -81,10 +90,28 @@ export function PlannerView({
         earlier={earlier}
         foldedDays={foldedDays}
         onEarlierToggle={() => setEarlierOpen(!earlierOpen)}
+        addingOn={panel?.kind === "add" ? panel.date : null}
+        onAdd={(date) => setPanel(panel?.kind === "add" && panel.date === date ? null : { kind: "add", date })}
+        onEdit={(mealId) => setPanel({ kind: "edit", mealId })}
       />
+      {panel?.kind === "add" && (
+        <AddMealPanel
+          key={panel.date}
+          date={panel.date}
+          week={weekOf(panel.date)}
+          pickers={pickers}
+          onClose={() => setPanel(null)}
+        />
+      )}
+      {editing && (
+        <EditMealPanel key={editing.id} meal={editing} week={weekOf(editing.date)} onClose={() => setPanel(null)} />
+      )}
     </div>
   );
 }
+
+// What the side panel shows: New Meal on a day, or Edit Meal. One at a time.
+type MealPanel = { kind: "add"; date: string } | { kind: "edit"; mealId: string } | null;
 
 // The week's name and dates, and on phone a strip of its days. Each day links
 // to its heading below, so a tap scrolls to it, first unfolding it when it is
@@ -201,6 +228,9 @@ function PlannerWeek({
   earlier,
   foldedDays,
   onEarlierToggle,
+  addingOn,
+  onAdd,
+  onEdit,
 }: {
   week: Week;
   days: string[];
@@ -210,6 +240,9 @@ function PlannerWeek({
   earlier: string[];
   foldedDays: string[];
   onEarlierToggle: () => void;
+  addingOn: string | null;
+  onAdd: (date: string) => void;
+  onEdit: (mealId: string) => void;
 }) {
   return (
     <div role="tabpanel" id="planner-days" aria-labelledby={`planner-tab-${week}`} className="planner-days">
@@ -226,11 +259,13 @@ function PlannerWeek({
         <PlannerDay
           key={date}
           date={date}
-          week={week}
           today={today}
           meals={sortMeals(meals.filter((meal) => meal.date === date))}
           pickers={pickers}
           folded={foldedDays.includes(date)}
+          adding={addingOn === date}
+          onAdd={() => onAdd(date)}
+          onEdit={onEdit}
         />
       ))}
     </div>
@@ -289,23 +324,25 @@ function EarlierRow({
 
 function PlannerDay({
   date,
-  week,
   today,
   meals,
   pickers,
   folded,
+  adding,
+  onAdd,
+  onEdit,
 }: {
   date: string;
-  week: Week;
   today: string;
   meals: PlannerMeal[];
   pickers: Pickers;
   folded: boolean;
+  adding: boolean;
+  onAdd: () => void;
+  onEdit: (mealId: string) => void;
 }) {
-  const [adding, setAdding] = useState<"scratch" | "template" | null>(null);
   const isToday = date === today;
   const longHeading = formatLongDayHeading(date);
-  const onFromTemplate = pickers.templates.length > 0 ? () => setAdding("template") : undefined;
   return (
     <section
       id={dayId(date)}
@@ -322,8 +359,8 @@ function PlannerDay({
           type="button"
           className="planner-add"
           aria-label={t("planner.addMealOn", { day: longHeading })}
-          aria-expanded={adding !== null}
-          onClick={() => setAdding(adding === null ? "scratch" : null)}
+          aria-expanded={adding}
+          onClick={onAdd}
         >
           <span className="phone-only">{t("planner.addMeal")}</span>
           <span className="desktop-only" aria-hidden="true">
@@ -337,30 +374,60 @@ function PlannerDay({
         <ul className="planner-meals">
           {meals.map((meal) => (
             <li key={meal.id}>
-              <MealCard meal={meal} week={week} today={today} pickers={pickers} />
+              <MealCard meal={meal} today={today} pickers={pickers} onEdit={() => onEdit(meal.id)} />
             </li>
           ))}
         </ul>
       )}
-      {adding === "scratch" && (
-        <AddMealForm
-          date={date}
-          week={week}
-          mealTypes={pickers.mealTypes}
-          onFromTemplate={onFromTemplate}
-          onDone={() => setAdding(null)}
-        />
-      )}
-      {adding === "template" && (
+    </section>
+  );
+}
+
+// New Meal in the side panel, on `date`. It starts from scratch; when there
+// are Meal Templates it can switch to adding from one. Closing it without
+// adding discards what was typed quietly.
+export function AddMealPanel({
+  date,
+  week,
+  pickers,
+  onClose,
+}: {
+  date: string;
+  week: Week;
+  pickers: Pick<Pickers, "mealTypes" | "templates">;
+  onClose: () => void;
+}) {
+  const [fromTemplate, setFromTemplate] = useState(false);
+  // The picked Meal Template's name, for the title.
+  const [template, setTemplate] = useState<string | null>(null);
+  return (
+    <SidePanel
+      icon={<MealPanelIcon />}
+      label={mealPanelLabel(date, week, "adding")}
+      title={fromTemplate && template ? t("planner.panel.newFromTemplateTitle", { template }) : t("planner.panel.newTitle")}
+      className={mealPanelClass(week)}
+      onClose={onClose}
+    >
+      {fromTemplate ? (
         <AddMealFromTemplateForm
           date={date}
-          week={week}
           templates={pickers.templates}
-          onFromScratch={() => setAdding("scratch")}
-          onDone={() => setAdding(null)}
+          onPick={setTemplate}
+          onFromScratch={() => {
+            setTemplate(null);
+            setFromTemplate(false);
+          }}
+          onDone={onClose}
+        />
+      ) : (
+        <AddMealForm
+          date={date}
+          mealTypes={pickers.mealTypes}
+          onFromTemplate={pickers.templates.length > 0 ? () => setFromTemplate(true) : undefined}
+          onDone={onClose}
         />
       )}
-    </section>
+    </SidePanel>
   );
 }
 
@@ -368,13 +435,11 @@ function PlannerDay({
 // this form for the one that adds from a Meal Template.
 function AddMealForm({
   date,
-  week,
   mealTypes,
   onFromTemplate,
   onDone,
 }: {
   date: string;
-  week: Week;
   mealTypes: PickerOption[];
   onFromTemplate?: () => void;
   onDone: () => void;
@@ -390,38 +455,34 @@ function AddMealForm({
   const { values } = state;
   const { invalid, allMessages } = useMealErrors(state.errors);
   return (
-    <form action={action} className="item-form planner-form open-row">
-      <p className="planner-editing">{editingLabel(date, week)}</p>
-      <Fragment key={state.submits}>
-        <select
-          name="mealTypeId"
-          aria-label={t("planner.mealType")}
-          defaultValue={values.mealTypeId}
-          autoFocus
-          {...invalid("mealType")}
-        >
-          <option value="">{t("planner.pickMealType")}</option>
-          {mealTypes.map((mealType) => (
-            <option key={mealType.id} value={mealType.id}>
-              {mealType.label}
-            </option>
-          ))}
-        </select>
-        <input type="time" name="hour" aria-label={t("planner.hour")} defaultValue={values.hour} {...invalid("hour")} />
-        <input name="name" aria-label={t("planner.name")} placeholder={t("planner.name")} defaultValue={values.name} />
-      </Fragment>
-      <button type="submit" className="button-primary" disabled={pending}>
-        {t("planner.add")}
-      </button>
-      <button type="button" onClick={onDone}>
-        {t("planner.cancel")}
-      </button>
-      {onFromTemplate && (
-        <button type="button" className="button-soft" onClick={onFromTemplate}>
-          {t("planner.addFromTemplate")}
-        </button>
-      )}
-      {allMessages()}
+    <form action={action} className="form-cards">
+      <div className="card item-form planner-form">
+        <Fragment key={state.submits}>
+          <select
+            name="mealTypeId"
+            aria-label={t("planner.mealType")}
+            defaultValue={values.mealTypeId}
+            autoFocus
+            {...invalid("mealType")}
+          >
+            <option value="">{t("planner.pickMealType")}</option>
+            {mealTypes.map((mealType) => (
+              <option key={mealType.id} value={mealType.id}>
+                {mealType.label}
+              </option>
+            ))}
+          </select>
+          <input type="time" name="hour" aria-label={t("planner.hour")} defaultValue={values.hour} {...invalid("hour")} />
+          <input name="name" aria-label={t("planner.name")} placeholder={t("planner.name")} defaultValue={values.name} />
+        </Fragment>
+        {onFromTemplate && (
+          <button type="button" className="button-soft" onClick={onFromTemplate}>
+            {t("planner.addFromTemplate")}
+          </button>
+        )}
+        {allMessages()}
+      </div>
+      <MealPanelActions submitLabel={t("planner.panel.addMeal")} pending={pending} onCancel={onDone} />
     </form>
   );
 }
@@ -430,14 +491,14 @@ function AddMealForm({
 // Meal can be edited afterwards like any other.
 function AddMealFromTemplateForm({
   date,
-  week,
   templates,
+  onPick,
   onFromScratch,
   onDone,
 }: {
   date: string;
-  week: Week;
   templates: PickerOption[];
+  onPick: (template: string | null) => void;
   onFromScratch: () => void;
   onDone: () => void;
 }) {
@@ -455,34 +516,32 @@ function AddMealFromTemplateForm({
     (error) => t(`planner.error.${error}`),
   );
   return (
-    <form action={action} className="item-form planner-form open-row">
-      <p className="planner-editing">{editingLabel(date, week)}</p>
-      <select
-        key={state.submits}
-        name="templateId"
-        aria-label={t("planner.template")}
-        defaultValue={state.templateId}
-        autoFocus
-        {...invalid("template")}
-      >
-        <option value="">{t("planner.pickTemplate")}</option>
-        {templates.map((template) => (
-          <option key={template.id} value={template.id}>
-            {template.label}
-          </option>
-        ))}
-      </select>
-      <button type="submit" className="button-primary" disabled={pending}>
-        {t("planner.add")}
-      </button>
-      <button type="button" onClick={onDone}>
-        {t("planner.cancel")}
-      </button>
-      <button type="button" className="button-soft" onClick={onFromScratch}>
-        {t("planner.fromScratch")}
-      </button>
-      {allMessages()}
+    <form action={action} className="form-cards">
+      <div className="card item-form planner-form">
+        <select
+          key={state.submits}
+          name="templateId"
+          aria-label={t("planner.template")}
+          defaultValue={state.templateId}
+          autoFocus
+          onChange={(event) => onPick(templates.find((template) => template.id === event.target.value)?.label ?? null)}
+          {...invalid("template")}
+        >
+          <option value="">{t("planner.pickTemplate")}</option>
+          {templates.map((template) => (
+            <option key={template.id} value={template.id}>
+              {template.label}
+            </option>
+          ))}
+        </select>
+        <button type="button" className="button-soft" onClick={onFromScratch}>
+          {t("planner.fromScratch")}
+        </button>
+        {allMessages()}
+      </div>
+      <MealPanelActions submitLabel={t("planner.panel.addMeal")} pending={pending} onCancel={onDone} />
     </form>
   );
 }
+
 

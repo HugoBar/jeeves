@@ -149,14 +149,6 @@ export function formatMovementMeal({
   return name === null ? t("stockMovement.meal", params) : t("stockMovement.namedMeal", { ...params, name });
 }
 
-// Which day a Meal form edits, saying "next" for a day of next week (spec
-// "Planning"). With no week, as off the planner, it names the date.
-export function editingLabel(date: string, week: "this" | "next" | null): string {
-  if (week === null) return t("planner.editing", { day: formatMealDate(date) });
-  const day = dayPart(date, { weekday: "long" });
-  return t(week === "next" ? "planner.editingNext" : "planner.editing", { day });
-}
-
 // Which day the Meal panel adds to or edits, saying "this" or "next" for a
 // day of the planner's weeks (spec "Planning"): "Adding to: this Friday · 30
 // Oct". With no week, as off the planner, it names the date alone.
