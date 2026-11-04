@@ -1,6 +1,6 @@
 import { beforeAll, describe, expect, it } from "vitest";
 import type { MealSlotFill } from "@/core/meals";
-import { confirmMeal, confirmMealsAsPlanned, reopenMeal, skipMeal } from "./confirmation";
+import { confirmMeal, confirmMealsAsPlanned, listReopenAddsBack, reopenMeal, skipMeal } from "./confirmation";
 import { listActiveCategories } from "./food-categories";
 import { listActiveMealTypes } from "./meal-types";
 import { createMeal, deleteMeal, getMeal, setMealUntracked, updateMeal } from "./meals";
@@ -408,6 +408,88 @@ describe("reopenMeal", () => {
   it("refuses a Meal that is not Confirmed or Skipped", async () => {
     const meal = await aMeal(TODAY, []);
     expect(await reopenMeal(db, meal.id)).toBe(false);
+  });
+});
+
+describe("listReopenAddsBack", () => {
+  it("lists what Reopen would add back: what each Confirmation took, after clamping", async () => {
+    const rice = await aProduct("Basmati rice", 500, { defaultUnit: "g", density: null });
+    const limes = await aProduct("Limes", 1, { defaultUnit: "pc", density: null });
+    const meal = await aMeal(TODAY, [
+      { content: "product", productId: rice.id, quantity: 80 },
+      { content: "product", productId: limes.id, quantity: 2 },
+    ]);
+    await confirmMeal(db, meal.id, { untracked: false, today: TODAY });
+
+    const addsBack = await listReopenAddsBack(db, [meal.id]);
+
+    // 2 limes were eaten but only 1 was in Stock, so only 1 comes back.
+    expect(addsBack.get(meal.id)).toEqual([
+      { name: "Basmati rice", defaultUnit: "g", quantity: 80 },
+      { name: "Limes", defaultUnit: "pc", quantity: 1 },
+    ]);
+    // And Reopen adds back exactly that.
+    await reopenMeal(db, meal.id);
+    expect(await getProduct(db, rice.id)).toMatchObject({ stock: 500 });
+    expect(await getProduct(db, limes.id)).toMatchObject({ stock: 1 });
+  });
+
+  it("lists the Products in the order of the Meal's slots", async () => {
+    const courgette = await aProduct("Courgette", 500, { defaultUnit: "g", density: null });
+    const apricots = await aProduct("Apricots", 6, { defaultUnit: "pc", density: null });
+    const meal = await aMeal(TODAY, [
+      { content: "product", productId: courgette.id, quantity: 100 },
+      { content: "product", productId: apricots.id, quantity: 2 },
+    ]);
+    await confirmMeal(db, meal.id, { untracked: false, today: TODAY });
+
+    expect((await listReopenAddsBack(db, [meal.id])).get(meal.id)!.map(({ name }) => name)).toEqual([
+      "Courgette",
+      "Apricots",
+    ]);
+  });
+
+  it("lists only the latest Confirmation after a Meal is Confirmed again", async () => {
+    const oats = await aProduct("Rolled oats", 1000, { defaultUnit: "g", density: null });
+    const meal = await aMeal(TODAY, [{ content: "product", productId: oats.id, quantity: 60 }]);
+    await confirmMeal(db, meal.id, { untracked: false, today: TODAY });
+    await reopenMeal(db, meal.id);
+    await confirmMeal(db, meal.id, { untracked: false, today: TODAY });
+
+    expect((await listReopenAddsBack(db, [meal.id])).get(meal.id)).toEqual([
+      { name: "Rolled oats", defaultUnit: "g", quantity: 60 },
+    ]);
+  });
+
+  it("lists nothing for a Confirmed Untracked or a Skipped Meal, or one Skipped after a Reopen", async () => {
+    const syrup = await aProduct("Maple syrup", 300, { defaultUnit: "g", density: null });
+    const fills: MealSlotFill[] = [{ content: "product", productId: syrup.id, quantity: 20 }];
+    const untracked = await aMeal(TODAY, fills);
+    await confirmMeal(db, untracked.id, { untracked: true, today: TODAY });
+    const skipped = await aMeal(TODAY, fills);
+    await skipMeal(db, skipped.id, TODAY);
+    const skippedAfterReopen = await aMeal(TODAY, fills);
+    await confirmMeal(db, skippedAfterReopen.id, { untracked: false, today: TODAY });
+    await reopenMeal(db, skippedAfterReopen.id);
+    await skipMeal(db, skippedAfterReopen.id, TODAY);
+
+    const addsBack = await listReopenAddsBack(db, [untracked.id, skipped.id, skippedAfterReopen.id]);
+
+    expect(addsBack.get(untracked.id)).toEqual([]);
+    expect(addsBack.get(skipped.id)).toEqual([]);
+    expect(addsBack.get(skippedAfterReopen.id)).toEqual([]);
+  });
+
+  it("leaves out a Product the Confirmation took nothing of, as its Stock was already 0", async () => {
+    const cumin = await aProduct("Ground cumin", 0, { defaultUnit: "g", density: null });
+    const meal = await aMeal(TODAY, [{ content: "product", productId: cumin.id, quantity: 5 }]);
+    await confirmMeal(db, meal.id, { untracked: false, today: TODAY });
+
+    expect((await listReopenAddsBack(db, [meal.id])).get(meal.id)).toEqual([]);
+  });
+
+  it("returns nothing when given no Meals", async () => {
+    expect(await listReopenAddsBack(db, [])).toEqual(new Map());
   });
 });
 

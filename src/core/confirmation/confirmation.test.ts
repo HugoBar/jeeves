@@ -1,7 +1,13 @@
 import { describe, expect, it } from "vitest";
 import type { ProjectedRecipe, ProjectedSlot } from "@/core/projected-stock";
 import type { ConvertibleProduct } from "@/core/units";
-import { confirmationDeductions, confirmationsToReverse, staysSuspectAfterReopen, type ProductMovement } from "./index";
+import {
+  confirmationDeductions,
+  confirmationsToReverse,
+  productsInSlotOrder,
+  staysSuspectAfterReopen,
+  type ProductMovement,
+} from "./index";
 
 // Products by id: rice in grams, milk in millilitres (1.03 g/ml), eggs in
 // pieces, flour in grams with no Density.
@@ -21,6 +27,19 @@ const risotto: ProjectedRecipe = {
     { productId: "eggs", amount: 2, unit: "pc" },
   ],
 };
+
+describe("productsInSlotOrder", () => {
+  it("lists each Product once, where the slots first use it, a Recipe's Ingredients in their order", () => {
+    const slots: ProjectedSlot[] = [
+      { id: "a", content: "product", productId: "flour", quantity: 50 },
+      { id: "b", content: "leftovers" },
+      { id: "c", content: "recipe", portions: 2, recipe: risotto },
+      { id: "d", content: "product", productId: "rice", quantity: 100 },
+      { id: "e", content: "empty" },
+    ];
+    expect(productsInSlotOrder(slots)).toEqual(["flour", "rice", "milk", "eggs"]);
+  });
+});
 
 describe("confirmationDeductions", () => {
   it("scales a Recipe's Ingredients by the slot's Portions over its own, in Default Units", () => {

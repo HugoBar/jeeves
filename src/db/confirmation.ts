@@ -1,12 +1,17 @@
 import "server-only";
-import { asc, eq } from "drizzle-orm";
-import { confirmationDeductions, confirmationsToReverse, staysSuspectAfterReopen } from "@/core/confirmation";
+import { asc, eq, inArray } from "drizzle-orm";
+import {
+  confirmationDeductions,
+  confirmationsToReverse,
+  productsInSlotOrder,
+  staysSuspectAfterReopen,
+} from "@/core/confirmation";
 import { canReopen, canConfirmOrSkip } from "@/core/meals";
 import { deduct, reverse } from "@/core/stock";
 import type { ConversionError, DefaultUnit, Unit } from "@/core/units";
 import type { Db } from "./index";
 import { loadMealSlots } from "./projected-stock";
-import { meals, stockMovements } from "./schema";
+import { meals, products, stockMovements } from "./schema";
 import { applyMovement } from "./stock-movements";
 
 // "notConfirmable": the Meal is gone, already Confirmed or Skipped, or after
@@ -100,6 +105,51 @@ export async function skipMeal(db: Db, id: string, today: string): Promise<boole
     await tx.update(meals).set({ status: "skipped" }).where(eq(meals.id, id));
     return true;
   });
+}
+
+// What Reopening a Meal adds back to one Product's Stock, in its Default Unit.
+export interface AddedBack {
+  name: string;
+  defaultUnit: DefaultUnit;
+  quantity: number;
+}
+
+// What Reopening each Meal would add back, in the order of its slots: exactly
+// what its Confirmation movements not yet reversed took, as reopenMeal
+// reverses them, leaving out a Product they took none of. Empty for a Skipped or Untracked
+// Meal, which took nothing. Every Meal given has an entry.
+export async function listReopenAddsBack(db: Db, mealIds: readonly string[]): Promise<Map<string, AddedBack[]>> {
+  const byMeal = new Map<string, AddedBack[]>(mealIds.map((id) => [id, []]));
+  if (mealIds.length === 0) return byMeal;
+  const linked = await db
+    .select({
+      mealId: stockMovements.mealId,
+      productId: stockMovements.productId,
+      type: stockMovements.type,
+      delta: stockMovements.delta,
+      name: products.name,
+      defaultUnit: products.defaultUnit,
+    })
+    .from(stockMovements)
+    .innerJoin(products, eq(stockMovements.productId, products.id))
+    .where(inArray(stockMovements.mealId, [...mealIds]));
+  const productOf = new Map(linked.map(({ productId, name, defaultUnit }) => [productId, { name, defaultUnit }]));
+  // A Confirmed Meal's slots can't change, so they still say what it took.
+  const { slotsByMeal } = await loadMealSlots(db, [...mealIds]);
+  for (const mealId of byMeal.keys()) {
+    const reversed = confirmationsToReverse(linked.filter((movement) => movement.mealId === mealId));
+    // A Product a Recipe no longer holds goes last.
+    const order = productsInSlotOrder(slotsByMeal.get(mealId) ?? []);
+    const rank = (productId: string) => (order.includes(productId) ? order.indexOf(productId) : order.length);
+    // A Confirmation's delta is what it removed, so negative; 0 when the
+    // Stock was already empty, which adds nothing back.
+    const addsBack = reversed
+      .filter(({ delta }) => delta !== 0)
+      .toSorted((a, b) => rank(a.productId) - rank(b.productId))
+      .map(({ productId, delta }) => ({ ...productOf.get(productId)!, quantity: -delta }));
+    byMeal.set(mealId, addsBack);
+  }
+  return byMeal;
 }
 
 // Reopens a Confirmed or Skipped Meal: one Reopen movement, linked to it, for

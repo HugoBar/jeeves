@@ -35,6 +35,17 @@ export function confirmationDeductions(
   };
 }
 
+// The Products a Meal's slots use, each once, in the order they first come:
+// a Product slot's Product, or a Recipe slot's Ingredients in theirs.
+export function productsInSlotOrder(slots: readonly ProjectedSlot[]): string[] {
+  const ordered = new Set<string>();
+  for (const slot of slots) {
+    if (slot.content === "product") ordered.add(slot.productId);
+    if (slot.content === "recipe") for (const { productId } of slot.recipe.ingredients) ordered.add(productId);
+  }
+  return [...ordered];
+}
+
 // A Stock Movement linked to a Meal.
 export interface MealMovement {
   productId: string;
