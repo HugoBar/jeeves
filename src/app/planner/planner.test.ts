@@ -322,6 +322,30 @@ describe("a Meal card", () => {
       expect(buttons).not.toContain("Remove");
     });
   });
+
+  describe("its Reopen button", () => {
+    const reopen = (html: string) => /<button [^>]*class="meal-card-reopen"[^>]*>(.*?)<\/button>/.exec(html)?.[1];
+
+    it.each([
+      ["a Confirmed Meal", { status: "confirmed" as const }],
+      ["a Confirmed · Untracked Meal", { status: "confirmed" as const, untracked: true }],
+      ["a Skipped Meal", { status: "skipped" as const }],
+      ["a Confirmed Meal on an earlier day", { status: "confirmed" as const, date: "2026-10-27" }],
+    ])("shows on %s, in the card's head", (_case, overrides) => {
+      const html = card(overrides)[2]!;
+      expect(text(reopen(html)!)).toBe("Reopen");
+      expect(html).toMatch(/<div class="meal-card-head">.*class="meal-card-reopen"/);
+    });
+
+    it.each([
+      ["a Planned Meal", {}],
+      ["an Untracked Meal that is still Planned", { untracked: true }],
+      ["an Unconfirmed Meal", { date: "2026-10-27" }],
+      ["an Unconfirmed Untracked Meal", { date: "2026-10-27", untracked: true }],
+    ])("isn't shown on %s", (_case, overrides) => {
+      expect(reopen(card(overrides)[2]!)).toBeUndefined();
+    });
+  });
 });
 
 describe("a slot on a Meal card", () => {

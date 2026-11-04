@@ -178,8 +178,10 @@ export function MealCard({
           <MealMenu meal={meal} label={label} onEdit={() => setEditing(true)} onAddSlot={() => setAddingSlot(true)} />
         )}
         {canReopen(meal) && (
-          <form action={reopenMealAction.bind(null, meal.id)} className="meal-card-reopen">
-            <button type="submit">{t("planner.reopen")}</button>
+          <form action={reopenMealAction.bind(null, meal.id)} className="meal-card-reopen-form">
+            <button type="submit" className="meal-card-reopen">
+              {t("planner.reopen")}
+            </button>
           </form>
         )}
       </div>
