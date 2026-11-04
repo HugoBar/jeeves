@@ -28,12 +28,15 @@ export function SidePanel({
   // Read while rendering, as a field that focuses itself on mount takes the
   // focus before any effect runs.
   const [opener] = useState(() => (typeof document === "undefined" ? null : document.activeElement));
+  // What takes the focus on opening: a field that focused itself, else the
+  // title, so a screen reader starts at the panel. Kept, as a development
+  // re-run of the effect finds the focus back on the opener.
+  const start = useRef<Element | null>(null);
   const titleId = useId();
 
   useEffect(() => {
-    // A field that focused itself keeps it; otherwise the title takes it, so
-    // a screen reader starts at the panel.
-    if (!panel.current?.contains(document.activeElement)) heading.current?.focus();
+    start.current ??= panel.current?.contains(document.activeElement) ? document.activeElement : heading.current;
+    if (!panel.current?.contains(document.activeElement) && start.current instanceof HTMLElement) start.current.focus();
     return () => {
       // Back on what opened it, unless the viewer has moved on elsewhere.
       if (opener instanceof HTMLElement && opener.isConnected) opener.focus();
