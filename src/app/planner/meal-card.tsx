@@ -22,9 +22,10 @@ import { localDate, localHour, type Week } from "@/core/planner";
 import { shortfallUrgency } from "@/core/projected-stock";
 import type { DefaultUnit } from "@/core/units";
 import { formatDayHeading, formatMealDate, mealPanelLabel, formatPortions, formatQuantity, t, type StringKey } from "@/strings";
-import { MEAL_ERROR_FIELDS, MEAL_SLOT_ERROR_FIELDS } from "../field-errors";
+import { FORM_LEVEL, MEAL_ERROR_FIELDS, MEAL_SLOT_ERROR_FIELDS } from "../field-errors";
 import { FoodCategoryPill } from "../food-category-pill";
-import { AlertIcon, FormError, useFieldErrors, type InvalidProps } from "../form-error";
+import { FormCard } from "../form-card";
+import { AlertIcon, FormBanner, FormError, LockIcon, useFieldErrors, type InvalidProps } from "../form-error";
 import { RemoveButton } from "../remove-button";
 import { ConfirmSheet } from "../sheet";
 import { SidePanel } from "../side-panel";
@@ -624,20 +625,7 @@ function SlotRow({
   const archived = slot.slotCategoryArchived;
   const asksForCategory = changeable && archived;
   const tappable = changeable && !archived;
-  const summary = (
-    <>
-      <span className="slot-row-top">
-        <FoodCategoryPill label={slot.slotCategoryLabel} archived={archived} />
-        {!asksForCategory && (
-          <span className="slot-row-end">
-            <span className="slot-row-amount">{slotAmount(slot.food)}</span>
-            {tappable && <SlotChevron />}
-          </span>
-        )}
-      </span>
-      <SlotFoodName food={slot.food} />
-    </>
-  );
+  const summary = <SlotSummary slot={slot} showAmount={!asksForCategory} chevron={tappable} />;
   const dashed = slot.food.content === "empty" || archived;
   return (
     <li className={dashed ? "slot-row slot-row-dashed" : "slot-row"}>
@@ -666,6 +654,25 @@ function SlotRow({
       )}
       {slot.warnings && <SlotWarningStrips warnings={slot.warnings} mealDate={meal.date} today={today} />}
     </li>
+  );
+}
+
+// A slot's Slot Category pill, with its Portions or quantity and a chevron
+// beside it when shown, over its food.
+function SlotSummary({ slot, showAmount, chevron }: { slot: PlannerMealSlot; showAmount: boolean; chevron: boolean }) {
+  return (
+    <>
+      <span className="slot-row-top">
+        <FoodCategoryPill label={slot.slotCategoryLabel} archived={slot.slotCategoryArchived} />
+        {showAmount && (
+          <span className="slot-row-end">
+            <span className="slot-row-amount">{slotAmount(slot.food)}</span>
+            {chevron && <SlotChevron />}
+          </span>
+        )}
+      </span>
+      <SlotFoodName food={slot.food} />
+    </>
   );
 }
 
@@ -1018,6 +1025,141 @@ export function EditMealPanel({ meal, week, onClose }: { meal: PlannerMeal; week
   );
 }
 
+// The values a Meal form shows, kept as sent when a submit is rejected. Only
+// adding has a Meal Type to pick.
+export interface MealFormValues {
+  mealTypeId?: string;
+  hour: string;
+  name: string;
+}
+
+// The Meal form's cards, without its buttons: Basics and Slots, under a banner
+// counting the errors once a submit is rejected. Adding offers `mealTypes` as
+// chips; `editing` shows its Meal Type locked and lists its slots. Mounted
+// again on every submit, so it starts from what was sent.
+export function MealFormFields({
+  errors,
+  values,
+  mealTypes,
+  editing,
+}: {
+  errors: MealFieldError[];
+  values: MealFormValues;
+  mealTypes: PickerOption[];
+  editing?: Pick<PlannerMeal, "mealTypeLabel" | "slots">;
+}) {
+  const [picked, setPicked] = useState(values.mealTypeId ?? "");
+  const { invalid, messages } = useMealErrors(errors);
+  const mealType = editing?.mealTypeLabel ?? mealTypes.find((option) => option.id === picked)?.label;
+
+  // The buttons are below the fields, so a rejected submit scrolls back up.
+  const banner = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    banner.current?.scrollIntoView({ block: "nearest" });
+  }, []);
+
+  return (
+    <>
+      {errors.length > 0 && (
+        <FormBanner ref={banner}>
+          <FixMessage count={errors.length} editing={editing !== undefined} />
+        </FormBanner>
+      )}
+      {messages(FORM_LEVEL)}
+      <FormCard title={t("planner.basics")}>
+        {editing ? (
+          <div className="form-field">
+            <span className="form-field-label">{t("planner.mealType")}</span>
+            <span className="field-locked">
+              <LockIcon />
+              {editing.mealTypeLabel}
+            </span>
+            <p className="field-hint">{t("planner.mealTypeLocked")}</p>
+          </div>
+        ) : (
+          <fieldset className="form-field">
+            <legend>{t("planner.mealType")}</legend>
+            <div className="chips">
+              {mealTypes.map((option) => (
+                <label key={option.id} className="chip meal-type-chip">
+                  <input
+                    type="radio"
+                    name="mealTypeId"
+                    value={option.id}
+                    defaultChecked={option.id === picked}
+                    onChange={() => setPicked(option.id)}
+                    {...invalid("mealType")}
+                  />
+                  {option.label}
+                </label>
+              ))}
+            </div>
+            {/* The error takes the hint's place. */}
+            {messages("mealType") ?? <p className="field-hint">{t("planner.mealTypeHint")}</p>}
+          </fieldset>
+        )}
+        <div className="form-field">
+          <div className="meal-form-row">
+            <label className="form-field">
+              {t("planner.hour")}
+              <input
+                name="hour"
+                defaultValue={values.hour}
+                placeholder={t("planner.hourPlaceholder")}
+                autoComplete="off"
+                autoFocus={editing !== undefined}
+                {...invalid("hour")}
+              />
+            </label>
+            <label className="form-field">
+              <span>
+                {t("planner.nameLabel")}
+                <span className="form-field-optional">{t("planner.optional")}</span>
+              </span>
+              <input
+                name="name"
+                defaultValue={values.name}
+                placeholder={
+                  mealType ? t("planner.namePlaceholder", { mealType }) : t("planner.namePlaceholderNoMealType")
+                }
+              />
+            </label>
+          </div>
+          {messages("hour")}
+        </div>
+      </FormCard>
+      <FormCard title={t("planner.slots")}>
+        {editing && editing.slots.length > 0 ? (
+          <ol className="slot-list">
+            {editing.slots.map((slot) => (
+              <li key={slot.id} className={slot.food.content === "empty" ? "slot-row slot-row-dashed" : "slot-row"}>
+                <div className="slot-row-main">
+                  <SlotSummary slot={slot} showAmount chevron={false} />
+                </div>
+              </li>
+            ))}
+          </ol>
+        ) : (
+          <p className="meal-form-no-slots">{t("planner.noSlots")}</p>
+        )}
+      </FormCard>
+    </>
+  );
+}
+
+// "Fix 2 things to add this Meal. They're marked in red below."
+function FixMessage({ count, editing }: { count: number; editing: boolean }) {
+  return count === 1 ? (
+    <>
+      <strong>{t(editing ? "planner.fixToSaveOne" : "planner.fixToAddOne")}</strong> {t("planner.fixWhereOne")}
+    </>
+  ) : (
+    <>
+      <strong>{t(editing ? "planner.fixToSave" : "planner.fixToAdd", { count })}</strong> {t("planner.fixWhere")}
+    </>
+  );
+}
+
 function EditMealForm({ meal, onDone }: { meal: PlannerMeal; onDone: () => void }) {
   const [state, action, pending] = useActionState(
     async ({ submits, ...previous }: Submitted<MealChangesFormState>, formData: FormData) => {
@@ -1027,18 +1169,15 @@ function EditMealForm({ meal, onDone }: { meal: PlannerMeal; onDone: () => void 
     },
     { errors: [], values: { hour: meal.hour, name: meal.name ?? "" }, submits: 0 },
   );
-  const { values } = state;
-  const { invalid, allMessages } = useMealErrors(state.errors);
   return (
-    <form action={action} className="form-cards">
-      <div className="card item-form planner-form">
-        <span>{meal.mealTypeLabel}</span>
-        <Fragment key={state.submits}>
-          <input type="time" name="hour" aria-label={t("planner.hour")} defaultValue={values.hour} autoFocus {...invalid("hour")} />
-          <input name="name" aria-label={t("planner.name")} placeholder={t("planner.name")} defaultValue={values.name} />
-        </Fragment>
-        {allMessages()}
-      </div>
+    <form action={action} className="form-cards" noValidate>
+      <MealFormFields
+        key={state.submits}
+        errors={state.errors}
+        values={state.values}
+        mealTypes={[]}
+        editing={meal}
+      />
       <MealPanelActions submitLabel={t("planner.save")} pending={pending} onCancel={onDone} />
     </form>
   );

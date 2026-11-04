@@ -1,7 +1,7 @@
 import { createElement, type ComponentProps } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
-import { EditMealPanel, MealMenuList, ReopenSheet, type PlannerMeal, type PlannerMealSlot, type SlotWarnings } from "./meal-card";
+import { EditMealPanel, MealFormFields, MealMenuList, ReopenSheet, type PlannerMeal, type PlannerMealSlot, type SlotWarnings } from "./meal-card";
 import { AddMealPanel, PlannerView } from "./planner";
 
 type Props = ComponentProps<typeof PlannerView>;
@@ -647,5 +647,85 @@ describe("the Meal panel", () => {
   it("names its main button for what it does", () => {
     expect(buttons(renderAdd("2026-10-30", "this"))).toContain("Add Meal");
     expect(buttons(renderEdit("this"))).toContain("Save");
+  });
+});
+
+describe("the Meal form", () => {
+  const mealTypes = [
+    { id: "dinner", label: "Dinner" },
+    { id: "lunch", label: "Lunch" },
+  ];
+  type FormProps = ComponentProps<typeof MealFormFields>;
+  const renderForm = (props: Partial<FormProps> = {}) =>
+    renderToStaticMarkup(
+      createElement(MealFormFields, { errors: [], values: { mealTypeId: "", hour: "", name: "" }, mealTypes, ...props }),
+    );
+  const renderEditForm = (props: Partial<FormProps> = {}) =>
+    renderForm({ mealTypes: [], editing: meal(), values: { hour: "12:30", name: "Weekday Lunch" }, ...props });
+  const banner = (html: string) => text(/<div role="alert" class="banner banner-error">(.*?)<\/div>/.exec(html)?.[1] ?? "");
+  const errorTexts = (html: string) => [...html.matchAll(/<p class="form-error">(.*?)<\/p>/g)].map((m) => text(m[1]!));
+  const input = (html: string, name: string) => new RegExp(`<input [^>]*name="${name}"[^>]*>`).exec(html)?.[0] ?? "";
+
+  it("offers the Meal Types as chips when adding, saying it can't be changed after", () => {
+    const html = renderForm();
+    const chips = [...html.matchAll(/<label class="chip meal-type-chip">(.*?)<\/label>/g)].map((m) => text(m[1]!));
+    expect(chips).toEqual(["Dinner", "Lunch"]);
+    expect(html).toMatch(/<input type="radio" name="mealTypeId" value="dinner"/);
+    expect(text(html)).toContain("It can't be changed after the Meal is added.");
+  });
+
+  it("shows the Meal Type locked when editing, saying it can't be changed", () => {
+    const html = renderEditForm();
+    expect(html).not.toContain('name="mealTypeId"');
+    expect(text(/<span class="field-locked">(.*?)<\/span>/.exec(html)![1]!)).toBe("Lunch");
+    expect(text(html)).toContain("A Meal's type can't be changed.");
+  });
+
+  it("takes the hour as typed 24-hour text, like 19:30", () => {
+    const hour = input(renderEditForm(), "hour");
+    expect(hour).not.toContain('type="time"');
+    expect(hour).toContain('placeholder="19:30"');
+    expect(hour).toContain('value="12:30"');
+  });
+
+  it("marks the name optional, and says what an empty one shows", () => {
+    expect(text(renderForm())).toContain("Name · optional");
+    expect(input(renderForm(), "name")).toContain('placeholder="Leave empty to show the Meal Type"');
+    expect(input(renderForm({ values: { mealTypeId: "dinner", hour: "", name: "" } }), "name")).toContain(
+      "placeholder=\"Leave empty to show &quot;Dinner&quot;\"",
+    );
+    expect(input(renderEditForm(), "name")).toContain("placeholder=\"Leave empty to show &quot;Lunch&quot;\"");
+  });
+
+  it("shows no banner before a submit is rejected", () => {
+    expect(renderForm()).not.toContain('role="alert"');
+  });
+
+  it("counts the real errors in its banner, and shows each under its field", () => {
+    const two = renderForm({ errors: ["invalidHour", "noMealType"] });
+    expect(banner(two)).toBe("Fix 2 things to add this Meal. They're marked in red below.");
+    expect(errorTexts(two)).toEqual(["Pick a Meal Type. It can't be changed later.", "Enter an hour, like 19:30."]);
+    expect(input(two, "hour")).toContain('aria-invalid="true"');
+    // The error takes the hint's place.
+    expect(text(two)).not.toContain("It can't be changed after the Meal is added.");
+
+    const one = renderEditForm({ errors: ["invalidHour"] });
+    expect(banner(one)).toBe("Fix 1 thing to save this Meal. It's marked in red below.");
+    expect(errorTexts(one)).toEqual(["Enter an hour, like 19:30."]);
+  });
+
+  it("says No slots yet when there are none, and lists the Meal's slots when editing", () => {
+    expect(text(renderForm())).toContain("No slots yet");
+    const slot: PlannerMealSlot = {
+      id: "slot-1",
+      slotCategoryId: "main",
+      slotCategoryLabel: "Main Dish",
+      slotCategoryArchived: false,
+      food: { content: "recipe", id: "r1", label: "Chicken curry", portions: 4, archived: false },
+      warnings: null,
+    };
+    const html = renderEditForm({ editing: meal({ slots: [slot] }) });
+    expect(text(html)).not.toContain("No slots yet");
+    expect(text(html)).toMatch(/Main Dish 4 portions Chicken curry/);
   });
 });

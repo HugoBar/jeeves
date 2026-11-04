@@ -24,8 +24,8 @@ import {
   MealPanelActions,
   MealPanelIcon,
   mealOnLabel,
+  MealFormFields,
   mealPanelClass,
-  useMealErrors,
   type PickerOption,
   type Pickers,
   type PlannerMeal,
@@ -452,36 +452,14 @@ function AddMealForm({
     },
     { errors: [], values: { mealTypeId: "", hour: "", name: "" }, submits: 0 },
   );
-  const { values } = state;
-  const { invalid, allMessages } = useMealErrors(state.errors);
   return (
-    <form action={action} className="form-cards">
-      <div className="card item-form planner-form">
-        <Fragment key={state.submits}>
-          <select
-            name="mealTypeId"
-            aria-label={t("planner.mealType")}
-            defaultValue={values.mealTypeId}
-            autoFocus
-            {...invalid("mealType")}
-          >
-            <option value="">{t("planner.pickMealType")}</option>
-            {mealTypes.map((mealType) => (
-              <option key={mealType.id} value={mealType.id}>
-                {mealType.label}
-              </option>
-            ))}
-          </select>
-          <input type="time" name="hour" aria-label={t("planner.hour")} defaultValue={values.hour} {...invalid("hour")} />
-          <input name="name" aria-label={t("planner.name")} placeholder={t("planner.name")} defaultValue={values.name} />
-        </Fragment>
-        {onFromTemplate && (
-          <button type="button" className="button-soft" onClick={onFromTemplate}>
-            {t("planner.addFromTemplate")}
-          </button>
-        )}
-        {allMessages()}
-      </div>
+    <form action={action} className="form-cards" noValidate>
+      {onFromTemplate && (
+        <button type="button" className="button-soft meal-form-from-template" onClick={onFromTemplate}>
+          {t("planner.addFromTemplate")}
+        </button>
+      )}
+      <MealFormFields key={state.submits} errors={state.errors} values={state.values} mealTypes={mealTypes} />
       <MealPanelActions submitLabel={t("planner.panel.addMeal")} pending={pending} onCancel={onDone} />
     </form>
   );

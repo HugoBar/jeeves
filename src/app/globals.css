@@ -3369,3 +3369,51 @@ a.back-link {
   margin: 0;
   color: var(--color-ink-soft);
 }
+
+/* The Meal form. A Meal Type chip is a radio button, picked in the week's
+   accent. */
+/* A row, as a radio button's label isn't one by default. */
+.form-cards .meal-type-chip {
+  flex-direction: row;
+  align-items: center;
+  min-height: 44px;
+  border-style: solid;
+  border-color: var(--color-border);
+  color: var(--color-ink);
+  font-size: var(--text-body);
+}
+
+.form-cards .meal-type-chip:has(input:checked) {
+  border-color: var(--week-accent);
+  background: var(--week-soft);
+  color: var(--week-ink);
+}
+
+.meal-type-chip:has(input:checked)::before {
+  content: none;
+}
+
+/* The hour beside the name, which takes the rest of the row. */
+.meal-form-row {
+  display: grid;
+  grid-template-columns: minmax(0, 120px) minmax(0, 1fr);
+  gap: 12px;
+}
+
+.form-field-optional {
+  color: var(--color-ink-muted);
+  font-weight: 400;
+}
+
+.meal-form-no-slots {
+  margin: 0;
+  padding: 16px;
+  border: 1px dashed var(--color-line-strong);
+  border-radius: 12px;
+  color: var(--color-ink-muted);
+  text-align: center;
+}
+
+.meal-form-from-template {
+  align-self: flex-start;
+}
