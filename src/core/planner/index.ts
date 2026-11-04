@@ -30,6 +30,9 @@ function weekFrom(monday: string): string[] {
   return Array.from({ length: 7 }, (_, index) => addDays(monday, index));
 }
 
+// Which planner week a Meal is shown in; null off the planner.
+export type Week = "this" | "next" | null;
+
 // The planner's two weeks, both always editable (spec "Planning").
 export function plannerWeeks(today: string): { thisWeek: string[]; nextWeek: string[] } {
   const monday = mondayOf(today);

@@ -22,17 +22,19 @@ export type MealSlotFill =
   | { content: "leftovers" };
 
 // What the user sets on a Meal made from scratch: its day, Meal Type and hour,
-// plus an optional name shown in place of the Meal Type (data-model Q5).
+// plus an optional name shown in place of the Meal Type (data-model Q5), and
+// whether it is Untracked: eaten out or from outside, deducting nothing.
 export interface NewMealFields {
   date: string;
   // A time of day, "HH:MM" on a 24-hour clock.
   hour: string;
   name: string | null;
   mealTypeId: string;
+  untracked: boolean;
 }
 
 // What can change on a Meal: never its Meal Type.
-export type MealChanges = Pick<NewMealFields, "hour" | "name">;
+export type MealChanges = Pick<NewMealFields, "hour" | "name" | "untracked">;
 
 // "HH:MM" from 00:00 to 23:59, as a time input sends it.
 const HOUR = /^([01]\d|2[0-3]):[0-5]\d$/;
@@ -51,6 +53,7 @@ export interface NewMealInput {
   hour: string;
   name: string;
   mealTypeId: string;
+  untracked: boolean;
 }
 
 // `pickable` holds the Meal Types a new Meal can have: the non-Archived ones.
@@ -245,10 +248,10 @@ export function slotKeepsFood(
 
 export type MealChangesResult = { ok: true; changes: MealChanges } | { ok: false; errors: "invalidHour"[] };
 
-export function parseMealChanges(input: { hour: string; name: string }): MealChangesResult {
+export function parseMealChanges(input: { hour: string; name: string; untracked: boolean }): MealChangesResult {
   const hour = input.hour.trim();
   if (!isHour(hour)) return { ok: false, errors: ["invalidHour"] };
-  return { ok: true, changes: { hour, name: input.name.trim() || null } };
+  return { ok: true, changes: { hour, name: input.name.trim() || null, untracked: input.untracked } };
 }
 
 // A day's Meals by hour; "HH:MM" text sorts as time does. Ties go to the Meal

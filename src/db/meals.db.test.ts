@@ -20,7 +20,6 @@ import {
   listPlannedMealsBefore,
   removeMealSlot,
   setMealSlotCategory,
-  setMealUntracked,
   updateMeal,
 } from "./meals";
 import { createProduct, getProduct, removeProduct } from "./products";
@@ -107,6 +106,18 @@ describe("createMeal", () => {
       untracked: false,
       mealType: { seedKey: "lunch", name: null, archived: false },
     });
+  });
+
+  it("saves a Meal set Untracked", async () => {
+    const meal = await createMeal(db, {
+      date: "2026-10-27",
+      hour: "19:30",
+      name: "Dinner out",
+      mealTypeId: await seededMealTypeId("dinner"),
+      untracked: true,
+    });
+
+    expect((await getMeal(db, meal.id))?.untracked).toBe(true);
   });
 
   it("allows several Meals of one Meal Type on the same day", async () => {
@@ -679,7 +690,7 @@ describe("updateMeal", () => {
     const lunchId = await seededMealTypeId("lunch");
     const meal = await createMeal(db, { date: "2026-10-29", hour: "12:30", name: null, mealTypeId: lunchId });
 
-    await updateMeal(db, meal.id, { hour: "13:15", name: "Late Lunch" });
+    await updateMeal(db, meal.id, { hour: "13:15", name: "Late Lunch", untracked: false });
 
     expect(await getMeal(db, meal.id)).toMatchObject({ hour: "13:15", name: "Late Lunch", mealTypeId: lunchId });
   });
@@ -692,14 +703,12 @@ describe("updateMeal", () => {
       mealTypeId: await seededMealTypeId("breakfast"),
     });
 
-    await updateMeal(db, meal.id, { hour: "10:00", name: null });
+    await updateMeal(db, meal.id, { hour: "10:00", name: null, untracked: false });
 
     expect((await getMeal(db, meal.id))?.name).toBeNull();
   });
-});
 
-describe("setMealUntracked", () => {
-  it("marks a Meal Untracked and back", async () => {
+  it("sets a Meal Untracked and back", async () => {
     const meal = await createMeal(db, {
       date: "2026-10-30",
       hour: "20:00",
@@ -707,10 +716,10 @@ describe("setMealUntracked", () => {
       mealTypeId: await seededMealTypeId("dinner"),
     });
 
-    await setMealUntracked(db, meal.id, true);
+    await updateMeal(db, meal.id, { hour: "20:00", name: "Eating out", untracked: true });
     expect((await getMeal(db, meal.id))?.untracked).toBe(true);
 
-    await setMealUntracked(db, meal.id, false);
+    await updateMeal(db, meal.id, { hour: "20:00", name: "Eating out", untracked: false });
     expect((await getMeal(db, meal.id))?.untracked).toBe(false);
   });
 });

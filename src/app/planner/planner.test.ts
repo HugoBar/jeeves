@@ -1,8 +1,8 @@
 import { createElement, type ComponentProps } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
-import { MealMenuList, ReopenSheet, type PlannerMeal, type PlannerMealSlot, type SlotWarnings } from "./meal-card";
-import { PlannerView } from "./planner";
+import { EditMealPanel, MealFormFields, MealMenuList, ReopenSheet, type PlannerMeal, type PlannerMealSlot, type SlotWarnings } from "./meal-card";
+import { AddMealPanel, PlannerView } from "./planner";
 
 type Props = ComponentProps<typeof PlannerView>;
 
@@ -206,6 +206,11 @@ describe("a Meal card", () => {
     const html = card()[2]!;
     expect(text(part(html, "meal-card-eyebrow")!)).toBe("Lunch · 12:30");
     expect(text(part(html, "meal-card-name")!)).toBe("Weekday Lunch");
+  });
+
+  // Untracked is set on the Meal form.
+  it.each([[false], [true]])("has no Mark or Unmark Untracked button (untracked: %s)", (untracked) => {
+    expect(text(card({ untracked })[2]!)).not.toMatch(/Mark Untracked|Unmark Untracked/);
   });
 
   it("shows its Meal Type as its name when it has none", () => {
@@ -602,5 +607,154 @@ describe("the Meal menu", () => {
 
   it("is a menu", () => {
     expect(renderMenu()).toMatch(/^<div [^>]*role="menu"/);
+  });
+});
+
+describe("the Meal panel", () => {
+  const renderAdd = (date: string, week: "this" | "next") =>
+    renderToStaticMarkup(createElement(AddMealPanel, { date, week, pickers, onClose: () => {} }));
+  const renderEdit = (week: "this" | "next") =>
+    renderToStaticMarkup(createElement(EditMealPanel, { meal: meal({ date: "2026-11-03" }), week, onClose: () => {} }));
+  const label = (html: string) => text(/<p class="side-panel-label">(.*?)<\/p>/.exec(html)![1]!);
+  const title = (html: string) => text(/<h2 [^>]*>(.*?)<\/h2>/.exec(html)![1]!);
+  const buttons = (html: string) => [...html.matchAll(/<button [^>]*>(.*?)<\/button>/g)].map((b) => text(b[1]!));
+
+  it("says which day a New Meal is added to, and is titled New Meal", () => {
+    const html = renderAdd("2026-10-30", "this");
+    expect(label(html)).toBe("Adding to: this Friday · 30 Oct");
+    expect(title(html)).toBe("New Meal");
+  });
+
+  it("says which day a Meal is edited on, and is titled with its name", () => {
+    const html = renderEdit("next");
+    expect(label(html)).toBe("Editing: next Tuesday · 3 Nov");
+    expect(title(html)).toBe("Edit Weekday Lunch");
+  });
+
+  it("takes the week's accent", () => {
+    expect(renderAdd("2026-10-30", "this")).not.toMatch(/side-panel[^"]*meal-panel-next/);
+    expect(renderEdit("next")).toMatch(/class="side-panel[^"]*meal-panel-next/);
+  });
+
+  it("can be closed by its close button or by Cancel", () => {
+    for (const html of [renderAdd("2026-10-30", "this"), renderEdit("this")]) {
+      expect(html).toMatch(/<button [^>]*aria-label="Close"/);
+      expect(buttons(html)).toContain("Cancel");
+    }
+  });
+
+  it("ends Edit Meal with a Delete card, and New Meal without one", () => {
+    const edit = renderEdit("this");
+    expect(text(/<section class="card meal-panel-delete">(.*?)<\/section>/.exec(edit)![1]!)).toMatch(/^Delete .*Delete this Meal$/);
+    expect(renderAdd("2026-10-30", "this")).not.toContain("meal-panel-delete");
+  });
+
+  it("names its main button for what it does", () => {
+    expect(buttons(renderAdd("2026-10-30", "this"))).toContain("Add Meal");
+    expect(buttons(renderEdit("this"))).toContain("Save");
+  });
+});
+
+describe("the Meal form", () => {
+  const mealTypes = [
+    { id: "dinner", label: "Dinner" },
+    { id: "lunch", label: "Lunch" },
+  ];
+  type FormProps = ComponentProps<typeof MealFormFields>;
+  const renderForm = (props: Partial<FormProps> = {}) =>
+    renderToStaticMarkup(
+      createElement(MealFormFields, { errors: [], values: { mealTypeId: "", hour: "", name: "", untracked: false }, mealTypes, ...props }),
+    );
+  const renderEditForm = (props: Partial<FormProps> = {}) =>
+    renderForm({ mealTypes: [], editing: meal(), values: { hour: "12:30", name: "Weekday Lunch", untracked: false }, ...props });
+  const banner = (html: string) => text(/<div role="alert" class="banner banner-error">(.*?)<\/div>/.exec(html)?.[1] ?? "");
+  const errorTexts = (html: string) => [...html.matchAll(/<p class="form-error">(.*?)<\/p>/g)].map((m) => text(m[1]!));
+  const input = (html: string, name: string) => new RegExp(`<input [^>]*name="${name}"[^>]*>`).exec(html)?.[0] ?? "";
+
+  it("offers the Meal Types as chips when adding, saying it can't be changed after", () => {
+    const html = renderForm();
+    const chips = [...html.matchAll(/<label class="chip meal-type-chip">(.*?)<\/label>/g)].map((m) => text(m[1]!));
+    expect(chips).toEqual(["Dinner", "Lunch"]);
+    expect(html).toMatch(/<input type="radio" name="mealTypeId" value="dinner"/);
+    expect(text(html)).toContain("It can't be changed after the Meal is added.");
+  });
+
+  it("shows the Meal Type locked when editing, saying it can't be changed", () => {
+    const html = renderEditForm();
+    expect(html).not.toContain('name="mealTypeId"');
+    expect(text(/<span class="field-locked">(.*?)<\/span>/.exec(html)![1]!)).toBe("Lunch");
+    expect(text(html)).toContain("A Meal's type can't be changed.");
+  });
+
+  it("takes the hour as typed 24-hour text, like 19:30", () => {
+    const hour = input(renderEditForm(), "hour");
+    expect(hour).not.toContain('type="time"');
+    expect(hour).toContain('placeholder="19:30"');
+    expect(hour).toContain('value="12:30"');
+  });
+
+  it("marks the name optional, and says what an empty one shows", () => {
+    expect(text(renderForm())).toContain("Name · optional");
+    expect(input(renderForm(), "name")).toContain('placeholder="Leave empty to show the Meal Type"');
+    expect(input(renderForm({ values: { mealTypeId: "dinner", hour: "", name: "", untracked: false } }), "name")).toContain(
+      "placeholder=\"Leave empty to show &quot;Dinner&quot;\"",
+    );
+    expect(input(renderEditForm(), "name")).toContain("placeholder=\"Leave empty to show &quot;Lunch&quot;\"");
+  });
+
+  it("shows no banner before a submit is rejected", () => {
+    expect(renderForm()).not.toContain('role="alert"');
+  });
+
+  it("counts the real errors in its banner, and shows each under its field", () => {
+    const two = renderForm({ errors: ["invalidHour", "noMealType"] });
+    expect(banner(two)).toBe("Fix 2 things to add this Meal. They're marked in red below.");
+    expect(errorTexts(two)).toEqual(["Pick a Meal Type. It can't be changed later.", "Enter an hour, like 19:30."]);
+    expect(input(two, "hour")).toContain('aria-invalid="true"');
+    // The error takes the hint's place.
+    expect(text(two)).not.toContain("It can't be changed after the Meal is added.");
+
+    const one = renderEditForm({ errors: ["invalidHour"] });
+    expect(banner(one)).toBe("Fix 1 thing to save this Meal. It's marked in red below.");
+    expect(errorTexts(one)).toEqual(["Enter an hour, like 19:30."]);
+  });
+
+  it("says No slots yet when there are none, and lists the Meal's slots when editing", () => {
+    expect(text(renderForm())).toContain("No slots yet");
+    const slot: PlannerMealSlot = {
+      id: "slot-1",
+      slotCategoryId: "main",
+      slotCategoryLabel: "Main Dish",
+      slotCategoryArchived: false,
+      food: { content: "recipe", id: "r1", label: "Chicken curry", portions: 4, archived: false },
+      warnings: null,
+    };
+    const html = renderEditForm({ editing: meal({ slots: [slot] }) });
+    expect(text(html)).not.toContain("No slots yet");
+    expect(text(html)).toMatch(/Main Dish 4 portions Chicken curry/);
+  });
+
+  describe("its Tracking and repeat card", () => {
+    const card = (html: string) => /<section class="card form-card ?">\s*<div><h2>Tracking and repeat<\/h2>.*?<\/section>/s.exec(html)?.[0] ?? "";
+    const untracked = (html: string) => /<input [^>]*name="untracked"[^>]*>/.exec(html)?.[0] ?? "";
+
+    it("has an Untracked switch saying what it means", () => {
+      const html = card(renderForm());
+      expect(text(html)).toContain("Untracked Eating out or food from outside. Nothing is deducted from Stock.");
+    });
+
+    // A real checkbox with its label around it, so a tap on the words flips it.
+    it("is a checkbox with a label", () => {
+      const html = card(renderForm());
+      expect(untracked(html)).toMatch(/type="checkbox"/);
+      const label = /<label [^>]*>(.*?)<\/label>/s.exec(html)?.[1] ?? "";
+      expect(label).toContain('name="untracked"');
+      expect(text(label)).toMatch(/^Untracked /);
+    });
+
+    it("starts off for a New Meal, and shows an edited Meal's setting", () => {
+      expect(untracked(renderForm())).not.toContain("checked");
+      expect(untracked(renderEditForm({ values: { hour: "12:30", name: "", untracked: true } }))).toContain('checked=""');
+    });
   });
 });

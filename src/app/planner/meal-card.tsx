@@ -18,15 +18,17 @@ import {
 } from "@/core/meals";
 import type { CategoryKind } from "@/core/food-categories";
 import type { AddedBack } from "@/db/confirmation";
-import { localDate, localHour } from "@/core/planner";
+import { localDate, localHour, type Week } from "@/core/planner";
 import { shortfallUrgency } from "@/core/projected-stock";
 import type { DefaultUnit } from "@/core/units";
-import { editingLabel, formatDayHeading, formatMealDate, formatPortions, formatQuantity, t, type StringKey } from "@/strings";
-import { MEAL_ERROR_FIELDS, MEAL_SLOT_ERROR_FIELDS } from "../field-errors";
+import { formatDayHeading, formatMealDate, mealPanelLabel, formatPortions, formatQuantity, t, type StringKey } from "@/strings";
+import { FORM_LEVEL, MEAL_ERROR_FIELDS, MEAL_SLOT_ERROR_FIELDS } from "../field-errors";
 import { FoodCategoryPill } from "../food-category-pill";
-import { AlertIcon, FormError, useFieldErrors, type InvalidProps } from "../form-error";
+import { FormCard } from "../form-card";
+import { AlertIcon, FormBanner, FormError, LockIcon, useFieldErrors, type InvalidProps } from "../form-error";
 import { RemoveButton } from "../remove-button";
 import { ConfirmSheet } from "../sheet";
+import { SidePanel } from "../side-panel";
 import { viewerToday } from "../viewer-clock";
 import {
   addMealSlotAction,
@@ -38,7 +40,6 @@ import {
   removeMealSlotAction,
   reopenMealAction,
   setMealSlotCategoryAction,
-  setMealUntrackedAction,
   skipMealAction,
   type ConfirmMealError,
   type MealChangesFormState,
@@ -128,8 +129,7 @@ export interface Pickers {
 // What a slot's picker offers: Slot Categories and food.
 type SlotPickers = Pick<Pickers, "slotCategories" | "slotFoods">;
 
-// Which planner week a Meal is shown in; null off the planner.
-export type Week = "this" | "next" | null;
+export type { Week };
 
 // React resets a form after every submit, putting each field back to the value
 // it mounted with. Counting submits gives the fields a new key each time, so
@@ -141,34 +141,26 @@ export function mealOnLabel(meal: Pick<PlannerMeal, "date" | "name" | "mealTypeL
   return t("unconfirmed.mealOn", { day: formatMealDate(meal.date), name: meal.name ?? meal.mealTypeLabel });
 }
 
-// A Meal on its day, edited in place. Its Meal Type is shown but never changes.
-// A Confirmed or Skipped Meal is read-only: it can only be Reopened.
+// A Meal on its day. Its slots are changed in place; `onEdit` opens Edit Meal
+// in the side panel. A Confirmed or Skipped Meal is read-only: it can only be
+// Reopened.
 export function MealCard({
   meal,
-  week,
   today,
   pickers,
+  onEdit,
 }: {
   meal: PlannerMeal;
-  week: Week;
   today: string;
   pickers: SlotPickers;
+  onEdit: () => void;
 }) {
-  const [editing, setEditing] = useState(false);
   const [addingSlot, setAddingSlot] = useState(false);
   const [reopening, setReopening] = useState(false);
   const label = meal.name ?? meal.mealTypeLabel;
   const changeable = canChangeMeal(meal);
   const status = mealCardStatus(meal, today);
   const unconfirmed = isUnconfirmed(meal, today);
-
-  if (editing) {
-    return (
-      <article className="meal-card">
-        <EditMealForm meal={meal} week={week} onDone={() => setEditing(false)} />
-      </article>
-    );
-  }
 
   const tint = unconfirmed ? " meal-card-unconfirmed" : meal.status === "skipped" ? " meal-card-skipped" : "";
   return (
@@ -181,7 +173,7 @@ export function MealCard({
         </div>
         {status && <MealCardStatusLine status={status} />}
         {changeable && !unconfirmed && (
-          <MealMenu meal={meal} label={label} onEdit={() => setEditing(true)} onAddSlot={() => setAddingSlot(true)} />
+          <MealMenu meal={meal} label={label} onEdit={onEdit} onAddSlot={() => setAddingSlot(true)} />
         )}
         {canReopen(meal) && (
           <button type="button" className="meal-card-reopen" onClick={() => setReopening(true)}>
@@ -190,13 +182,6 @@ export function MealCard({
         )}
         {reopening && <ReopenSheet meal={meal} today={today} onClose={() => setReopening(false)} />}
       </div>
-      {changeable && (
-        <div className="meal-card-actions">
-          <form action={setMealUntrackedAction.bind(null, meal.id, !meal.untracked)}>
-            <button type="submit">{t(meal.untracked ? "planner.unmarkUntracked" : "planner.markUntracked")}</button>
-          </form>
-        </div>
-      )}
       {meal.slots.length > 0 && (
         <ol className="slot-list" aria-label={t("planner.slots")}>
           {meal.slots.map((slot) => (
@@ -264,6 +249,8 @@ function MealMenu({
     }
     function closeOnEscape(event: KeyboardEvent) {
       if (event.key !== "Escape") return;
+      // Handled, so a side panel behind stays open.
+      event.preventDefault();
       setOpen(false);
       button.current?.focus();
     }
@@ -630,20 +617,7 @@ function SlotRow({
   const archived = slot.slotCategoryArchived;
   const asksForCategory = changeable && archived;
   const tappable = changeable && !archived;
-  const summary = (
-    <>
-      <span className="slot-row-top">
-        <FoodCategoryPill label={slot.slotCategoryLabel} archived={archived} />
-        {!asksForCategory && (
-          <span className="slot-row-end">
-            <span className="slot-row-amount">{slotAmount(slot.food)}</span>
-            {tappable && <SlotChevron />}
-          </span>
-        )}
-      </span>
-      <SlotFoodName food={slot.food} />
-    </>
-  );
+  const summary = <SlotSummary slot={slot} showAmount={!asksForCategory} chevron={tappable} />;
   const dashed = slot.food.content === "empty" || archived;
   return (
     <li className={dashed ? "slot-row slot-row-dashed" : "slot-row"}>
@@ -672,6 +646,25 @@ function SlotRow({
       )}
       {slot.warnings && <SlotWarningStrips warnings={slot.warnings} mealDate={meal.date} today={today} />}
     </li>
+  );
+}
+
+// A slot's Slot Category pill, with its Portions or quantity and a chevron
+// beside it when shown, over its food.
+function SlotSummary({ slot, showAmount, chevron }: { slot: PlannerMealSlot; showAmount: boolean; chevron: boolean }) {
+  return (
+    <>
+      <span className="slot-row-top">
+        <FoodCategoryPill label={slot.slotCategoryLabel} archived={slot.slotCategoryArchived} />
+        {showAmount && (
+          <span className="slot-row-end">
+            <span className="slot-row-amount">{slotAmount(slot.food)}</span>
+            {chevron && <SlotChevron />}
+          </span>
+        )}
+      </span>
+      <SlotFoodName food={slot.food} />
+    </>
   );
 }
 
@@ -969,34 +962,272 @@ function AddSlotForm({
   );
 }
 
-// Unmounted when closed, so its errors go with it.
-function EditMealForm({ meal, week, onDone }: { meal: PlannerMeal; week: Week; onDone: () => void }) {
+// The class giving a Meal panel its week's accent: blue for next week.
+export function mealPanelClass(week: Week): string {
+  return week === "next" ? "meal-panel meal-panel-next" : "meal-panel";
+}
+
+// The day a Meal panel adds to or edits, before its label.
+export function MealPanelIcon() {
+  return (
+    <svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="3" y="5" width="18" height="16" rx="2" />
+      <path d="M3 10h18M8 3v4M16 3v4" />
+    </svg>
+  );
+}
+
+// Cancel and the main button at the foot of a Meal panel's form.
+export function MealPanelActions({
+  submitLabel,
+  pending,
+  onCancel,
+}: {
+  submitLabel: string;
+  pending: boolean;
+  onCancel: () => void;
+}) {
+  return (
+    <div className="form-actions">
+      <button type="button" onClick={onCancel}>
+        {t("planner.cancel")}
+      </button>
+      <button type="submit" className="button-primary" disabled={pending}>
+        {submitLabel}
+      </button>
+    </div>
+  );
+}
+
+// Edit Meal in the side panel, on a Planned Meal. Its Meal Type is shown but
+// never changes. Closing it without saving discards the changes quietly.
+export function EditMealPanel({ meal, week, onClose }: { meal: PlannerMeal; week: Week; onClose: () => void }) {
+  const label = meal.name ?? meal.mealTypeLabel;
+  return (
+    <SidePanel
+      icon={<MealPanelIcon />}
+      label={mealPanelLabel(meal.date, week, "editing")}
+      title={t("planner.panel.editTitle", { name: label })}
+      className={mealPanelClass(week)}
+      onClose={onClose}
+    >
+      <EditMealForm meal={meal} onDone={onClose} />
+      <DeleteMealCard meal={meal} label={label} onDeleted={onClose} />
+    </SidePanel>
+  );
+}
+
+// The values a Meal form shows, kept as sent when a submit is rejected. Only
+// adding has a Meal Type to pick.
+export interface MealFormValues {
+  mealTypeId?: string;
+  hour: string;
+  name: string;
+  untracked: boolean;
+}
+
+// The Meal form's cards, without its buttons: Basics, Slots, and Tracking and
+// repeat, under a banner
+// counting the errors once a submit is rejected. Adding offers `mealTypes` as
+// chips; `editing` shows its Meal Type locked and lists its slots. Mounted
+// again on every submit, so it starts from what was sent.
+export function MealFormFields({
+  errors,
+  values,
+  mealTypes,
+  editing,
+}: {
+  errors: MealFieldError[];
+  values: MealFormValues;
+  mealTypes: PickerOption[];
+  editing?: Pick<PlannerMeal, "mealTypeLabel" | "slots">;
+}) {
+  const [picked, setPicked] = useState(values.mealTypeId ?? "");
+  const { invalid, messages } = useMealErrors(errors);
+  const mealType = editing?.mealTypeLabel ?? mealTypes.find((option) => option.id === picked)?.label;
+
+  // The buttons are below the fields, so a rejected submit scrolls back up.
+  const banner = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    banner.current?.scrollIntoView({ block: "nearest" });
+  }, []);
+
+  return (
+    <>
+      {errors.length > 0 && (
+        <FormBanner ref={banner}>
+          <FixMessage count={errors.length} editing={editing !== undefined} />
+        </FormBanner>
+      )}
+      {messages(FORM_LEVEL)}
+      <FormCard title={t("planner.basics")}>
+        {editing ? (
+          <div className="form-field">
+            <span className="form-field-label">{t("planner.mealType")}</span>
+            <span className="field-locked">
+              <LockIcon />
+              {editing.mealTypeLabel}
+            </span>
+            <p className="field-hint">{t("planner.mealTypeLocked")}</p>
+          </div>
+        ) : (
+          <fieldset className="form-field">
+            <legend>{t("planner.mealType")}</legend>
+            <div className="chips">
+              {mealTypes.map((option) => (
+                <label key={option.id} className="chip meal-type-chip">
+                  <input
+                    type="radio"
+                    name="mealTypeId"
+                    value={option.id}
+                    defaultChecked={option.id === picked}
+                    onChange={() => setPicked(option.id)}
+                    {...invalid("mealType")}
+                  />
+                  {option.label}
+                </label>
+              ))}
+            </div>
+            {/* The error takes the hint's place. */}
+            {messages("mealType") ?? <p className="field-hint">{t("planner.mealTypeHint")}</p>}
+          </fieldset>
+        )}
+        <div className="form-field">
+          <div className="meal-form-row">
+            <label className="form-field">
+              {t("planner.hour")}
+              <input
+                name="hour"
+                defaultValue={values.hour}
+                placeholder={t("planner.hourPlaceholder")}
+                autoComplete="off"
+                autoFocus={editing !== undefined}
+                {...invalid("hour")}
+              />
+            </label>
+            <label className="form-field">
+              <span>
+                {t("planner.nameLabel")}
+                <span className="form-field-optional">{t("planner.optional")}</span>
+              </span>
+              <input
+                name="name"
+                defaultValue={values.name}
+                placeholder={
+                  mealType ? t("planner.namePlaceholder", { mealType }) : t("planner.namePlaceholderNoMealType")
+                }
+              />
+            </label>
+          </div>
+          {messages("hour")}
+        </div>
+      </FormCard>
+      <FormCard title={t("planner.slots")}>
+        {editing && editing.slots.length > 0 ? (
+          <ol className="slot-list">
+            {editing.slots.map((slot) => (
+              <li key={slot.id} className={slot.food.content === "empty" ? "slot-row slot-row-dashed" : "slot-row"}>
+                <div className="slot-row-main">
+                  <SlotSummary slot={slot} showAmount chevron={false} />
+                </div>
+              </li>
+            ))}
+          </ol>
+        ) : (
+          <p className="meal-form-no-slots">{t("planner.noSlots")}</p>
+        )}
+      </FormCard>
+      <FormCard title={t("planner.trackingAndRepeat")}>
+        <UntrackedSwitch untracked={values.untracked} />
+      </FormCard>
+    </>
+  );
+}
+
+// Untracked as a switch: a checkbox named by "Untracked", with what it means
+// under it. The whole row is its label, so a tap anywhere on it flips it.
+function UntrackedSwitch({ untracked }: { untracked: boolean }) {
+  const id = useId();
+  return (
+    <label className="meal-form-switch">
+      <span id={`${id}-name`} className="meal-form-switch-name">
+        <StatusIcon status="untracked" />
+        {t("planner.untracked")}
+      </span>
+      <span id={`${id}-hint`} className="field-hint">
+        {t("planner.untrackedHint")}
+      </span>
+      <input
+        type="checkbox"
+        role="switch"
+        name="untracked"
+        defaultChecked={untracked}
+        aria-labelledby={`${id}-name`}
+        aria-describedby={`${id}-hint`}
+      />
+    </label>
+  );
+}
+
+// "Fix 2 things to add this Meal. They're marked in red below."
+function FixMessage({ count, editing }: { count: number; editing: boolean }) {
+  return count === 1 ? (
+    <>
+      <strong>{t(editing ? "planner.fixToSaveOne" : "planner.fixToAddOne")}</strong> {t("planner.fixWhereOne")}
+    </>
+  ) : (
+    <>
+      <strong>{t(editing ? "planner.fixToSave" : "planner.fixToAdd", { count })}</strong> {t("planner.fixWhere")}
+    </>
+  );
+}
+
+function EditMealForm({ meal, onDone }: { meal: PlannerMeal; onDone: () => void }) {
   const [state, action, pending] = useActionState(
     async ({ submits, ...previous }: Submitted<MealChangesFormState>, formData: FormData) => {
       const next = await editMealAction(meal.id, previous, formData);
       if (next.errors.length === 0) onDone();
       return { ...next, submits: submits + 1 };
     },
-    { errors: [], values: { hour: meal.hour, name: meal.name ?? "" }, submits: 0 },
+    { errors: [], values: { hour: meal.hour, name: meal.name ?? "", untracked: meal.untracked }, submits: 0 },
   );
-  const { values } = state;
-  const { invalid, allMessages } = useMealErrors(state.errors);
   return (
-    <form action={action} className="item-form planner-form open-row">
-      <p className="planner-editing">{editingLabel(meal.date, week)}</p>
-      <span>{meal.mealTypeLabel}</span>
-      <Fragment key={state.submits}>
-        <input type="time" name="hour" aria-label={t("planner.hour")} defaultValue={values.hour} autoFocus {...invalid("hour")} />
-        <input name="name" aria-label={t("planner.name")} placeholder={t("planner.name")} defaultValue={values.name} />
-      </Fragment>
-      <button type="submit" className="button-primary" disabled={pending}>
-        {t("planner.save")}
-      </button>
-      <button type="button" onClick={onDone}>
-        {t("planner.cancel")}
-      </button>
-      {allMessages()}
+    <form action={action} className="form-cards" noValidate>
+      <MealFormFields
+        key={state.submits}
+        errors={state.errors}
+        values={state.values}
+        mealTypes={[]}
+        editing={meal}
+      />
+      <MealPanelActions submitLabel={t("planner.save")} pending={pending} onCancel={onDone} />
     </form>
+  );
+}
+
+// The foot of Edit Meal. Delete asks first in a sheet.
+function DeleteMealCard({ meal, label, onDeleted }: { meal: PlannerMeal; label: string; onDeleted: () => void }) {
+  const [deleting, setDeleting] = useState(false);
+  return (
+    <section className="card meal-panel-delete">
+      <h3>{t("planner.panel.delete")}</h3>
+      <p>{t("planner.panel.deleteBody")}</p>
+      <button type="button" className="button-danger" onClick={() => setDeleting(true)}>
+        {t("planner.menu.deleteMeal")}
+      </button>
+      {deleting && (
+        <ConfirmSheet
+          title={t("sheet.deleteTitle", { name: label })}
+          confirmLabel={t("sheet.delete")}
+          destructive
+          onConfirm={async () => {
+            await removeMealAction(meal.id);
+            onDeleted();
+          }}
+          onClose={() => setDeleting(false)}
+        />
+      )}
+    </section>
   );
 }
 

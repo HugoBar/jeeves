@@ -10,7 +10,7 @@ import { groupCategoriesByKind } from "../categories/category-groups";
 import type { CategoryOption } from "../categories/category-options";
 import { PRODUCT_ERROR_FIELDS } from "../field-errors";
 import { FormCard } from "../form-card";
-import { FormBanner, useFieldErrors } from "../form-error";
+import { FormBanner, LockIcon, useFieldErrors } from "../form-error";
 import type { ProductFormError, ProductFormState, ProductFormValues } from "./actions";
 
 type ProductFormContent = {
@@ -260,15 +260,6 @@ function InfoIcon() {
     <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
       <circle cx="12" cy="12" r="9" />
       <path d="M12 11v5M12 7.5v.01" />
-    </svg>
-  );
-}
-
-function LockIcon() {
-  return (
-    <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-      <rect x="6" y="11" width="12" height="9" rx="2" />
-      <path d="M9 11V8a3 3 0 0 1 6 0v3" />
     </svg>
   );
 }

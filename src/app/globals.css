@@ -2379,13 +2379,16 @@ a.back-link {
 /* Planner: each week carries its own colors, set as --week-*. "Needs
    confirmation" lists Meals off the planner with the same colors. */
 .planner-week,
-.needs-confirmation {
+.needs-confirmation,
+.meal-panel {
   --week-accent: var(--color-accent);
   --week-soft: var(--color-accent-soft);
   --week-ink: var(--color-accent-ink);
 }
 
-.planner-week-next {
+/* A Meal panel takes its week's accent too. */
+.planner-week-next,
+.meal-panel-next {
   --week-accent: var(--color-next);
   --week-soft: var(--color-next-soft);
   --week-ink: var(--color-next-ink);
@@ -2841,12 +2844,6 @@ a.back-link {
   font-weight: 500;
 }
 
-.meal-card-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: calc(var(--space) / 2);
-}
-
 /* + Slot, then Confirm taking the rest of the row. */
 .meal-card-foot {
   display: flex;
@@ -3252,4 +3249,236 @@ a.back-link {
   margin: 0;
   color: var(--week-ink);
   font-weight: 600;
+}
+
+/* The side panel, for a form beside the page: filling the screen on phone,
+   from 768px a column on the right with the page narrowed beside it. */
+.side-panel {
+  position: fixed;
+  inset: 0;
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: calc(12px + env(safe-area-inset-top)) var(--space) calc(24px + env(safe-area-inset-bottom));
+  background: var(--color-ground);
+}
+
+.side-panel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.side-panel-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  padding: 6px 12px;
+  border-radius: 999px;
+  background: var(--week-soft, var(--color-accent-soft));
+  color: var(--week-ink, var(--color-accent-ink));
+  font-size: var(--text-meta);
+  font-weight: 600;
+}
+
+.side-panel-close {
+  --button-bg: var(--color-surface);
+  --button-line: var(--color-border);
+  --button-ink: var(--color-ink-soft);
+  flex: none;
+  width: 44px;
+  padding: 0;
+}
+
+.side-panel > h2 {
+  margin: 0;
+  font-size: var(--text-title);
+  letter-spacing: -0.02em;
+  line-height: 1.15;
+}
+
+.side-panel > h2:focus {
+  outline: none;
+}
+
+/* Cancel narrower than the main button beside it. */
+.side-panel .form-cards .form-actions button {
+  flex: 1;
+}
+
+.side-panel .form-cards .form-actions button:last-child {
+  flex: 1.35;
+}
+
+@media (max-width: 767px) {
+  /* The page behind a full-screen panel doesn't scroll with it. */
+  html:has(.side-panel) {
+    overflow: hidden;
+  }
+}
+
+@media (min-width: 768px) {
+  :root {
+    --side-panel-width: min(600px, 45vw);
+  }
+
+  body:has(.side-panel) {
+    padding-right: var(--side-panel-width);
+  }
+
+  .side-panel {
+    left: auto;
+    width: var(--side-panel-width);
+    padding: 16px 24px 32px;
+    border-left: 1px solid var(--color-border);
+    box-shadow: -12px 0 32px var(--color-sheet-shadow);
+  }
+
+  /* The panel is narrow, so its buttons fill the row as on phone. */
+  .side-panel .form-cards .form-actions button {
+    flex: 1;
+    min-height: 48px;
+  }
+}
+
+.meal-panel-delete {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+/* Direct children only, as the Delete sheet opens inside the card. */
+.meal-panel-delete > h3 {
+  margin: 0;
+  color: var(--color-danger);
+  font-size: var(--text-body);
+}
+
+.meal-panel-delete > p {
+  margin: 0;
+  color: var(--color-ink-soft);
+}
+
+/* The Meal form. A Meal Type chip is a radio button, picked in the week's
+   accent. */
+/* A row, as a radio button's label isn't one by default. */
+.form-cards .meal-type-chip {
+  flex-direction: row;
+  align-items: center;
+  min-height: 44px;
+  border-style: solid;
+  border-color: var(--color-border);
+  color: var(--color-ink);
+  font-size: var(--text-body);
+}
+
+.form-cards .meal-type-chip:has(input:checked) {
+  border-color: var(--week-accent);
+  background: var(--week-soft);
+  color: var(--week-ink);
+}
+
+.meal-type-chip:has(input:checked)::before {
+  content: none;
+}
+
+/* The hour beside the name, which takes the rest of the row. */
+.meal-form-row {
+  display: grid;
+  grid-template-columns: minmax(0, 120px) minmax(0, 1fr);
+  gap: 12px;
+}
+
+.form-field-optional {
+  color: var(--color-ink-muted);
+  font-weight: 400;
+}
+
+.meal-form-no-slots {
+  margin: 0;
+  padding: 16px;
+  border: 1px dashed var(--color-line-strong);
+  border-radius: 12px;
+  color: var(--color-ink-muted);
+  text-align: center;
+}
+
+.meal-form-from-template {
+  align-self: flex-start;
+}
+
+/* The Untracked switch: its name over what it means, and the switch on the
+   right, a checkbox drawn as a track and knob. */
+.form-cards .meal-form-switch {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 2px 16px;
+  align-items: center;
+  min-height: 44px;
+  cursor: pointer;
+}
+
+.meal-form-switch-name {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--color-ink);
+  font-size: var(--text-item);
+  font-weight: 600;
+}
+
+.meal-form-switch .field-hint {
+  grid-column: 1;
+  margin: 0;
+}
+
+.form-cards .meal-form-switch input {
+  position: relative;
+  grid-row: 1 / span 2;
+  grid-column: 2;
+  width: 44px;
+  height: 26px;
+  margin: 0;
+  border-radius: 999px;
+  background: var(--color-track);
+  box-shadow: inset 0 0 0 1px var(--color-line-field);
+  cursor: pointer;
+  appearance: none;
+}
+
+.meal-form-switch input::before {
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--color-surface);
+  box-shadow: 0 1px 2px var(--color-sheet-shadow);
+  content: "";
+}
+
+.form-cards .meal-form-switch input:checked {
+  background: var(--week-accent);
+  box-shadow: none;
+}
+
+.meal-form-switch input:checked::before {
+  transform: translateX(18px);
+}
+
+.meal-form-switch input:focus-visible {
+  outline: 2px solid var(--week-accent);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .meal-form-switch input::before {
+    transition: transform 0.15s;
+  }
 }

@@ -30,15 +30,24 @@ const pickable = new Set(["lunch-id"]);
 describe("parseNewMeal", () => {
   it("reads a filled-in form, trimming text", () => {
     expect(
-      parseNewMeal({ date: "2026-10-27", hour: " 12:30 ", name: " Office Lunch ", mealTypeId: " lunch-id " }, pickable),
+      parseNewMeal(
+        { date: "2026-10-27", hour: " 12:30 ", name: " Office Lunch ", mealTypeId: " lunch-id ", untracked: false },
+        pickable,
+      ),
     ).toEqual({
       ok: true,
-      fields: { date: "2026-10-27", hour: "12:30", name: "Office Lunch", mealTypeId: "lunch-id" },
+      fields: { date: "2026-10-27", hour: "12:30", name: "Office Lunch", mealTypeId: "lunch-id", untracked: false },
     });
   });
 
+  it("keeps a Meal set Untracked", () => {
+    expect(
+      parseNewMeal({ date: "2026-10-27", hour: "19:30", name: "Dinner out", mealTypeId: "lunch-id", untracked: true }, pickable),
+    ).toMatchObject({ ok: true, fields: { untracked: true } });
+  });
+
   it.each([[""], ["   "]])("takes no name as none (%j), so the card shows the Meal Type", (name) => {
-    expect(parseNewMeal({ date: "2026-10-27", hour: "12:30", name, mealTypeId: "lunch-id" }, pickable)).toMatchObject({
+    expect(parseNewMeal({ date: "2026-10-27", hour: "12:30", name, mealTypeId: "lunch-id", untracked: false }, pickable)).toMatchObject({
       ok: true,
       fields: { name: null },
     });
@@ -46,7 +55,7 @@ describe("parseNewMeal", () => {
 });
 
 describe("parseNewMeal rejects", () => {
-  const filled = { date: "2026-10-27", hour: "12:30", name: "", mealTypeId: "lunch-id" };
+  const filled = { date: "2026-10-27", hour: "12:30", name: "", mealTypeId: "lunch-id", untracked: false };
 
   it.each([[""], ["24:00"], ["12:60"], ["7:30"], ["noon"]])("an hour that is not a time of day (%j)", (hour) => {
     expect(parseNewMeal({ ...filled, hour }, pickable)).toEqual({ ok: false, errors: ["invalidHour"] });
@@ -70,7 +79,7 @@ describe("parseNewMeal rejects", () => {
   });
 
   it("every invalid field at once", () => {
-    expect(parseNewMeal({ date: "", hour: "", name: "", mealTypeId: "" }, pickable)).toEqual({
+    expect(parseNewMeal({ date: "", hour: "", name: "", mealTypeId: "", untracked: false }, pickable)).toEqual({
       ok: false,
       errors: ["invalidDate", "invalidHour", "noMealType"],
     });
@@ -348,18 +357,26 @@ describe("slotKeepsFood", () => {
 
 describe("parseMealChanges", () => {
   it("reads a new hour and name", () => {
-    expect(parseMealChanges({ hour: "13:00", name: " Late Lunch " })).toEqual({
+    expect(parseMealChanges({ hour: "13:00", name: " Late Lunch ", untracked: false })).toEqual({
       ok: true,
-      changes: { hour: "13:00", name: "Late Lunch" },
+      changes: { hour: "13:00", name: "Late Lunch", untracked: false },
     });
   });
 
   it("clears the name when it is emptied", () => {
-    expect(parseMealChanges({ hour: "13:00", name: " " })).toEqual({ ok: true, changes: { hour: "13:00", name: null } });
+    expect(parseMealChanges({ hour: "13:00", name: " ", untracked: false })).toEqual({
+      ok: true,
+      changes: { hour: "13:00", name: null, untracked: false },
+    });
+  });
+
+  it("sets the Meal Untracked, or tracked again", () => {
+    expect(parseMealChanges({ hour: "13:00", name: "", untracked: true })).toMatchObject({ changes: { untracked: true } });
+    expect(parseMealChanges({ hour: "13:00", name: "", untracked: false })).toMatchObject({ changes: { untracked: false } });
   });
 
   it("rejects an hour that is not a time of day", () => {
-    expect(parseMealChanges({ hour: "", name: "Lunch" })).toEqual({ ok: false, errors: ["invalidHour"] });
+    expect(parseMealChanges({ hour: "", name: "Lunch", untracked: false })).toEqual({ ok: false, errors: ["invalidHour"] });
   });
 });
 

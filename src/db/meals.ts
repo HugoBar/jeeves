@@ -167,8 +167,12 @@ export async function getMeal(db: Db, id: string): Promise<Meal | undefined> {
   return meal;
 }
 
-// A Meal made from scratch: Planned, tracked, with no Meal Slots.
-export async function createMeal(db: Db, fields: NewMealFields): Promise<{ id: string }> {
+// A Meal made from scratch: Planned, with no Meal Slots, and tracked unless
+// `untracked` says otherwise.
+export async function createMeal(
+  db: Db,
+  fields: Omit<NewMealFields, "untracked"> & Partial<Pick<NewMealFields, "untracked">>,
+): Promise<{ id: string }> {
   const [row] = await db.insert(meals).values(fields).returning({ id: meals.id });
   return row!;
 }
@@ -322,11 +326,6 @@ export async function listFoodsForSlots(db: Db): Promise<{ recipes: SlotRecipe[]
     recipes: activeRecipes.map(({ id, name, portions }) => ({ id, name, portions, categoryIds: categoryIds.get(id)! })),
     products: activeProducts.map(({ id, name, defaultUnit, categoryIds }) => ({ id, name, defaultUnit, categoryIds })),
   };
-}
-
-// Nothing if the Meal is Confirmed or Skipped.
-export async function setMealUntracked(db: Db, id: string, untracked: boolean): Promise<void> {
-  await db.update(meals).set({ untracked }).where(changeable(id));
 }
 
 // A hard delete; its own slots cascade. Nothing if the Meal is Confirmed or

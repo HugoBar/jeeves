@@ -42,7 +42,6 @@ import {
   listFoodsForSlots,
   removeMealSlot,
   setMealSlotCategory,
-  setMealUntracked,
   updateMeal,
 } from "@/db/meals";
 import { foodCategoryLabel } from "@/strings";
@@ -50,7 +49,7 @@ import { foodCategoryLabel } from "@/strings";
 // `values` refills the form after a rejected submit, which React resets.
 export type NewMealFormValues = Omit<NewMealInput, "date">;
 export type NewMealFormState = { errors: MealFieldError[]; values: NewMealFormValues };
-export type MealChangesFormValues = Pick<NewMealInput, "hour" | "name">;
+export type MealChangesFormValues = Pick<NewMealInput, "hour" | "name" | "untracked">;
 export type MealChangesFormState = { errors: MealFieldError[]; values: MealChangesFormValues };
 export type MealFromTemplateFormState = { errors: MealFromTemplateError[]; templateId: string };
 // "notChangeable": the Meal was Confirmed or Skipped since the planner was
@@ -76,12 +75,13 @@ export async function createMealAction(
     mealTypeId: String(formData.get("mealTypeId") ?? ""),
     hour: String(formData.get("hour") ?? ""),
     name: String(formData.get("name") ?? ""),
+    untracked: formData.get("untracked") === "on",
   };
   const parsed = parseNewMeal({ date, ...values }, pickable);
   if (!parsed.ok) return { errors: parsed.errors, values };
   await createMeal(db, parsed.fields);
   refresh();
-  return { errors: [], values: { mealTypeId: "", hour: "", name: "" } };
+  return { errors: [], values: { mealTypeId: "", hour: "", name: "", untracked: false } };
 }
 
 // `date` is the planner day the form was opened on. Any Meal Template can be
@@ -110,7 +110,11 @@ export async function editMealAction(
 ): Promise<MealChangesFormState> {
   const db = getDb();
   if (!(await getMeal(db, id))) throw new Error("Meal not found");
-  const values = { hour: String(formData.get("hour") ?? ""), name: String(formData.get("name") ?? "") };
+  const values = {
+    hour: String(formData.get("hour") ?? ""),
+    name: String(formData.get("name") ?? ""),
+    untracked: formData.get("untracked") === "on",
+  };
   const parsed = parseMealChanges(values);
   if (!parsed.ok) return { errors: parsed.errors, values };
   await updateMeal(db, id, parsed.changes);
@@ -250,12 +254,6 @@ export async function skipMealAction(id: string, today: string): Promise<SkipMea
 // shows the planner it is not.
 export async function reopenMealAction(id: string): Promise<void> {
   await reopenMeal(getDb(), id);
-  refresh();
-}
-
-// Nothing changes on a Confirmed or Skipped Meal, as for removing one.
-export async function setMealUntrackedAction(id: string, untracked: boolean): Promise<void> {
-  await setMealUntracked(getDb(), id, untracked);
   refresh();
 }
 
