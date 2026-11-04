@@ -208,6 +208,11 @@ describe("a Meal card", () => {
     expect(text(part(html, "meal-card-name")!)).toBe("Weekday Lunch");
   });
 
+  // Untracked is set on the Meal form.
+  it.each([[false], [true]])("has no Mark or Unmark Untracked button (untracked: %s)", (untracked) => {
+    expect(text(card({ untracked })[2]!)).not.toMatch(/Mark Untracked|Unmark Untracked/);
+  });
+
   it("shows its Meal Type as its name when it has none", () => {
     expect(text(part(card({ name: null })[2]!, "meal-card-name")!)).toBe("Lunch");
   });

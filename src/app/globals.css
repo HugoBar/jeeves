@@ -2844,12 +2844,6 @@ a.back-link {
   font-weight: 500;
 }
 
-.meal-card-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: calc(var(--space) / 2);
-}
-
 /* + Slot, then Confirm taking the rest of the row. */
 .meal-card-foot {
   display: flex;

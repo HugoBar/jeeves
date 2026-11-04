@@ -40,7 +40,6 @@ import {
   removeMealSlotAction,
   reopenMealAction,
   setMealSlotCategoryAction,
-  setMealUntrackedAction,
   skipMealAction,
   type ConfirmMealError,
   type MealChangesFormState,
@@ -183,13 +182,6 @@ export function MealCard({
         )}
         {reopening && <ReopenSheet meal={meal} today={today} onClose={() => setReopening(false)} />}
       </div>
-      {changeable && (
-        <div className="meal-card-actions">
-          <form action={setMealUntrackedAction.bind(null, meal.id, !meal.untracked)}>
-            <button type="submit">{t(meal.untracked ? "planner.unmarkUntracked" : "planner.markUntracked")}</button>
-          </form>
-        </div>
-      )}
       {meal.slots.length > 0 && (
         <ol className="slot-list" aria-label={t("planner.slots")}>
           {meal.slots.map((slot) => (

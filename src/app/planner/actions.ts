@@ -42,7 +42,6 @@ import {
   listFoodsForSlots,
   removeMealSlot,
   setMealSlotCategory,
-  setMealUntracked,
   updateMeal,
 } from "@/db/meals";
 import { foodCategoryLabel } from "@/strings";
@@ -255,12 +254,6 @@ export async function skipMealAction(id: string, today: string): Promise<SkipMea
 // shows the planner it is not.
 export async function reopenMealAction(id: string): Promise<void> {
   await reopenMeal(getDb(), id);
-  refresh();
-}
-
-// Nothing changes on a Confirmed or Skipped Meal, as for removing one.
-export async function setMealUntrackedAction(id: string, untracked: boolean): Promise<void> {
-  await setMealUntracked(getDb(), id, untracked);
   refresh();
 }
 

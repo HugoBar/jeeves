@@ -140,8 +140,6 @@ export const en = {
   "planner.menu.editMeal": "Edit Meal",
   "planner.menu.addSlot": "Add slot",
   "planner.menu.deleteMeal": "Delete this Meal",
-  "planner.markUntracked": "Mark Untracked",
-  "planner.unmarkUntracked": "Unmark Untracked",
   "planner.mealTypeArchived": "Meal Type Archived",
   "planner.mealEyebrow": "{mealType} · {hour}",
   "planner.status.confirmed": "Confirmed",

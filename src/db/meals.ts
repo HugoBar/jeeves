@@ -328,11 +328,6 @@ export async function listFoodsForSlots(db: Db): Promise<{ recipes: SlotRecipe[]
   };
 }
 
-// Nothing if the Meal is Confirmed or Skipped.
-export async function setMealUntracked(db: Db, id: string, untracked: boolean): Promise<void> {
-  await db.update(meals).set({ untracked }).where(changeable(id));
-}
-
 // A hard delete; its own slots cascade. Nothing if the Meal is Confirmed or
 // Skipped: it must be Reopened first. A Reopened Meal's Stock Movements stay
 // in the Products' history, no longer linked to it.
