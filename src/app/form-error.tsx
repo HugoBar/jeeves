@@ -10,6 +10,16 @@ export function AlertIcon() {
   );
 }
 
+// The lock beside a field that can't be changed.
+export function LockIcon() {
+  return (
+    <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+      <rect x="6" y="11" width="12" height="9" rx="2" />
+      <path d="M9 11V8a3 3 0 0 1 6 0v3" />
+    </svg>
+  );
+}
+
 // An error message with its icon.
 export function FormError({ children }: { children: ReactNode }) {
   return (
