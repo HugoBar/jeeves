@@ -9,6 +9,7 @@ import {
   isUnconfirmed,
   mealCardStatus,
   pickableForSlot,
+  reopensAs,
   slotCategoryChoices,
   slotFoodValue,
   type MealCardStatus,
@@ -16,10 +17,11 @@ import {
   type MealStatus,
 } from "@/core/meals";
 import type { CategoryKind } from "@/core/food-categories";
+import type { AddedBack } from "@/db/confirmation";
 import { localDate, localHour } from "@/core/planner";
 import { shortfallUrgency } from "@/core/projected-stock";
 import type { DefaultUnit } from "@/core/units";
-import { editingLabel, formatDayHeading, formatMealDate, formatPortions, formatQuantity, t } from "@/strings";
+import { editingLabel, formatDayHeading, formatMealDate, formatPortions, formatQuantity, t, type StringKey } from "@/strings";
 import { MEAL_ERROR_FIELDS, MEAL_SLOT_ERROR_FIELDS } from "../field-errors";
 import { FoodCategoryPill } from "../food-category-pill";
 import { AlertIcon, FormError, useFieldErrors, type InvalidProps } from "../form-error";
@@ -61,6 +63,9 @@ export interface PlannerMeal {
   status: MealStatus;
   untracked: boolean;
   slots: PlannerMealSlot[];
+  // What Reopening it adds back to Stock, by Product name: exactly what its
+  // Confirmation took. Empty unless it is Confirmed and took something.
+  addsBack: AddedBack[];
 }
 
 // A Meal Slot with what its card shows. Its Slot Category may be Archived:
@@ -151,6 +156,7 @@ export function MealCard({
 }) {
   const [editing, setEditing] = useState(false);
   const [addingSlot, setAddingSlot] = useState(false);
+  const [reopening, setReopening] = useState(false);
   const label = meal.name ?? meal.mealTypeLabel;
   const changeable = canChangeMeal(meal);
   const status = mealCardStatus(meal, today);
@@ -178,10 +184,11 @@ export function MealCard({
           <MealMenu meal={meal} label={label} onEdit={() => setEditing(true)} onAddSlot={() => setAddingSlot(true)} />
         )}
         {canReopen(meal) && (
-          <form action={reopenMealAction.bind(null, meal.id)} className="meal-card-reopen">
-            <button type="submit">{t("planner.reopen")}</button>
-          </form>
+          <button type="button" className="meal-card-reopen" onClick={() => setReopening(true)}>
+            {t("planner.reopen")}
+          </button>
         )}
+        {reopening && <ReopenSheet meal={meal} today={today} onClose={() => setReopening(false)} />}
       </div>
       {changeable && (
         <div className="meal-card-actions">
@@ -354,6 +361,59 @@ export function MealMenuList({
       </button>
     </div>
   );
+}
+
+// Asks before Reopening a Confirmed or Skipped Meal, saying where it goes and
+// what goes back to Stock: exactly what its Confirmation took, or nothing for
+// a Skipped or Untracked one. Cancel changes nothing. `today` is the viewer's
+// date.
+export function ReopenSheet({ meal, today, onClose }: { meal: PlannerMeal; today: string; onClose: () => void }) {
+  const status = mealCardStatus(meal, today);
+  const day = formatMealDate(meal.date);
+  return (
+    <ConfirmSheet
+      eyebrow={t(meal.date === today ? "planner.reopenSheet.eyebrowToday" : "planner.reopenSheet.eyebrow", {
+        day,
+        hour: meal.hour,
+      })}
+      title={t("planner.reopenSheet.title", { name: meal.name ?? meal.mealTypeLabel })}
+      confirmLabel={t("planner.reopen")}
+      onConfirm={() => reopenMealAction(meal.id)}
+      onClose={onClose}
+    >
+      {status && <MealCardStatusLine status={status} />}
+      <ul className="sheet-effects">
+        <li className="sheet-effect-back">
+          {t(reopensAs(meal, today) === "unconfirmed" ? "planner.reopenSheet.toUnconfirmed" : "planner.reopenSheet.toPlanned")}
+        </li>
+        {meal.addsBack.length > 0 ? (
+          <li className="sheet-effect-add">{t("planner.reopenSheet.addsBack")}</li>
+        ) : (
+          <li className="sheet-effect-kept">{t(nothingAddedBack(meal))}</li>
+        )}
+      </ul>
+      {meal.addsBack.length > 0 && (
+        <div className="reopen-adds-back">
+          <p className="reopen-adds-back-label">{t("planner.reopenSheet.addsBackLabel")}</p>
+          <dl>
+            {meal.addsBack.map(({ name, defaultUnit, quantity }) => (
+              <div key={name} className="reopen-adds-back-row">
+                <dt>{name}</dt>
+                <dd>{t("planner.reopenSheet.addsBackQuantity", { quantity: formatQuantity(quantity, defaultUnit) })}</dd>
+              </div>
+            ))}
+          </dl>
+        </div>
+      )}
+    </ConfirmSheet>
+  );
+}
+
+// Why a Reopen adds nothing back: Skipped, Confirmed as Untracked, or
+// Confirmed with nothing to take.
+function nothingAddedBack(meal: PlannerMeal): StringKey {
+  if (meal.status === "skipped") return "planner.reopenSheet.nothingSkipped";
+  return meal.untracked ? "planner.reopenSheet.nothingUntracked" : "planner.reopenSheet.nothingConfirmed";
 }
 
 // "✓ Confirmed", "↗ Confirmed · Untracked", "↗ Untracked", "◷ Unconfirmed",

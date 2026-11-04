@@ -1019,6 +1019,56 @@ html:has(.sheet[open]) {
   color: var(--color-warning-ink);
 }
 
+.sheet-effect-back::before,
+.sheet-effect-add::before {
+  background: var(--color-accent-soft);
+  color: var(--color-accent-ink);
+}
+
+.sheet-effect-back::before {
+  content: "↺" / "";
+}
+
+.sheet-effect-add::before {
+  content: "+" / "";
+}
+
+/* The Reopen sheet's "Adds back to Stock": each Product and "+ 80 g". */
+.reopen-adds-back {
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: var(--color-inset);
+}
+
+.reopen-adds-back-label {
+  margin: 0 0 4px;
+  color: var(--color-ink-muted);
+  font-size: var(--text-label);
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.reopen-adds-back dl {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0;
+}
+
+.reopen-adds-back-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.reopen-adds-back dd {
+  margin: 0;
+  color: var(--color-confirmed);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
 .sheet-actions {
   display: flex;
   gap: 8px;
@@ -2579,7 +2629,7 @@ a.back-link {
   padding: 0;
 }
 
-.planner-meals li + li {
+.planner-meals > li + li {
   border-top: 1px solid var(--color-border);
 }
 
@@ -2782,6 +2832,15 @@ a.back-link {
   color: var(--color-warning-ink);
 }
 
+/* Reopen, small, on a Confirmed or Skipped Meal: beside its status on
+   phone, at the row's right end when it wraps. */
+.meal-card-reopen {
+  margin-left: auto;
+  padding: 0 14px;
+  font-size: var(--text-meta);
+  font-weight: 500;
+}
+
 .meal-card-actions {
   display: flex;
   flex-wrap: wrap;
@@ -2838,7 +2897,9 @@ a.back-link {
   }
 
   .meal-card-reopen {
-    margin-top: 6px;
+    margin: 6px 0 0;
+    min-height: 30px;
+    font-size: var(--text-label);
   }
 
   .meal-card-name {

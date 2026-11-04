@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   canChangeMeal,
   canReopen,
+  reopensAs,
   isUnconfirmed,
   mealCardStatus,
   needingConfirmation,
@@ -430,6 +431,17 @@ describe("canReopen", () => {
 
   it("refuses a Planned or Unconfirmed Meal", () => {
     expect(canReopen({ status: "planned" })).toBe(false);
+  });
+});
+
+describe("reopensAs", () => {
+  it("returns a Meal dated today or later to Planned", () => {
+    expect(reopensAs({ date: "2026-10-28" }, "2026-10-28")).toBe("planned");
+    expect(reopensAs({ date: "2026-10-30" }, "2026-10-28")).toBe("planned");
+  });
+
+  it("returns a Meal whose day has passed to Unconfirmed", () => {
+    expect(reopensAs({ date: "2026-10-27" }, "2026-10-28")).toBe("unconfirmed");
   });
 });
 

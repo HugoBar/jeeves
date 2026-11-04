@@ -1,7 +1,7 @@
 import { createElement, type ComponentProps } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
-import { MealMenuList, type PlannerMeal, type PlannerMealSlot, type SlotWarnings } from "./meal-card";
+import { MealMenuList, ReopenSheet, type PlannerMeal, type PlannerMealSlot, type SlotWarnings } from "./meal-card";
 import { PlannerView } from "./planner";
 
 type Props = ComponentProps<typeof PlannerView>;
@@ -36,6 +36,7 @@ const meal = (overrides: Partial<PlannerMeal> = {}): PlannerMeal => ({
   status: "planned",
   untracked: false,
   slots: [],
+  addsBack: [],
   ...overrides,
 });
 
@@ -321,6 +322,122 @@ describe("a Meal card", () => {
       expect(buttons).not.toContain("Edit");
       expect(buttons).not.toContain("Remove");
     });
+  });
+
+  describe("its Reopen button", () => {
+    const reopen = (html: string) => /<button [^>]*class="meal-card-reopen"[^>]*>(.*?)<\/button>/.exec(html)?.[1];
+
+    it.each([
+      ["a Confirmed Meal", { status: "confirmed" as const }],
+      ["a Confirmed · Untracked Meal", { status: "confirmed" as const, untracked: true }],
+      ["a Skipped Meal", { status: "skipped" as const }],
+      ["a Confirmed Meal on an earlier day", { status: "confirmed" as const, date: "2026-10-27" }],
+    ])("shows on %s, in the card's head", (_case, overrides) => {
+      const html = card(overrides)[2]!;
+      expect(text(reopen(html)!)).toBe("Reopen");
+      expect(html).toMatch(/<div class="meal-card-head">.*class="meal-card-reopen"/);
+    });
+
+    it.each([
+      ["a Planned Meal", {}],
+      ["an Untracked Meal that is still Planned", { untracked: true }],
+      ["an Unconfirmed Meal", { date: "2026-10-27" }],
+      ["an Unconfirmed Untracked Meal", { date: "2026-10-27", untracked: true }],
+    ])("isn't shown on %s", (_case, overrides) => {
+      expect(reopen(card(overrides)[2]!)).toBeUndefined();
+    });
+  });
+});
+
+describe("the Reopen sheet", () => {
+  const sheet = (overrides: Partial<PlannerMeal> = {}, sheetToday = today) =>
+    renderToStaticMarkup(
+      createElement(ReopenSheet, {
+        meal: meal({ status: "confirmed", hour: "08:00", name: "Overnight oats", ...overrides }),
+        today: sheetToday,
+        onClose: () => {},
+      }),
+    );
+  const effects = (html: string) => [...html.matchAll(/<li class="([^"]*)">(.*?)<\/li>/g)].map((li) => [li[1], text(li[2]!)]);
+  const addsBack = (html: string) =>
+    [...html.matchAll(/<div class="reopen-adds-back-row"><dt>(.*?)<\/dt><dd>(.*?)<\/dd><\/div>/g)].map((row) => [
+      text(row[1]!),
+      text(row[2]!),
+    ]);
+
+  it("is headed with the Meal's day and hour, and Reopen {Meal}?", () => {
+    const html = sheet({ date: "2026-10-27" });
+    expect(text(/<span class="sheet-eyebrow">(.*?)<\/span>/.exec(html)![1]!)).toBe("Tue 27 Oct · 08:00");
+    expect(text(/<h2 [^>]*>(.*?)<\/h2>/.exec(html)![1]!)).toBe("Reopen Overnight oats?");
+  });
+
+  it("says Today in the heading of a Meal dated today", () => {
+    expect(text(/<span class="sheet-eyebrow">(.*?)<\/span>/.exec(sheet())![1]!)).toBe("Today · Thu 29 Oct · 08:00");
+  });
+
+  it("names a Meal with no name by its Meal Type", () => {
+    expect(text(/<h2 [^>]*>(.*?)<\/h2>/.exec(sheet({ name: null }))![1]!)).toBe("Reopen Lunch?");
+  });
+
+  it.each([
+    [{}, "Confirmed"],
+    [{ untracked: true }, "Confirmed · Untracked"],
+    [{ status: "skipped" as const }, "Skipped"],
+  ])("shows %o's current status as %s", (overrides, expected) => {
+    const status = /<p class="meal-status ([^"]*)">(.*?)<\/p>/.exec(sheet(overrides))!;
+    expect(text(status[2]!)).toBe(expected);
+    expect(status[2]).toContain("<svg");
+  });
+
+  it("says a Meal dated today or later goes back to Planned", () => {
+    expect(effects(sheet({ date: "2026-10-30" }))[0]).toEqual([
+      "sheet-effect-back",
+      "It goes back to Planned, so you can change it and confirm again.",
+    ]);
+    expect(effects(sheet())[0]![1]).toBe("It goes back to Planned, so you can change it and confirm again.");
+  });
+
+  it("says a Meal whose day has passed goes back to Unconfirmed", () => {
+    expect(effects(sheet({ date: "2026-10-27" }))[0]).toEqual([
+      "sheet-effect-back",
+      "It goes back to Unconfirmed, because its day has passed.",
+    ]);
+  });
+
+  it("lists what the Confirmation took in an Adds back to Stock box", () => {
+    const html = sheet({
+      addsBack: [
+        { name: "Milk", defaultUnit: "ml", quantity: 200 },
+        { name: "Oat flakes", defaultUnit: "g", quantity: 1800 },
+      ],
+    });
+    expect(effects(html)[1]).toEqual([
+      "sheet-effect-add",
+      "Exactly what confirming took is added back, as Stock Movements linked to this Meal.",
+    ]);
+    expect(text(/<p class="reopen-adds-back-label">(.*?)<\/p>/.exec(html)![1]!)).toBe("Adds back to Stock");
+    expect(addsBack(html)).toEqual([
+      ["Milk", "+ 200 ml"],
+      ["Oat flakes", "+ 1,800 g"],
+    ]);
+  });
+
+  it.each([
+    [{ status: "skipped" as const }, "Nothing was taken when it was Skipped, so nothing is added back."],
+    [{ untracked: true }, "Nothing was taken when it was Confirmed as Untracked, so nothing is added back."],
+    [{}, "Nothing was taken when it was Confirmed, so nothing is added back."],
+  ])("says nothing is added back for %o, with no box", (overrides, expected) => {
+    const html = sheet(overrides);
+    expect(effects(html)[1]).toEqual(["sheet-effect-kept", expected]);
+    expect(html).not.toContain("reopen-adds-back");
+  });
+
+  it("has Cancel and Reopen at its foot", () => {
+    const foot = /<div class="sheet-actions">(.*?)<\/div>/.exec(sheet())![1]!;
+    expect([...foot.matchAll(/<button [^>]*>(.*?)<\/button>/g)].map((button) => text(button[1]!))).toEqual([
+      "Cancel",
+      "Reopen",
+    ]);
   });
 });
 
