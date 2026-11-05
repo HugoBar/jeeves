@@ -1158,6 +1158,8 @@ export function NewMealSlotsCard({
               <li key={key} className="slot-row meal-form-slot">
                 <div className="slot-row-main">
                   <SlotSummary slot={slot} showAmount chevron={false} />
+                  {/* On the food's line, as the design has it: × takes the top. */}
+                  <SlotChevron />
                 </div>
                 <button
                   type="button"

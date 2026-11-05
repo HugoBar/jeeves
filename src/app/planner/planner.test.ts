@@ -757,6 +757,11 @@ describe("the Meal form", () => {
       expect(rows[0]![2]).toMatch(/<button type="button"[^>]*aria-label="Remove Main Dish slot"/);
     });
 
+    it("shows a chevron on each added slot, as the Planner's slots have", () => {
+      const rows = slotRows(renderCard());
+      expect(rows.every((row) => row[2]!.includes("slot-row-chevron"))).toBe(true);
+    });
+
     it("sends the added slots with the form, in the order shown", () => {
       const html = renderCard();
       const sent = (name: string) => [...html.matchAll(new RegExp(`<input type="hidden" name="${name}" value="([^"]*)"`, "g"))].map((m) => m[1]);

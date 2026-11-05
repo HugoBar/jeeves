@@ -3422,7 +3422,15 @@ a.back-link {
 }
 
 .meal-form-slot > .slot-row-main {
+  position: relative;
   padding-right: 52px;
+}
+
+/* The chevron sits at the right of the food's line, under the ×. */
+.meal-form-slot .slot-row-main > .slot-row-chevron {
+  position: absolute;
+  right: 14px;
+  bottom: 14px;
 }
 
 .meal-form-slot-remove {
