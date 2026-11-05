@@ -1,6 +1,11 @@
 import { AMOUNT_COLUMN, roundForColumn } from "@/core/amounts";
-import { slotNeeds, type ProjectedSlot, type UnconvertibleIngredient } from "@/core/projected-stock";
-import type { StockMovementType } from "@/core/stock";
+import {
+  slotNeeds,
+  type ProjectedProduct,
+  type ProjectedSlot,
+  type UnconvertibleIngredient,
+} from "@/core/projected-stock";
+import { deduct, type StockMovementType } from "@/core/stock";
 import type { ConvertibleProduct } from "@/core/units";
 
 // What Confirming a Meal takes from one Product's Stock, in its Default Unit.
@@ -32,6 +37,34 @@ export function confirmationDeductions(
   return {
     ok: true,
     deductions: [...totals].map(([productId, total]) => ({ productId, quantity: roundForColumn(total, AMOUNT_COLUMN) })),
+  };
+}
+
+// What Confirming a tracked Meal as planned would take from one Product's
+// Stock, in its Default Unit: `needs` is its deduction, `takes` what that
+// removes once clamped at 0, less than `needs` when Stock is short.
+export interface StockTake {
+  productId: string;
+  needs: number;
+  takes: number;
+}
+
+// What Confirming a tracked Meal as planned would take from Stock, before it
+// is Confirmed: its deductions, in slot order, each against the Product's
+// Stock now, or the Ingredient that would refuse it.
+export function stockTakes(
+  slots: readonly ProjectedSlot[],
+  products: ReadonlyMap<string, ProjectedProduct>,
+): { ok: true; takes: StockTake[] } | { ok: false; unconvertible: UnconvertibleIngredient } {
+  const result = confirmationDeductions(slots, products);
+  if (!result.ok) return result;
+  return {
+    ok: true,
+    // Removed as Confirm removes it: the size of the deduction's delta.
+    takes: result.deductions.map(({ productId, quantity }) => {
+      const { delta } = deduct({ stock: products.get(productId)!.stock, stockSuspect: false }, quantity);
+      return { productId, needs: quantity, takes: Math.abs(delta) };
+    }),
   };
 }
 

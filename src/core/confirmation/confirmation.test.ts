@@ -1,11 +1,12 @@
 import { describe, expect, it } from "vitest";
-import type { ProjectedRecipe, ProjectedSlot } from "@/core/projected-stock";
+import type { ProjectedProduct, ProjectedRecipe, ProjectedSlot } from "@/core/projected-stock";
 import type { ConvertibleProduct } from "@/core/units";
 import {
   confirmationDeductions,
   confirmationsToReverse,
   productsInSlotOrder,
   staysSuspectAfterReopen,
+  stockTakes,
   type ProductMovement,
 } from "./index";
 
@@ -105,6 +106,51 @@ describe("confirmationDeductions", () => {
       { id: "b", content: "recipe", portions: 2, recipe: pancakes },
     ];
     expect(confirmationDeductions(slots, products)).toEqual({
+      ok: false,
+      unconvertible: { productId: "flour", amount: 1, unit: "cup", error: { code: "noDensity" } },
+    });
+  });
+});
+
+describe("stockTakes", () => {
+  // The same Products, with what is in Stock: 1,000 g rice, 100 ml milk, no eggs.
+  const stocked = new Map<string, ProjectedProduct>([
+    ["rice", { defaultUnit: "g", density: null, stock: 1000 }],
+    ["milk", { defaultUnit: "ml", density: 1.03, stock: 100 }],
+    ["eggs", { defaultUnit: "pc", density: null, stock: 0 }],
+    ["flour", { defaultUnit: "g", density: null, stock: 500 }],
+  ]);
+
+  it("takes what each Product needs while Stock covers it, in slot order", () => {
+    const slots: ProjectedSlot[] = [
+      { id: "a", content: "product", productId: "flour", quantity: 50 },
+      { id: "b", content: "product", productId: "rice", quantity: 300 },
+    ];
+    expect(stockTakes(slots, stocked)).toEqual({
+      ok: true,
+      takes: [
+        { productId: "flour", needs: 50, takes: 50 },
+        { productId: "rice", needs: 300, takes: 300 },
+      ],
+    });
+  });
+
+  // Confirm clamps at 0, so it removes only what is there.
+  it("takes only what is in Stock of a Product it needs more of", () => {
+    const slots: ProjectedSlot[] = [{ id: "a", content: "recipe", portions: 2, recipe: risotto }];
+    expect(stockTakes(slots, stocked)).toEqual({
+      ok: true,
+      takes: [
+        { productId: "rice", needs: 200, takes: 200 },
+        { productId: "milk", needs: 250, takes: 100 },
+        { productId: "eggs", needs: 1, takes: 0 },
+      ],
+    });
+  });
+
+  it("refuses as Confirm does when an Ingredient cannot be converted", () => {
+    const scones: ProjectedRecipe = { portions: 1, ingredients: [{ productId: "flour", amount: 1, unit: "cup" }] };
+    expect(stockTakes([{ id: "a", content: "recipe", portions: 1, recipe: scones }], stocked)).toEqual({
       ok: false,
       unconvertible: { productId: "flour", amount: 1, unit: "cup", error: { code: "noDensity" } },
     });
