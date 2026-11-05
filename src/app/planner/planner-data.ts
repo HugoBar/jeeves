@@ -4,7 +4,7 @@ import { sortMealTemplates } from "@/core/meal-templates";
 import { sortMealTypes } from "@/core/meal-types";
 import { projectStock, type SlotProjection } from "@/core/projected-stock";
 import type { Db } from "@/db";
-import { listReopenAddsBack } from "@/db/confirmation";
+import { listConfirmTakes, listReopenAddsBack } from "@/db/confirmation";
 import { listActiveCategories } from "@/db/food-categories";
 import { listMealTemplates, listPickableMealTypes, listPickableSlotCategories, type MealTemplate } from "@/db/meal-templates";
 import { listActiveMealTypes } from "@/db/meal-types";
@@ -24,6 +24,11 @@ export async function toPlannerMeals(db: Db, meals: Meal[], to: string): Promise
   const addsBack = await listReopenAddsBack(
     db,
     meals.filter((meal) => meal.status === "confirmed").map((meal) => meal.id),
+  );
+  // Only a tracked Meal still to Confirm can take anything.
+  const takes = await listConfirmTakes(
+    db,
+    meals.filter((meal) => meal.status === "planned" && !meal.untracked).map((meal) => meal.id),
   );
   return meals.map((meal) => ({
     id: meal.id,
@@ -45,6 +50,7 @@ export async function toPlannerMeals(db: Db, meals: Meal[], to: string): Promise
       warnings: toSlotWarnings(projection.get(slot.id), projectionInput.products),
     })),
     addsBack: addsBack.get(meal.id) ?? [],
+    takes: takes.get(meal.id) ?? { ok: true, products: [] },
   }));
 }
 

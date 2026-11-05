@@ -5,12 +5,14 @@ import {
   confirmationsToReverse,
   productsInSlotOrder,
   staysSuspectAfterReopen,
+  stockTakes,
 } from "@/core/confirmation";
 import { canReopen, canConfirmOrSkip } from "@/core/meals";
+import type { UnconvertibleIngredient } from "@/core/projected-stock";
 import { deduct, reverse } from "@/core/stock";
 import type { ConversionError, DefaultUnit, Unit } from "@/core/units";
 import type { Db } from "./index";
-import { loadMealSlots } from "./projected-stock";
+import { loadMealSlots, type ProjectedProductWithName } from "./projected-stock";
 import { meals, products, stockMovements } from "./schema";
 import { applyMovement } from "./stock-movements";
 
@@ -28,6 +30,56 @@ export type ConfirmMealResult =
       unit: Unit;
       code: ConversionError["code"];
     };
+
+// Confirm refused because an Ingredient cannot be converted.
+type UnconvertibleRefusal = Extract<ConfirmMealResult, { error: "unconvertible" }>;
+
+// The refusal for an Ingredient that cannot be converted, with its Product's
+// name and Default Unit.
+function unconvertibleRefusal(
+  { productId, amount, unit, error }: UnconvertibleIngredient,
+  products: ReadonlyMap<string, ProjectedProductWithName>,
+): UnconvertibleRefusal {
+  const { name, defaultUnit } = products.get(productId)!;
+  return { ok: false, error: "unconvertible", product: { name, defaultUnit }, amount, unit, code: error.code };
+}
+
+// What Confirming a Meal as planned would take from one Product's Stock, in
+// its Default Unit: it `needs` that much, and `takes` less when Stock is
+// short, as the deduction clamps at 0.
+export interface TakenFromStock {
+  name: string;
+  defaultUnit: DefaultUnit;
+  needs: number;
+  takes: number;
+}
+
+// What Confirming a Meal as planned would take, or the refusal it would get.
+export type ConfirmTakes = { ok: true; products: TakenFromStock[] } | UnconvertibleRefusal;
+
+// What Confirming each tracked Meal as planned would take from Stock now,
+// worked out as confirmMeal deducts it, by Product name in slot order, or
+// the refusal confirmMeal would give. Every Meal given has an entry.
+export async function listConfirmTakes(db: Db, mealIds: readonly string[]): Promise<Map<string, ConfirmTakes>> {
+  if (mealIds.length === 0) return new Map();
+  const { slotsByMeal, products } = await loadMealSlots(db, [...mealIds]);
+  return new Map(
+    mealIds.map((mealId): [string, ConfirmTakes] => {
+      const result = stockTakes(slotsByMeal.get(mealId)!, products);
+      if (!result.ok) return [mealId, unconvertibleRefusal(result.unconvertible, products)];
+      return [
+        mealId,
+        {
+          ok: true,
+          products: result.takes.map(({ productId, needs, takes }) => {
+            const { name, defaultUnit } = products.get(productId)!;
+            return { name, defaultUnit, needs, takes };
+          }),
+        },
+      ];
+    }),
+  );
+}
 
 // A Meal "Confirm all as planned" could not Confirm, and why.
 export interface RefusedMeal {
@@ -59,11 +111,7 @@ export async function confirmMeal(
     if (!marksUntracked) {
       const { slotsByMeal, products } = await loadMealSlots(tx, [id]);
       const result = confirmationDeductions(slotsByMeal.get(id)!, products);
-      if (!result.ok) {
-        const { productId, amount, unit, error } = result.unconvertible;
-        const { name, defaultUnit } = products.get(productId)!;
-        return { ok: false, error: "unconvertible", product: { name, defaultUnit }, amount, unit, code: error.code };
-      }
+      if (!result.ok) return unconvertibleRefusal(result.unconvertible, products);
       for (const { productId, quantity } of result.deductions) {
         await applyMovement(tx, productId, "confirmation", (current) => deduct(current, quantity), id);
       }

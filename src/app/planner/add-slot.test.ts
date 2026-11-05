@@ -20,6 +20,7 @@ const meal: PlannerMeal = {
   untracked: false,
   slots: [],
   addsBack: [],
+  takes: { ok: true, products: [] },
 };
 
 const pickers: SlotPickers = {

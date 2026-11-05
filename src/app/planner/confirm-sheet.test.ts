@@ -34,6 +34,7 @@ const meal = (overrides: Partial<PlannerMeal> = {}): PlannerMeal => ({
     slot("left", "Side Dish", { content: "leftovers" }),
   ],
   addsBack: [],
+  takes: { ok: true, products: [] },
   ...overrides,
 });
 

@@ -19,11 +19,20 @@ import {
 } from "@/core/meals";
 import type { CategoryKind } from "@/core/food-categories";
 import { moveSlot, type SlotMove } from "@/core/slot-order";
-import type { AddedBack } from "@/db/confirmation";
+import type { AddedBack, ConfirmTakes } from "@/db/confirmation";
 import { localDate, localHour, type Week } from "@/core/planner";
 import { shortfallUrgency } from "@/core/projected-stock";
 import type { DefaultUnit } from "@/core/units";
-import { formatDayHeading, formatMealDate, mealPanelLabel, formatPortions, formatQuantity, t, type StringKey } from "@/strings";
+import {
+  formatDayHeading,
+  formatList,
+  formatMealDate,
+  mealPanelLabel,
+  formatPortions,
+  formatQuantity,
+  t,
+  type StringKey,
+} from "@/strings";
 import { FORM_LEVEL, MEAL_ERROR_FIELDS } from "../field-errors";
 import { FoodCategoryPill } from "../food-category-pill";
 import { FormCard } from "../form-card";
@@ -70,6 +79,9 @@ export interface PlannerMeal {
   // What Reopening it adds back to Stock, by Product name: exactly what its
   // Confirmation took. Empty unless it is Confirmed and took something.
   addsBack: AddedBack[];
+  // What Confirming it as planned would take from Stock now, or why Confirm
+  // would refuse. Nothing for a Meal that is Untracked, Confirmed or Skipped.
+  takes: ConfirmTakes;
 }
 
 // A Meal Slot with what its card shows. Its Slot Category may be Archived:
@@ -582,6 +594,7 @@ export function ConfirmMealSheet({
             </label>
           ))}
         </fieldset>
+        <TakesFromStock meal={meal} outcome={outcome} />
         {notYet && !refused && (
           <div className="banner">
             <AlertIcon />
@@ -658,6 +671,73 @@ function ConfirmSlotRow({ slot, disabled, onEdit }: { slot: PlannerMealSlot; dis
       </button>
     </li>
   );
+}
+
+// The Confirm sheet's "Takes from Stock": each Product and "− 300 g", what
+// Eaten as planned deducts, in amber with why when Stock is short and the
+// deduction clamps at 0. Otherwise it says why nothing leaves Stock: the
+// outcome picked, an Untracked Meal, the slots, or the refusal Confirm
+// would give.
+function TakesFromStock({ meal, outcome }: { meal: PlannerMeal; outcome: ConfirmOutcome }) {
+  const listed = outcome === "asPlanned" && !meal.untracked && meal.takes.ok ? meal.takes.products : [];
+  return (
+    <div className="confirm-takes">
+      <p className="confirm-takes-label">{t("planner.confirmSheet.takesLabel")}</p>
+      {listed.length > 0 ? (
+        <ul className="confirm-take-list">
+          {listed.map(({ name, defaultUnit, needs, takes }) => {
+            const short = takes < needs;
+            return (
+              <li key={name} className={short ? "confirm-take confirm-take-short" : "confirm-take"}>
+                <span className="confirm-take-name">{name}</span>
+                <span className="confirm-take-amount">
+                  {t("planner.confirmSheet.takesQuantity", { quantity: formatQuantity(takes, defaultUnit) })}
+                </span>
+                {short && (
+                  <p className="confirm-take-warning">
+                    <AlertIcon />
+                    {t("planner.confirmSheet.takesShort", {
+                      needs: formatQuantity(needs, defaultUnit),
+                      stock: formatQuantity(takes, defaultUnit),
+                      name,
+                      flag: t("stock.suspect"),
+                    })}
+                  </p>
+                )}
+              </li>
+            );
+          })}
+        </ul>
+      ) : (
+        <p className="confirm-takes-note">{nothingTaken(meal, outcome)}</p>
+      )}
+    </div>
+  );
+}
+
+// Why the Confirm sheet's "Takes from Stock" lists nothing.
+function nothingTaken(meal: PlannerMeal, outcome: ConfirmOutcome): string {
+  if (outcome === "skipped") return t("planner.confirmSheet.takesSkipped");
+  if (outcome === "untracked" || meal.untracked) return t("planner.confirmSheet.takesUntracked");
+  if (!meal.takes.ok) return confirmOrSkipErrorMessage(meal.takes);
+  if (meal.slots.length === 0) return t("planner.confirmSheet.takesNoSlots");
+  const empty = meal.slots.filter((slot) => slot.food.content === "empty").map((slot) => slot.slotCategoryLabel);
+  // Each once, however many slots hold it.
+  const recipes = [...new Set(meal.slots.flatMap(({ food }) => (food.content === "recipe" ? [food.label] : [])))];
+  const reasons = [
+    ...(meal.slots.some((slot) => slot.food.content === "leftovers") ? [t("planner.confirmSheet.takesLeftovers")] : []),
+    ...(empty.length > 0
+      ? [t(empty.length === 1 ? "planner.confirmSheet.takesEmptyOne" : "planner.confirmSheet.takesEmptyMany", { categories: formatList(empty) })]
+      : []),
+    ...(recipes.length > 0
+      ? [
+          t(recipes.length === 1 ? "planner.confirmSheet.takesNoIngredientsOne" : "planner.confirmSheet.takesNoIngredientsMany", {
+            recipes: formatList(recipes),
+          }),
+        ]
+      : []),
+  ];
+  return t("planner.confirmSheet.takesNothing", { reasons: formatList(reasons) });
 }
 
 // "Today · Thu 29 Oct · 12:30" over a sheet about a Meal, or without Today

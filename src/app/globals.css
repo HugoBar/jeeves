@@ -3329,6 +3329,71 @@ a.back-link {
   font-size: var(--text-meta);
 }
 
+/* The Confirm sheet's "Takes from Stock": each Product and "− 300 g", amber
+   with why when Stock is short, or why nothing leaves Stock. */
+.confirm-takes {
+  flex: none;
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: var(--color-inset);
+}
+
+.confirm-takes-label {
+  margin: 0 0 4px;
+  color: var(--color-ink-muted);
+  font-size: var(--text-label);
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.confirm-take-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.confirm-take {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 2px 12px;
+}
+
+.confirm-take-amount {
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.confirm-take-short .confirm-take-amount,
+.confirm-take-warning {
+  color: var(--color-warning-ink);
+}
+
+.confirm-take-warning {
+  display: flex;
+  flex-basis: 100%;
+  align-items: flex-start;
+  gap: 6px;
+  margin: 0;
+  font-size: var(--text-meta);
+}
+
+.confirm-take-warning svg {
+  flex: none;
+  width: 14px;
+  height: 14px;
+  margin-top: 0.1em;
+}
+
+.confirm-takes-note {
+  margin: 0;
+  color: var(--color-ink-muted);
+}
+
 /* The slot picker: a sheet on phone, a dialog on desktop, or the Meal
    panel's content. */
 .slot-picker-sheet {
