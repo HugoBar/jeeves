@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useActionState, useId, useState, useTransition } from "react";
+import { useActionState, useId, useState, useTransition, type ReactNode } from "react";
 import { pickableForSlot, slotFoodValue } from "@/core/meals";
 import type { DefaultUnit } from "@/core/units";
 import { formatMealDate, t } from "@/strings";
@@ -17,7 +17,7 @@ import {
   removeMealSlotAction,
   setMealSlotCategoryAction,
 } from "./actions";
-import type { PlannerMeal, PlannerMealSlot, SlotCategoryOption, SlotPickers } from "./meal-card";
+import type { PlannerMeal, PlannerMealSlot, SlotCategoryOption, SlotFoods, SlotPickers } from "./meal-card";
 
 // What the slot picker shows: the food to pick from, how much of the picked
 // Recipe or Product, or Change Slot Category. Change Slot Category opened
@@ -134,15 +134,27 @@ export function SlotPickerBody({
 // A Recipe or Product the picker offers, with its line under its name. A
 // Recipe starts at its own Portions; a Product has its Default Unit. `value`
 // is what the fill form sends for it, as slotFoodValue gives it.
-type FoodOption = { id: string; value: string; label: string; line: string } & (
+export type FoodOption = { id: string; value: string; label: string; line: string } & (
   | { content: "recipe"; portions: number }
   | { content: "product"; defaultUnit: DefaultUnit }
 );
 
 // The non-Archived Recipes and Products carrying the slot's Slot Category, by
-// name: "Recipe · makes 4" or "Product · g".
+// name.
 function foodOptions({ slotFoods }: SlotPickers, slotCategoryId: string): FoodOption[] {
-  const recipes = pickableForSlot(slotFoods.recipes, slotCategoryId).map(({ id, label, portions }) => ({
+  return toFoodOptions(
+    pickableForSlot(slotFoods.recipes, slotCategoryId),
+    pickableForSlot(slotFoods.products, slotCategoryId),
+  );
+}
+
+// Recipes and Products as the picker lists them, by name: "Recipe · makes 4"
+// or "Product · g".
+export function toFoodOptions(
+  recipeOptions: readonly SlotFoods["recipes"][number][],
+  productOptions: readonly SlotFoods["products"][number][],
+): FoodOption[] {
+  const recipes = recipeOptions.map(({ id, label, portions }) => ({
     content: "recipe" as const,
     id,
     value: slotFoodValue("recipe", id),
@@ -150,7 +162,7 @@ function foodOptions({ slotFoods }: SlotPickers, slotCategoryId: string): FoodOp
     portions,
     line: t("planner.picker.recipeLine", { portions }),
   }));
-  const products = pickableForSlot(slotFoods.products, slotCategoryId).map(({ id, label, defaultUnit }) => ({
+  const products = productOptions.map(({ id, label, defaultUnit }) => ({
     content: "product" as const,
     id,
     value: slotFoodValue("product", id),
@@ -230,26 +242,12 @@ function PickFood({
         {foods.length > 0 ? (
           <>
             {leftovers}
-            <section className="slot-picker-section">
-              <h3 className="eyebrow">{t("planner.picker.all", { category })}</h3>
-              <ul className="slot-picker-list">
-                {foods.map((food) => (
-                  <li key={food.value}>
-                    <button
-                      type="button"
-                      className="slot-picker-option"
-                      disabled={pending}
-                      onClick={() => onScreen({ kind: "amount", content: food.content, id: food.id })}
-                    >
-                      <span className="slot-picker-option-text">
-                        <span className="slot-picker-option-name">{food.label}</span>
-                        <span className="slot-picker-option-line">{food.line}</span>
-                      </span>
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            </section>
+            <FoodList
+              heading={t("planner.picker.all", { category })}
+              foods={foods}
+              disabled={pending}
+              onPick={(food) => onScreen({ kind: "amount", content: food.content, id: food.id })}
+            />
           </>
         ) : (
           <>
@@ -277,11 +275,67 @@ function PickFood({
   );
 }
 
-// How much of the picked Recipe or Product: Portions, stepped with - and +
-// from the Recipe's own, or a quantity in the Product's Default Unit,
-// starting empty. Either starts at what the slot holds when it holds the
-// same food. Change and Back both go back to the food. A rejected amount
-// shows under its field, keeping what was typed.
+// The food to pick from under `heading`, each a row with its name over its
+// line.
+export function FoodList({
+  heading,
+  foods,
+  disabled,
+  onPick,
+}: {
+  heading: string;
+  foods: FoodOption[];
+  disabled: boolean;
+  onPick: (food: FoodOption) => void;
+}) {
+  return (
+    <section className="slot-picker-section">
+      <h3 className="eyebrow">{heading}</h3>
+      <ul className="slot-picker-list">
+        {foods.map((food) => (
+          <li key={food.value}>
+            <button type="button" className="slot-picker-option" disabled={disabled} onClick={() => onPick(food)}>
+              <span className="slot-picker-option-text">
+                <span className="slot-picker-option-name">{food.label}</span>
+                <span className="slot-picker-option-line">{food.line}</span>
+              </span>
+            </button>
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+
+// The picked food, its name over `line`, with Change, which goes back to the
+// food.
+export function PickedFood({
+  food,
+  line,
+  disabled,
+  onChangeFood,
+}: {
+  food: FoodOption;
+  line: string;
+  disabled: boolean;
+  onChangeFood: () => void;
+}) {
+  return (
+    <div className="slot-picker-picked">
+      <span className="slot-picker-option-text">
+        <span className="slot-picker-option-name">{food.label}</span>
+        <span className="slot-picker-option-line">{line}</span>
+      </span>
+      <button type="button" onClick={onChangeFood} disabled={disabled}>
+        {t("planner.picker.change")}
+      </button>
+    </div>
+  );
+}
+
+// How much of the picked Recipe or Product goes in the slot. It starts at
+// what the slot holds when it holds the same food. Change and Back both go
+// back to the food.
 function PickAmount({
   slot,
   food,
@@ -293,9 +347,50 @@ function PickAmount({
   onBack: () => void;
   onDone: () => void;
 }) {
-  const [amount, setAmount] = useState(() => startingAmount(slot, food));
   const [state, action, pending] = useSlotAction(fillMealSlotAction, slot.id, onDone);
-  const { invalid, messages } = useSlotErrors(state.error);
+  return (
+    <AmountForm
+      categoryLabel={slot.slotCategoryLabel}
+      food={food}
+      startAmount={startingAmount(slot, food)}
+      error={state.error}
+      action={action}
+      pending={pending}
+      onChangeFood={onBack}
+      onBack={onBack}
+    />
+  );
+}
+
+// How much of `food` goes in a slot of `categoryLabel`: Portions, stepped
+// with - and +, or a quantity in the Product's Default Unit, from
+// `startAmount`. `action` sends the food and amount, with `children`, hidden
+// fields of its own. `error` is why the last send was refused: an amount
+// shows under its field, keeping what was typed. Change goes to the food and
+// Back a step back.
+export function AmountForm({
+  categoryLabel,
+  food,
+  startAmount,
+  error,
+  action,
+  pending,
+  onChangeFood,
+  onBack,
+  children,
+}: {
+  categoryLabel: string;
+  food: FoodOption;
+  startAmount: string;
+  error: SlotError | null;
+  action: (formData: FormData) => void;
+  pending: boolean;
+  onChangeFood: () => void;
+  onBack: () => void;
+  children?: ReactNode;
+}) {
+  const [amount, setAmount] = useState(startAmount);
+  const { invalid, messages } = useSlotErrors(error);
   const fieldId = useId();
   const field = (
     <input
@@ -316,19 +411,12 @@ function PickAmount({
     <form action={action} className="slot-picker-amount">
       <p className="slot-picker-scope">
         <span className="slot-picker-scope-label">
-          {t("planner.picker.slot")} <FoodCategoryPill label={slot.slotCategoryLabel} />
+          {t("planner.picker.slot")} <FoodCategoryPill label={categoryLabel} />
         </span>
       </p>
-      <div className="slot-picker-picked">
-        <span className="slot-picker-option-text">
-          <span className="slot-picker-option-name">{food.label}</span>
-          <span className="slot-picker-option-line">{pickedLine(food)}</span>
-        </span>
-        <button type="button" onClick={onBack} disabled={pending}>
-          {t("planner.picker.change")}
-        </button>
-      </div>
+      <PickedFood food={food} line={pickedLine(food)} disabled={pending} onChangeFood={onChangeFood} />
       <input type="hidden" name="food" value={food.value} />
+      {children}
       <div className="form-field">
         {food.content === "recipe" ? (
           <>
@@ -358,6 +446,7 @@ function PickAmount({
         )}
       </div>
       {messages("food")}
+      {messages("slotCategory")}
       {messages(FORM_LEVEL)}
       <div className="sheet-actions">
         <button type="button" onClick={onBack} disabled={pending}>
@@ -481,7 +570,7 @@ export function ChevronIcon() {
 }
 
 // Why a slot's picking or adding was refused.
-type SlotError = keyof typeof MEAL_SLOT_ERROR_FIELDS;
+export type SlotError = keyof typeof MEAL_SLOT_ERROR_FIELDS;
 
 // The refused field's props and its message, for a slot form.
 export function useSlotErrors(error: SlotError | null) {
