@@ -1,6 +1,6 @@
 "use client";
 
-import { Fragment, startTransition, useActionState, useEffect, useId, useOptimistic, useRef, useState, type ReactNode } from "react";
+import { startTransition, useActionState, useEffect, useId, useOptimistic, useRef, useState, useTransition, type ReactNode } from "react";
 import {
   canChangeMeal,
   canReopen,
@@ -28,7 +28,7 @@ import { FORM_LEVEL, MEAL_ERROR_FIELDS } from "../field-errors";
 import { FoodCategoryPill } from "../food-category-pill";
 import { FormCard } from "../form-card";
 import { AlertIcon, FormBanner, FormError, LockIcon, useFieldErrors } from "../form-error";
-import { ConfirmSheet } from "../sheet";
+import { ConfirmSheet, Sheet } from "../sheet";
 import { SidePanel } from "../side-panel";
 import { viewerToday } from "../viewer-clock";
 import { AddSlotSheet } from "./add-slot";
@@ -219,7 +219,9 @@ export function MealCard({
           <button type="button" className="meal-card-add" onClick={() => setAddingSlot(true)}>
             {t("planner.addSlot")}
           </button>
-          {canConfirmOrSkip(meal, today) && <ConfirmOrSkipMeal meal={meal} unconfirmed={unconfirmed} />}
+          {canConfirmOrSkip(meal, today) && (
+            <ConfirmOrSkipMeal meal={meal} today={today} unconfirmed={unconfirmed} pickers={pickers} />
+          )}
         </div>
       )}
       {changeable && addingSlot && <AddSlotSheet meal={meal} pickers={pickers} onClose={() => setAddingSlot(false)} />}
@@ -365,13 +367,9 @@ export function MealMenuList({
 // date.
 export function ReopenSheet({ meal, today, onClose }: { meal: PlannerMeal; today: string; onClose: () => void }) {
   const status = mealCardStatus(meal, today);
-  const day = formatMealDate(meal.date);
   return (
     <ConfirmSheet
-      eyebrow={t(meal.date === today ? "planner.reopenSheet.eyebrowToday" : "planner.reopenSheet.eyebrow", {
-        day,
-        hour: meal.hour,
-      })}
+      eyebrow={mealSheetEyebrow(meal, today)}
       title={t("planner.reopenSheet.title", { name: meal.name ?? meal.mealTypeLabel })}
       confirmLabel={t("planner.reopen")}
       onConfirm={() => reopenMealAction(meal.id)}
@@ -459,77 +457,216 @@ const STATUS_ICONS: Record<MealCardStatus, ReactNode> = {
 
 type ConfirmOrSkipError = ConfirmMealError | SkipMealError;
 
-// What each of the form's buttons sends as "outcome".
-const OUTCOME = { confirm: "confirm", confirmUntracked: "confirmUntracked", skip: "skip" } as const;
-
 // Confirm, or "Confirm or skip" once the Meal is Unconfirmed, for a Meal dated
-// today or earlier. It opens the three outcomes: Confirm, Confirm as
-// Untracked and Skip. A Meal later today may not have happened yet, so each
-// asks first in a sheet, holding what was submitted until it is answered;
-// cancelling sends nothing. An Untracked Meal deducts nothing either way. A
-// refusal shows here, with nothing written.
-function ConfirmOrSkipMeal({ meal, unconfirmed }: { meal: PlannerMeal; unconfirmed: boolean }) {
-  const [open, setOpen] = useState(false);
-  const [asking, setAsking] = useState<FormData | null>(null);
-  const [error, action, pending] = useActionState(
-    (_previous: ConfirmOrSkipError | null, formData: FormData): Promise<ConfirmOrSkipError | null> => {
-      const outcome = formData.get("outcome");
-      if (outcome === OUTCOME.skip) return skipMealAction(meal.id, viewerToday());
-      return confirmMealAction(meal.id, outcome === OUTCOME.confirmUntracked, viewerToday());
-    },
-    null,
-  );
-  const skipping = asking?.get("outcome") === OUTCOME.skip;
-  const name = meal.name ?? meal.mealTypeLabel;
-  if (!open) {
-    return (
+// today or earlier. It opens the Confirm sheet, which asks first when the
+// Meal is later today: it may not have happened yet.
+function ConfirmOrSkipMeal({
+  meal,
+  today,
+  unconfirmed,
+  pickers,
+}: {
+  meal: PlannerMeal;
+  today: string;
+  unconfirmed: boolean;
+  pickers: SlotPickers;
+}) {
+  // Whether it asks first, worked out from the clock when the sheet opens.
+  const [open, setOpen] = useState<{ notYet: boolean } | null>(null);
+  return (
+    <>
       <button
         type="button"
         className={`${unconfirmed ? "button-warning" : "button-primary"} meal-card-confirm`}
-        onClick={() => setOpen(true)}
+        onClick={() => {
+          const now = new Date();
+          setOpen({ notYet: confirmOrSkipAsksFirst(meal, { date: localDate(now), hour: localHour(now) }) });
+        }}
       >
         {t(unconfirmed ? "planner.confirmOrSkip" : "planner.confirm")}
       </button>
-    );
-  }
-  return (
-    <>
-      <form
-        action={action}
-        className="planner-confirm"
-        onSubmit={(event) => {
-          const now = new Date();
-          if (!confirmOrSkipAsksFirst(meal, { date: localDate(now), hour: localHour(now) })) return;
-          event.preventDefault();
-          setAsking(new FormData(event.currentTarget, (event.nativeEvent as SubmitEvent).submitter));
-        }}
-      >
-        <button type="submit" name="outcome" value={OUTCOME.confirm} className="button-primary" disabled={pending}>
-          {t("planner.confirm")}
-        </button>
-        <button type="submit" name="outcome" value={OUTCOME.confirmUntracked} disabled={pending}>
-          {t("planner.confirmUntracked")}
-        </button>
-        <button type="submit" name="outcome" value={OUTCOME.skip} disabled={pending}>
-          {t("planner.skip")}
-        </button>
-        <button type="button" onClick={() => setOpen(false)} disabled={pending}>
-          {t("planner.cancel")}
-        </button>
-        {error && <FormError>{confirmOrSkipErrorMessage(error)}</FormError>}
-      </form>
-      {asking && (
-        <ConfirmSheet
-          title={t(skipping ? "planner.skipTodayTitle" : "planner.confirmTodayTitle", { name })}
-          confirmLabel={t(skipping ? "planner.skipAnyway" : "planner.confirmAnyway")}
-          onConfirm={() => action(asking)}
-          onClose={() => setAsking(null)}
-        >
-          <p className="banner">{t(skipping ? "planner.skipToday" : "planner.confirmToday")}</p>
-        </ConfirmSheet>
+      {open && (
+        <ConfirmMealSheet meal={meal} today={today} notYet={open.notYet} pickers={pickers} onClose={() => setOpen(null)} />
       )}
     </>
   );
+}
+
+// What happened at a Meal, as the Confirm sheet offers it.
+export type ConfirmOutcome = "asPlanned" | "untracked" | "skipped";
+
+const CONFIRM_OUTCOMES: { outcome: ConfirmOutcome; icon: MealCardStatus }[] = [
+  { outcome: "asPlanned", icon: "confirmed" },
+  { outcome: "untracked", icon: "untracked" },
+  { outcome: "skipped", icon: "skipped" },
+];
+
+// Confirming a Meal: what was eaten, each slot with Edit, which opens the slot
+// picker over the sheet, and what happened: Eaten as planned, "Eaten, but not
+// from the Pantry" (Confirmed as Untracked) or Skipped. Skipped hides the
+// slots. `notYet` is a Meal later today: the sheet asks first, and its button
+// says "anyway". A refusal shows in red, with nothing written. Cancel changes
+// nothing. `today` is the viewer's date.
+export function ConfirmMealSheet({
+  meal,
+  today,
+  notYet,
+  pickers,
+  onClose,
+}: {
+  meal: PlannerMeal;
+  today: string;
+  notYet: boolean;
+  pickers: SlotPickers;
+  onClose: () => void;
+}) {
+  const [outcome, setOutcome] = useState<ConfirmOutcome>("asPlanned");
+  const [editingSlotId, setEditingSlotId] = useState<string | null>(null);
+  // Stays until another outcome is picked or a slot is edited, with the
+  // button off meanwhile, as retrying unchanged would be refused again.
+  const [refused, setRefused] = useState<ConfirmOrSkipError | null>(null);
+  const [pending, startTransition] = useTransition();
+  const outcomeName = useId();
+  const skipping = outcome === "skipped";
+  const editingSlot = meal.slots.find((slot) => slot.id === editingSlotId);
+
+  const submit = () =>
+    startTransition(async () => {
+      const error = skipping
+        ? await skipMealAction(meal.id, viewerToday())
+        : await confirmMealAction(meal.id, outcome === "untracked", viewerToday());
+      if (error) setRefused(error);
+      else onClose();
+    });
+
+  return (
+    <>
+      <Sheet
+        eyebrow={mealSheetEyebrow(meal, today)}
+        title={t("planner.confirmSheet.title", { name: meal.name ?? meal.mealTypeLabel })}
+        className="confirm-sheet"
+        busy={pending}
+        onClose={onClose}
+      >
+        {!skipping && meal.slots.length > 0 && (
+          <div className="confirm-slots">
+            <p className="confirm-slots-label">{t("planner.confirmSheet.slotsLabel")}</p>
+            <ul className="confirm-slot-list">
+              {meal.slots.map((slot) => (
+                <ConfirmSlotRow key={slot.id} slot={slot} disabled={pending} onEdit={() => setEditingSlotId(slot.id)} />
+              ))}
+            </ul>
+          </div>
+        )}
+        <fieldset className="confirm-outcomes" disabled={pending}>
+          <legend className="visually-hidden">{t("planner.confirmSheet.outcomes")}</legend>
+          {CONFIRM_OUTCOMES.map(({ outcome: option, icon }) => (
+            <label key={option} className="confirm-outcome">
+              <input
+                type="radio"
+                name={outcomeName}
+                value={option}
+                checked={outcome === option}
+                onChange={() => {
+                  setOutcome(option);
+                  setRefused(null);
+                }}
+              />
+              <span className="confirm-outcome-text">
+                <span className="confirm-outcome-name">
+                  <StatusIcon status={icon} />
+                  {t(`planner.confirmSheet.${option}`)}
+                </span>
+                <span className="confirm-outcome-hint">{t(`planner.confirmSheet.${option}Hint`)}</span>
+              </span>
+            </label>
+          ))}
+        </fieldset>
+        {notYet && !refused && (
+          <div className="banner">
+            <AlertIcon />
+            <p>{t(skipping ? "planner.skipToday" : "planner.confirmToday")}</p>
+          </div>
+        )}
+        {/* Why, and that nothing was taken, in one message. */}
+        {refused && (
+          <FormBanner>
+            {confirmOrSkipErrorMessage(refused)} {t("planner.confirmSheet.nothingLeft")}
+          </FormBanner>
+        )}
+        <div className="sheet-actions">
+          <button type="button" onClick={onClose} disabled={pending}>
+            {t("planner.cancel")}
+          </button>
+          <button type="button" className="button-primary" disabled={pending || refused !== null} onClick={submit}>
+            {t(confirmSheetButton(outcome, notYet))}
+          </button>
+        </div>
+      </Sheet>
+      {/* Beside the sheet, not in it, so closing the picker leaves it open. */}
+      {editingSlot && (
+        <SlotPickerSheet
+          meal={meal}
+          slot={editingSlot}
+          pickers={pickers}
+          onClose={() => {
+            setEditingSlotId(null);
+            setRefused(null);
+          }}
+        />
+      )}
+    </>
+  );
+}
+
+// The Confirm sheet's main button, for what happened: Confirm, "Confirm as
+// Untracked" or "Skip Meal", or "Confirm anyway" and "Skip anyway" for a
+// Meal later today.
+function confirmSheetButton(outcome: ConfirmOutcome, notYet: boolean): StringKey {
+  if (outcome === "skipped") return notYet ? "planner.skipAnyway" : "planner.skipMeal";
+  if (notYet) return "planner.confirmAnyway";
+  return outcome === "untracked" ? "planner.confirmUntracked" : "planner.confirm";
+}
+
+// A slot on the Confirm sheet: its pill and food, its amount, and Edit. An
+// empty one says it deducts nothing.
+function ConfirmSlotRow({ slot, disabled, onEdit }: { slot: PlannerMealSlot; disabled: boolean; onEdit: () => void }) {
+  const empty = slot.food.content === "empty";
+  const showsAmount = slot.food.content === "recipe" || slot.food.content === "product";
+  return (
+    <li className={empty ? "confirm-slot confirm-slot-empty" : "confirm-slot"}>
+      <FoodCategoryPill label={slot.slotCategoryLabel} archived={slot.slotCategoryArchived} />
+      <span className="confirm-slot-food">
+        {empty ? (
+          <>
+            <span className="confirm-slot-none">{t("planner.confirmSheet.empty")}</span>
+            <span className="confirm-slot-hint">{t("planner.confirmSheet.emptyHint")}</span>
+          </>
+        ) : (
+          <SlotFoodName food={slot.food} />
+        )}
+      </span>
+      {showsAmount && <span className="confirm-slot-amount">{slotAmount(slot.food)}</span>}
+      <button
+        type="button"
+        className="confirm-slot-edit"
+        aria-label={t("planner.confirmSheet.editSlot", { category: slot.slotCategoryLabel })}
+        disabled={disabled}
+        onClick={onEdit}
+      >
+        {t("planner.confirmSheet.edit")}
+      </button>
+    </li>
+  );
+}
+
+// "Today · Thu 29 Oct · 12:30" over a sheet about a Meal, or without Today
+// on another day.
+function mealSheetEyebrow(meal: PlannerMeal, today: string): string {
+  return t(meal.date === today ? "planner.mealSheet.eyebrowToday" : "planner.mealSheet.eyebrow", {
+    day: formatMealDate(meal.date),
+    hour: meal.hour,
+  });
 }
 
 // "Can't confirm: Flour has no Density, so 1 cup can't be converted to g. ..."
