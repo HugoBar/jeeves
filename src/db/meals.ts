@@ -3,11 +3,11 @@ import { and, asc, eq, gt, gte, inArray, lt, lte, max, sql } from "drizzle-orm";
 import {
   slotKeepsFood,
   type MealChanges,
+  type MealFormSlot,
   type MealSlotContent,
   type MealSlotFill,
   type MealStatus,
   type NewMealFields,
-  type NewMealSlot,
   type NewMealFromTemplateFields,
 } from "@/core/meals";
 import type { DefaultUnit } from "@/core/units";
@@ -167,14 +167,15 @@ export async function getMeal(db: Db, id: string): Promise<Meal | undefined> {
   return meal;
 }
 
-// A Meal made from scratch: Planned, and tracked unless `untracked` says
-// otherwise. `slots`, added on the Meal form, are added in order by
-// addMealSlot; each must already be checked by core's parseNewMealSlots. If
-// one can't be added, nothing is written.
+// A new Meal: Planned, and tracked unless `untracked` says otherwise.
+// `slots`, the ones on the Meal form, are added in order by addMealSlot: added
+// by hand, or copied empty from a Meal Template, which the Meal keeps no link
+// to (data-model Q5). Each must already be checked by core's
+// parseNewMealSlots. If one can't be added, nothing is written.
 export async function createMeal(
   db: Db,
   fields: Omit<NewMealFields, "untracked"> & Partial<Pick<NewMealFields, "untracked">>,
-  slots: readonly NewMealSlot[] = [],
+  slots: readonly MealFormSlot[] = [],
 ): Promise<{ id: string }> {
   return db.transaction(async (tx) => {
     const [row] = await tx.insert(meals).values(fields).returning({ id: meals.id });
@@ -226,9 +227,9 @@ export async function fillMealSlot(db: Db, slotId: string, fill: MealSlotFill): 
     .where(eq(mealSlots.id, slotId));
 }
 
-// A slot added by hand, after the Meal's others. It must already be checked by
-// core's parseNewMealSlot.
-export async function addMealSlot(db: Db, mealId: string, { slotCategoryId, fill }: NewMealSlot): Promise<void> {
+// A slot after the Meal's others. It must already be checked by core's
+// parseNewMealSlot, or parseNewMealSlots on the Meal form.
+export async function addMealSlot(db: Db, mealId: string, { slotCategoryId, fill }: MealFormSlot): Promise<void> {
   await db.transaction(async (tx) => {
     const [last] = await tx
       .select({ position: max(mealSlots.position) })

@@ -395,6 +395,36 @@ describe("parseNewMealSlots", () => {
       ],
     });
   });
+
+  // Copied from a Meal Template: a Slot Category and no food.
+  describe("an empty slot", () => {
+    const emptyCategories = new Set(["fruit-id", "sauces-id"]);
+    const fruit = { food: "", amount: "", slotCategoryId: " fruit-id " };
+
+    it("reads it in its place among filled slots", () => {
+      expect(parseNewMealSlots([fruit, bread], pickable, emptyCategories)).toEqual({
+        ok: true,
+        slots: [
+          { slotCategoryId: "fruit-id", fill: { content: "empty" } },
+          { slotCategoryId: "grains-id", fill: { content: "product", productId: "bread-id", quantity: 120 } },
+        ],
+      });
+    });
+
+    it.each([["gone-id"], [""]])("refuses one with a Slot Category it can't have (%j)", (slotCategoryId) => {
+      expect(parseNewMealSlots([bread, { ...fruit, slotCategoryId }], pickable, emptyCategories)).toEqual({
+        ok: false,
+        errors: [{ row: 2, code: "unavailableSlotCategory" }],
+      });
+    });
+
+    it("can have none without being told which Slot Categories it can have", () => {
+      expect(parseNewMealSlots([fruit], pickable)).toEqual({
+        ok: false,
+        errors: [{ row: 1, code: "unavailableSlotCategory" }],
+      });
+    });
+  });
 });
 
 describe("slotKeepsFood", () => {

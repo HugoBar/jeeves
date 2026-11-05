@@ -150,6 +150,27 @@ describe("createMeal", () => {
     ]);
   });
 
+  it("adds empty slots, as copied from a Meal Template, in order among filled ones", async () => {
+    const [grains, fruit] = await Promise.all([seededCategoryId("grains"), seededCategoryId("fruit")]);
+    const bread = await aProduct("Template Meal Bread", [grains]);
+
+    const meal = await createMeal(
+      db,
+      { date: "2026-10-29", hour: "12:30", name: "Office Lunch", mealTypeId: await seededMealTypeId("lunch") },
+      [
+        { slotCategoryId: fruit, fill: { content: "empty" } },
+        { slotCategoryId: grains, fill: { content: "product", productId: bread.id, quantity: 150 } },
+        { slotCategoryId: fruit, fill: { content: "empty" } },
+      ],
+    );
+
+    expect((await getMeal(db, meal.id))?.slots.map((slot) => [slot.slotCategoryId, slot.content])).toEqual([
+      [fruit, "empty"],
+      [grains, "product"],
+      [fruit, "empty"],
+    ]);
+  });
+
   it("writes nothing if a slot can't be added", async () => {
     const grains = await seededCategoryId("grains");
     const missing = "00000000-0000-4000-8000-000000000000";

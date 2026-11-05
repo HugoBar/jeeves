@@ -226,23 +226,39 @@ export function newMealSlotPickable<T extends { id: string; kind: CategoryKind }
 // shows the slots.
 export type NewMealSlotRowError = { row: number; code: NewMealSlotError };
 
-// The slots added on the Meal form, all read, or why each refused one was.
-export type NewMealSlotsResult = { ok: true; slots: NewMealSlot[] } | { ok: false; errors: NewMealSlotRowError[] };
+// A slot on the Meal form: one added by hand, filled, or one copied from a
+// Meal Template, empty with the template slot's Slot Category.
+export type MealFormSlot = NewMealSlot | { slotCategoryId: string; fill: { content: "empty" } };
 
-// The slots added on the Meal form before the Meal exists, each checked as
-// parseNewMealSlot does, so none is written unless all of them can be.
+// The slots on the Meal form, all read, or why each refused one was.
+export type NewMealSlotsResult = { ok: true; slots: MealFormSlot[] } | { ok: false; errors: NewMealSlotRowError[] };
+
+// The slots on the Meal form before the Meal exists, in the order shown, so
+// none is written unless all of them can be. One with food is checked as
+// parseNewMealSlot does. One without is an empty slot copied from a Meal
+// Template, whose Slot Category must be in `emptySlotCategories`.
 export function parseNewMealSlots(
   inputs: readonly NewMealSlotInput[],
   pickable: NewMealSlotPickable,
+  emptySlotCategories: ReadonlySet<string> = new Set(),
 ): NewMealSlotsResult {
-  const slots: NewMealSlot[] = [];
+  const slots: MealFormSlot[] = [];
   const errors: NewMealSlotRowError[] = [];
   inputs.forEach((input, index) => {
-    const parsed = parseNewMealSlot(input, pickable);
+    const parsed = input.food.trim() ? parseNewMealSlot(input, pickable) : parseEmptySlot(input, emptySlotCategories);
     if (parsed.ok) slots.push(parsed.slot);
     else errors.push({ row: index + 1, code: parsed.error });
   });
   return errors.length ? { ok: false, errors } : { ok: true, slots };
+}
+
+function parseEmptySlot(
+  input: NewMealSlotInput,
+  pickable: ReadonlySet<string>,
+): { ok: true; slot: MealFormSlot } | { ok: false; error: NewMealSlotError } {
+  const slotCategoryId = input.slotCategoryId.trim();
+  if (!pickable.has(slotCategoryId)) return { ok: false, error: "unavailableSlotCategory" };
+  return { ok: true, slot: { slotCategoryId, fill: { content: "empty" } } };
 }
 
 // The Recipes or Products a slot's picker offers: those carrying its Slot
