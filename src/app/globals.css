@@ -949,6 +949,10 @@ html:has(.sheet[open]) {
   line-height: 1.2;
 }
 
+.sheet-heading h2:focus {
+  outline: none;
+}
+
 .sheet-eyebrow,
 .stock-list-head,
 .recipe-list-head,
