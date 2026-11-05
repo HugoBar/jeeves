@@ -2,6 +2,7 @@
 
 import { refresh } from "next/cache";
 import { sortCategories } from "@/core/food-categories";
+import type { SlotMove } from "@/core/slot-order";
 import {
   canChangeMeal,
   parseMealChanges,
@@ -41,6 +42,7 @@ import {
   getMeal,
   getMealSlotContext,
   listFoodsForSlots,
+  moveMealSlot,
   removeMealSlot,
   setMealSlotCategory,
   updateMeal,
@@ -252,6 +254,14 @@ export async function removeMealSlotAction(slotId: string): Promise<void> {
   const db = getDb();
   const slot = await getMealSlotContext(db, slotId);
   if (slot && canChangeMeal(slot.meal)) await removeMealSlot(db, slotId);
+  refresh();
+}
+
+// The slot swapped with the one above it (-1) or below it (1). Nothing changes
+// if it is already first or last, or the Meal was Confirmed or Skipped; the
+// refresh shows the planner as it is.
+export async function moveMealSlotAction(slotId: string, move: SlotMove): Promise<void> {
+  await moveMealSlot(getDb(), slotId, move);
   refresh();
 }
 
