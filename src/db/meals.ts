@@ -167,14 +167,21 @@ export async function getMeal(db: Db, id: string): Promise<Meal | undefined> {
   return meal;
 }
 
-// A Meal made from scratch: Planned, with no Meal Slots, and tracked unless
-// `untracked` says otherwise.
+// A Meal made from scratch: Planned, and tracked unless `untracked` says
+// otherwise. `slots`, added on the Meal form, are added in order by
+// addMealSlot; each must already be checked by core's parseNewMealSlots. If
+// one can't be added, nothing is written.
 export async function createMeal(
   db: Db,
   fields: Omit<NewMealFields, "untracked"> & Partial<Pick<NewMealFields, "untracked">>,
+  slots: readonly NewMealSlot[] = [],
 ): Promise<{ id: string }> {
-  const [row] = await db.insert(meals).values(fields).returning({ id: meals.id });
-  return row!;
+  return db.transaction(async (tx) => {
+    const [row] = await tx.insert(meals).values(fields).returning({ id: meals.id });
+    // One after another, so each goes after the one before.
+    for (const slot of slots) await addMealSlot(tx, row!.id, slot);
+    return row!;
+  });
 }
 
 // Copies the template's name, Meal Type, hour and slots, each empty with the

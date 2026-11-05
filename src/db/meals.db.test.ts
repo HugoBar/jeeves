@@ -130,6 +130,41 @@ describe("createMeal", () => {
     expect(listed.map((meal) => meal.id)).toEqual(expect.arrayContaining([morning.id, afternoon.id]));
   });
 
+  it("adds the slots given after it, in order", async () => {
+    const [grains, mainDish] = await Promise.all([seededCategoryId("grains"), seededCategoryId("main_dish")]);
+    const bread = await aProduct("New Meal Bread", [grains]);
+    const curry = await aRecipe("New Meal Curry", [], [{ categoryId: mainDish, mode: "add" }]);
+
+    const meal = await createMeal(
+      db,
+      { date: "2026-10-29", hour: "19:30", name: null, mealTypeId: await seededMealTypeId("dinner") },
+      [
+        { slotCategoryId: mainDish, fill: { content: "recipe", recipeId: curry.id, portions: 4 } },
+        { slotCategoryId: grains, fill: { content: "product", productId: bread.id, quantity: 150 } },
+      ],
+    );
+
+    expect((await getMeal(db, meal.id))?.slots).toMatchObject([
+      { slotCategoryId: mainDish, content: "recipe", recipeId: curry.id, portions: 4 },
+      { slotCategoryId: grains, content: "product", productId: bread.id, quantity: 150 },
+    ]);
+  });
+
+  it("writes nothing if a slot can't be added", async () => {
+    const grains = await seededCategoryId("grains");
+    const missing = "00000000-0000-4000-8000-000000000000";
+
+    await expect(
+      createMeal(
+        db,
+        { date: "2026-10-30", hour: "07:30", name: "No Meal", mealTypeId: await seededMealTypeId("breakfast") },
+        [{ slotCategoryId: grains, fill: { content: "product", productId: missing, quantity: 1 } }],
+      ),
+    ).rejects.toThrow();
+
+    expect((await listMeals(db, "2026-10-30", "2026-10-30")).map((meal) => meal.name)).not.toContain("No Meal");
+  });
+
   it("rejects a Meal Type that does not exist", async () => {
     await expect(
       createMeal(db, {
