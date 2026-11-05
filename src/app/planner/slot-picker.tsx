@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useActionState, useState, useTransition } from "react";
+import { useActionState, useId, useState, useTransition } from "react";
 import { pickableForSlot, slotFoodValue } from "@/core/meals";
 import type { DefaultUnit } from "@/core/units";
 import { formatMealDate, t } from "@/strings";
@@ -10,6 +10,7 @@ import { FoodCategoryPill } from "../food-category-pill";
 import { useFieldErrors } from "../form-error";
 import { RemoveButton } from "../remove-button";
 import { Sheet } from "../sheet";
+import { StepIcon, stepPortions } from "../stepper";
 import {
   emptyMealSlotAction,
   fillMealSlotAction,
@@ -276,10 +277,11 @@ function PickFood({
   );
 }
 
-// How much of the picked Recipe or Product: Portions, starting at the
-// Recipe's own, or a quantity in the Product's Default Unit, starting empty.
-// Either starts at what the slot holds when it holds the same food. A
-// rejected amount shows under its field, keeping what was typed.
+// How much of the picked Recipe or Product: Portions, stepped with - and +
+// from the Recipe's own, or a quantity in the Product's Default Unit,
+// starting empty. Either starts at what the slot holds when it holds the
+// same food. Change and Back both go back to the food. A rejected amount
+// shows under its field, keeping what was typed.
 function PickAmount({
   slot,
   food,
@@ -294,14 +296,18 @@ function PickAmount({
   const [amount, setAmount] = useState(() => startingAmount(slot, food));
   const [state, action, pending] = useSlotAction(fillMealSlotAction, slot.id, onDone);
   const { invalid, messages } = useSlotErrors(state.error);
+  const fieldId = useId();
   const field = (
     <input
+      id={fieldId}
       name="amount"
       inputMode={food.content === "recipe" ? "numeric" : "decimal"}
       autoComplete="off"
       value={amount}
       onChange={(event) => setAmount(event.target.value)}
-      autoFocus
+      // Portions start at the Recipe's own, so - and + come first. A
+      // quantity starts empty and waits for typing.
+      autoFocus={food.content === "product"}
       {...invalid("amount")}
     />
   );
@@ -314,26 +320,42 @@ function PickAmount({
         </span>
       </p>
       <div className="slot-picker-picked">
-        <span className="slot-picker-option-name">{food.label}</span>
-        <span className="slot-picker-option-line">{food.line}</span>
+        <span className="slot-picker-option-text">
+          <span className="slot-picker-option-name">{food.label}</span>
+          <span className="slot-picker-option-line">{pickedLine(food)}</span>
+        </span>
+        <button type="button" onClick={onBack} disabled={pending}>
+          {t("planner.picker.change")}
+        </button>
       </div>
       <input type="hidden" name="food" value={food.value} />
       <div className="form-field">
         {food.content === "recipe" ? (
-          <label className="form-field">
-            {t("planner.portions")}
-            {field}
-          </label>
+          <>
+            <label htmlFor={fieldId}>{t("planner.portions")}</label>
+            <span className="slot-picker-stepper">
+              <button type="button" aria-label={t("planner.picker.portionsLess")} disabled={pending} onClick={() => setAmount(stepPortions(amount, -1))}>
+                <StepIcon step="less" />
+              </button>
+              {field}
+              <button type="button" aria-label={t("planner.picker.portionsMore")} disabled={pending} onClick={() => setAmount(stepPortions(amount, 1))}>
+                <StepIcon step="more" />
+              </button>
+            </span>
+            {messages("amount")}
+            <p className="field-hint">{t("planner.picker.portionsHint", { portions: food.portions })}</p>
+          </>
         ) : (
-          <label className="form-field">
-            {t("planner.picker.quantity")}
-            <span className="field-joined">
+          <>
+            <label htmlFor={fieldId}>{t("planner.picker.quantity")}</label>
+            <span className="slot-picker-quantity">
               {field}
               <span className="field-unit">{t(`unit.${food.defaultUnit}`)}</span>
             </span>
-          </label>
+            {messages("amount")}
+            <p className="field-hint">{t("planner.picker.quantityHint", { product: food.label })}</p>
+          </>
         )}
-        {messages("amount")}
       </div>
       {messages("food")}
       {messages(FORM_LEVEL)}
@@ -347,6 +369,12 @@ function PickAmount({
       </div>
     </form>
   );
+}
+
+// The picked food's line: "Recipe · makes 4" or "Product · Default Unit pc".
+function pickedLine(food: FoodOption): string {
+  if (food.content === "recipe") return food.line;
+  return t("planner.picker.pickedProductLine", { unit: t(`unit.${food.defaultUnit}`) });
 }
 
 // What the amount field starts at: what the slot holds when it holds this
