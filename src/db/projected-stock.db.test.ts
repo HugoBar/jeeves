@@ -1,8 +1,7 @@
 import { beforeAll, describe, expect, it } from "vitest";
 import { listActiveCategories } from "./food-categories";
 import { listActiveMealTypes } from "./meal-types";
-import { createMealTemplate } from "./meal-templates";
-import { addMealSlot, createMeal, createMealFromTemplate, fillMealSlot, getMeal } from "./meals";
+import { addMealSlot, createMeal, fillMealSlot, getMeal } from "./meals";
 import { createProduct, removeProduct } from "./products";
 import { loadStockProjection } from "./projected-stock";
 import { createRecipe, removeRecipe } from "./recipes";
@@ -111,13 +110,12 @@ describe("loadStockProjection", () => {
   it("loads empty and Leftovers slots, in their order", async () => {
     const dinner = (await listActiveMealTypes(db)).find((mealType) => mealType.seedKey === "dinner")!;
     const slotCategoryId = (await listActiveCategories(db))[0]!.id;
-    const template = await createMealTemplate(db, {
-      name: "Two Slots",
-      hour: "20:00",
-      mealTypeId: dinner.id,
-      slotCategoryIds: [slotCategoryId, slotCategoryId],
-    });
-    const meal = (await createMealFromTemplate(db, { date: "2026-11-20", templateId: template.id }))!;
+    const empty = { slotCategoryId, fill: { content: "empty" as const } };
+    const meal = await createMeal(
+      db,
+      { date: "2026-11-20", hour: "20:00", name: "Two Slots", mealTypeId: dinner.id },
+      [empty, empty],
+    );
     const [first, second] = (await getMeal(db, meal.id))!.slots;
     await fillMealSlot(db, first!.id, { content: "leftovers" });
 

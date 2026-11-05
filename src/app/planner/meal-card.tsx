@@ -122,12 +122,25 @@ export interface SlotCategoryOption extends PickerOption {
   kind: CategoryKind;
 }
 
+// A Meal Template as Add a Meal offers it, with what New Meal copies from it:
+// its name as `label`, hour, Meal Type and its slots' Slot Categories, in
+// order. Its Meal Type and Slot Categories may be Archived: a Meal copied
+// from it keeps them, unless they are changed on the form.
+export interface TemplateOption extends PickerOption {
+  hour: string;
+  mealType: PickerOption & { archived: boolean };
+  slots: { slotCategoryId: string; label: string; archived: boolean }[];
+}
+
 // What the planner's pickers offer: Meal Types, Food Categories, Recipes and
-// Products that are not Archived, and every Meal Template.
+// Products that are not Archived, and every Meal Template, by Meal Type.
+// `archivedSlotCategories` are the Archived Food Categories a template still
+// uses, so a slot copied from it can show its name.
 export interface Pickers {
   mealTypes: PickerOption[];
-  templates: PickerOption[];
+  templates: TemplateOption[];
   slotCategories: SlotCategoryOption[];
+  archivedSlotCategories: PickerOption[];
   slotFoods: SlotFoods;
 }
 
@@ -664,7 +677,7 @@ function SlotSummary({ slot, showAmount, chevron }: { slot: PlannerMealSlot; sho
         {showAmount && (
           <span className="slot-row-end">
             <span className="slot-row-amount">{slotAmount(slot.food)}</span>
-            {chevron && <SlotChevron />}
+            {chevron && <ChevronIcon />}
           </span>
         )}
       </span>
@@ -673,7 +686,7 @@ function SlotSummary({ slot, showAmount, chevron }: { slot: PlannerMealSlot; sho
   );
 }
 
-function SlotChevron() {
+export function ChevronIcon() {
   return (
     <svg className="slot-row-chevron" aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
       <path d="M9 6l6 6-6 6" />
@@ -1084,16 +1097,24 @@ function NewSlotPicker({
   );
 }
 
-// A slot added on the Meal form, as its row shows it: its Slot Category and
-// what it holds, which is empty if its Recipe or Product is no longer
-// offered. It isn't saved yet, so it has no warnings.
-function draftSlot(key: string, input: NewMealSlotInput, { slotFoods, slotCategories }: SlotPickers): PlannerMealSlot {
+// A slot on the Meal form, as its row shows it: its Slot Category and what it
+// holds, which is empty if it was copied from a Meal Template or its Recipe or
+// Product is no longer offered. A copied one may keep an Archived Slot
+// Category, one of `archivedCategories`. It isn't saved yet, so it has no
+// warnings.
+function draftSlot(
+  key: string,
+  input: NewMealSlotInput,
+  { slotFoods, slotCategories }: SlotPickers,
+  archivedCategories: PickerOption[],
+): PlannerMealSlot {
   const category = slotCategories.find((option) => option.id === input.slotCategoryId);
+  const archived = category ? undefined : archivedCategories.find((option) => option.id === input.slotCategoryId);
   return {
     id: key,
     slotCategoryId: input.slotCategoryId,
-    slotCategoryLabel: category?.label ?? "",
-    slotCategoryArchived: false,
+    slotCategoryLabel: (category ?? archived)?.label ?? "",
+    slotCategoryArchived: archived !== undefined,
     food: draftFood(input, slotFoods),
     warnings: null,
   };
@@ -1120,22 +1141,28 @@ function slotErrorMessage(row: number, food: PlannerSlotFood, error: NewMealSlot
     : t("planner.error.slotNoFood", { row, reason });
 }
 
-// A slot added on the Meal form, with the key its row keeps when others are
+// A slot on the Meal form, with the key its row keeps when others are
 // removed, and why it was refused, if it was.
 type FormSlot = { key: number; input: NewMealSlotInput; error?: NewMealSlotError };
 
-// New Meal's Slots card. Slots added here can be removed with ×, and are
-// sent with the form in the order shown, each under the same three names.
-// `errors` count rows from 1, and each shows under its slot. Mounted again
-// on every submit, so it starts from `initial`, what was sent.
+// New Meal's Slots card: the empty slots copied from a Meal Template, with
+// no food, and the ones added here. Each can be removed with ×, and is sent
+// with the form in the order shown, under the same three names. `errors`
+// count rows from 1, and each shows under its slot. Mounted again on every
+// submit, so it starts from `initial`, what was sent. `hint` says where the
+// slots came from.
 export function NewMealSlotsCard({
   pickers,
+  archivedCategories = [],
   initial = [],
   errors = [],
+  hint = t("planner.slotsHint"),
 }: {
   pickers: SlotPickers;
+  archivedCategories?: PickerOption[];
   initial?: NewMealSlotInput[];
   errors?: NewMealSlotRowError[];
+  hint?: string;
 }) {
   const [slots, setSlots] = useState<FormSlot[]>(() =>
     initial.map((input, index) => ({
@@ -1149,17 +1176,19 @@ export function NewMealSlotsCard({
   const names = MEAL_FORM_SLOT_FIELDS;
 
   return (
-    <FormCard title={t("planner.slots")} hint={t("planner.slotsHint")}>
+    <FormCard title={t("planner.slots")} hint={hint}>
       {slots.length > 0 && (
         <ol className="slot-list">
           {slots.map(({ key, input, error }, index) => {
-            const slot = draftSlot(String(key), input, pickers);
+            const slot = draftSlot(String(key), input, pickers, archivedCategories);
+            const empty = slot.food.content === "empty" && !input.food;
             return (
-              <li key={key} className="slot-row meal-form-slot">
+              <li key={key} className={empty ? "slot-row slot-row-dashed meal-form-slot" : "slot-row meal-form-slot"}>
                 <div className="slot-row-main">
                   <SlotSummary slot={slot} showAmount chevron={false} />
-                  {/* On the food's line, as the design has it: × takes the top. */}
-                  <SlotChevron />
+                  {/* On the food's line, as the design has it: × takes the top.
+                      An empty slot has nothing to pick on the form yet. */}
+                  {!empty && <ChevronIcon />}
                 </div>
                 <button
                   type="button"
@@ -1271,15 +1300,16 @@ export interface MealFormValues {
 
 // The Meal form's cards, without its buttons: Basics, Slots, and Tracking and
 // repeat, under a banner counting the errors once a submit is rejected.
-// Adding offers `mealTypes` as chips and shows `slotsCard`, its
-// NewMealSlotsCard, whose refused slots `slotErrors` holds; `editing` shows
-// its Meal Type locked and lists its slots. Mounted again on every submit,
-// so it starts from what was sent.
+// Adding offers `mealTypes` as chips, with `mealTypeHint` under them, and
+// shows `slotsCard`, its NewMealSlotsCard, whose refused slots `slotErrors`
+// holds; `editing` shows its Meal Type locked and lists its slots. Mounted
+// again on every submit, so it starts from what was sent.
 export function MealFormFields({
   errors,
   slotErrors = [],
   values,
   mealTypes,
+  mealTypeHint = t("planner.mealTypeHint"),
   slotsCard,
   editing,
 }: {
@@ -1287,6 +1317,7 @@ export function MealFormFields({
   slotErrors?: NewMealSlotRowError[];
   values: MealFormValues;
   mealTypes: PickerOption[];
+  mealTypeHint?: string;
   slotsCard?: ReactNode;
   editing?: Pick<PlannerMeal, "mealTypeLabel" | "slots">;
 }) {
@@ -1327,7 +1358,7 @@ export function MealFormFields({
               ))}
             </div>
             {/* The error takes the hint's place. */}
-            {messages("mealType") ?? <p className="field-hint">{t("planner.mealTypeHint")}</p>}
+            {messages("mealType") ?? <p className="field-hint">{mealTypeHint}</p>}
           </fieldset>
         )}
         <div className="form-field">

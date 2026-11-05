@@ -51,6 +51,11 @@ export function formatMealCount(count: number): string {
   return count === 1 ? t("planner.mealCountOne") : t("planner.mealCount", { count });
 }
 
+// How many slots a Meal Template has: "1 slot", "3 slots".
+export function formatSlotCount(count: number): string {
+  return count === 1 ? t("planner.slotCountOne") : t("planner.slotCount", { count });
+}
+
 // A Recipe's Portions in running text: "1 portion", "1,800 portions".
 export function formatPortions(portions: number): string {
   return portions === 1

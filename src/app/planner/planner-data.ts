@@ -6,12 +6,12 @@ import { projectStock, type SlotProjection } from "@/core/projected-stock";
 import type { Db } from "@/db";
 import { listReopenAddsBack } from "@/db/confirmation";
 import { listActiveCategories } from "@/db/food-categories";
-import { listMealTemplates } from "@/db/meal-templates";
+import { listMealTemplates, listPickableMealTypes, listPickableSlotCategories, type MealTemplate } from "@/db/meal-templates";
 import { listActiveMealTypes } from "@/db/meal-types";
 import { listFoodsForSlots, type Meal, type MealSlotFood } from "@/db/meals";
 import { loadStockProjection, type ProjectedProductWithName } from "@/db/projected-stock";
 import { foodCategoryLabel, mealTypeLabel } from "@/strings";
-import type { Pickers, PlannerMeal, PlannerSlotFood, SlotWarnings } from "./meal-card";
+import type { Pickers, PlannerMeal, PlannerSlotFood, SlotWarnings, TemplateOption } from "./meal-card";
 
 // The Meals as their cards show them, each slot with its warnings. `to` is the
 // last day any of them can be on: every Meal up to it takes Stock from them.
@@ -61,7 +61,14 @@ export async function loadPickers(db: Db): Promise<Pickers> {
     label: mealTypeLabel(mealType),
   }));
 
-  const templateOptions = sortMealTemplates(templates).map((template) => ({ id: template.id, label: template.name }));
+  const templateOptions = await toTemplateOptions(db, templates);
+  // By id, so each shows once however many template slots use it.
+  const archivedSlotCategories = new Map(
+    templateOptions
+      .flatMap((template) => template.slots)
+      .filter((slot) => slot.archived)
+      .map((slot) => [slot.slotCategoryId, slot.label]),
+  );
   // A slot's picker offers only Food Categories that are not Archived. A slot
   // added by hand is offered its food's Roles, else Kinds, in this order too.
   const slotCategoryOptions = sortCategories(categories, foodCategoryLabel).map((category) => ({
@@ -77,11 +84,42 @@ export async function loadPickers(db: Db): Promise<Pickers> {
     mealTypes: mealTypeOptions,
     templates: templateOptions,
     slotCategories: slotCategoryOptions,
+    archivedSlotCategories: [...archivedSlotCategories].map(([id, label]) => ({ id, label })),
     slotFoods: {
       recipes: foods.recipes.toSorted(byName).map(({ name, ...recipe }) => ({ ...recipe, label: name })),
       products: foods.products.toSorted(byName).map(({ name, ...product }) => ({ ...product, label: name })),
     },
   };
+}
+
+// The Meal Templates as Add a Meal lists them: by Meal Type, in the order the
+// Meal Type picker lists them, then by hour. A template's Meal Type and Slot
+// Categories may be Archived; those Meal Types come last.
+async function toTemplateOptions(db: Db, templates: MealTemplate[]): Promise<TemplateOption[]> {
+  const ids = templates.map((template) => template.id);
+  const [mealTypes, categories] = await Promise.all([
+    listPickableMealTypes(db, ids),
+    listPickableSlotCategories(db, ids),
+  ]);
+  const order = sortMealTypes(mealTypes, mealTypeLabel).sort((a, b) => Number(a.archived) - Number(b.archived));
+  const byId = <T extends { id: string }>(items: T[]) => new Map(items.map((item) => [item.id, item]));
+  const [mealTypeById, categoryById] = [byId(mealTypes), byId(categories)];
+  const rank = new Map(order.map((mealType, index) => [mealType.id, index]));
+  return sortMealTemplates(templates)
+    .sort((a, b) => rank.get(a.mealTypeId)! - rank.get(b.mealTypeId)!)
+    .map((template) => {
+      const mealType = mealTypeById.get(template.mealTypeId)!;
+      return {
+        id: template.id,
+        label: template.name,
+        hour: template.hour,
+        mealType: { id: mealType.id, label: mealTypeLabel(mealType), archived: mealType.archived },
+        slots: template.slotCategoryIds.map((slotCategoryId) => {
+          const category = categoryById.get(slotCategoryId)!;
+          return { slotCategoryId, label: foodCategoryLabel(category), archived: category.archived };
+        }),
+      };
+    });
 }
 
 // A slot's Shortfalls and unprojectable Products, by Product name; null when

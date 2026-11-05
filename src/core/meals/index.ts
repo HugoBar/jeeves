@@ -56,7 +56,9 @@ export interface NewMealInput {
   untracked: boolean;
 }
 
-// `pickable` holds the Meal Types a new Meal can have: the non-Archived ones.
+// `pickable` holds the Meal Types a new Meal can have: the non-Archived ones,
+// plus an Archived one a Meal Template still uses, which a Meal copied from it
+// keeps.
 export function parseNewMeal(input: NewMealInput, pickable: ReadonlySet<string>): NewMealResult {
   const date = input.date.trim();
   const mealTypeId = input.mealTypeId.trim();
@@ -70,37 +72,6 @@ export function parseNewMeal(input: NewMealInput, pickable: ReadonlySet<string>)
   if (errors.length || !changes.ok) return { ok: false, errors };
 
   return { ok: true, fields: { date, mealTypeId, ...changes.changes } };
-}
-
-// A Meal made from a Meal Template copies its name, Meal Type, hour and empty
-// slots, and keeps no link to it (data-model Q5). The template's Meal Type may
-// be Archived: the Meal keeps it, as the template does.
-export interface NewMealFromTemplateFields {
-  date: string;
-  templateId: string;
-}
-
-export type MealFromTemplateError = "invalidDate" | "noMealTemplate" | "unavailableMealTemplate";
-
-export type NewMealFromTemplateResult =
-  | { ok: true; fields: NewMealFromTemplateFields }
-  | { ok: false; errors: MealFromTemplateError[] };
-
-// `templates` holds the ids of every Meal Template.
-export function parseNewMealFromTemplate(
-  input: NewMealFromTemplateFields,
-  templates: ReadonlySet<string>,
-): NewMealFromTemplateResult {
-  const date = input.date.trim();
-  const templateId = input.templateId.trim();
-
-  const errors: MealFromTemplateError[] = [];
-  if (!isDate(date)) errors.push("invalidDate");
-  if (!templateId) errors.push("noMealTemplate");
-  else if (!templates.has(templateId)) errors.push("unavailableMealTemplate");
-  if (errors.length) return { ok: false, errors };
-
-  return { ok: true, fields: { date, templateId } };
 }
 
 export type MealSlotCategoryError = "noSlotCategory" | "unavailableSlotCategory";

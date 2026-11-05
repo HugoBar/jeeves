@@ -13,7 +13,6 @@ import {
   parseMealSlotCategory,
   parseNewMeal,
   parseMealSlotFill,
-  parseNewMealFromTemplate,
   parseNewMealSlot,
   parseNewMealSlots,
   newMealSlotPickable,
@@ -84,40 +83,6 @@ describe("parseNewMeal rejects", () => {
     expect(parseNewMeal({ date: "", hour: "", name: "", mealTypeId: "", untracked: false }, pickable)).toEqual({
       ok: false,
       errors: ["invalidDate", "invalidHour", "noMealType"],
-    });
-  });
-});
-
-describe("parseNewMealFromTemplate", () => {
-  // The Meal Templates that exist in these tests.
-  const templates = new Set(["office-lunch-id"]);
-
-  it("reads the planner day and the picked template", () => {
-    expect(parseNewMealFromTemplate({ date: "2026-10-27", templateId: " office-lunch-id " }, templates)).toEqual({
-      ok: true,
-      fields: { date: "2026-10-27", templateId: "office-lunch-id" },
-    });
-  });
-
-  it.each([[""], ["  "]])("rejects a missing template (%j)", (templateId) => {
-    expect(parseNewMealFromTemplate({ date: "2026-10-27", templateId }, templates)).toEqual({
-      ok: false,
-      errors: ["noMealTemplate"],
-    });
-  });
-
-  // Deleted since the planner loaded, or a crafted id.
-  it("rejects a template that does not exist", () => {
-    expect(parseNewMealFromTemplate({ date: "2026-10-27", templateId: "deleted-id" }, templates)).toEqual({
-      ok: false,
-      errors: ["unavailableMealTemplate"],
-    });
-  });
-
-  it("rejects a date that is no day", () => {
-    expect(parseNewMealFromTemplate({ date: "2026-02-30", templateId: "office-lunch-id" }, templates)).toEqual({
-      ok: false,
-      errors: ["invalidDate"],
     });
   });
 });

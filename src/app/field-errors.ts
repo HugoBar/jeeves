@@ -3,7 +3,6 @@ import type { MealTemplateFieldError, TemplateSlotError } from "@/core/meal-temp
 import type { MealTypeFieldError } from "@/core/meal-types";
 import type {
   MealFieldError,
-  MealFromTemplateError,
   MealSlotCategoryError,
   MealSlotFillError,
   NewMealSlotError,
@@ -33,12 +32,6 @@ export const MEAL_ERROR_FIELDS = {
   noMealType: "mealType",
   unavailableMealType: "mealType",
 } as const satisfies Record<MealFieldError, string>;
-
-export const MEAL_FROM_TEMPLATE_ERROR_FIELDS = {
-  invalidDate: FORM_LEVEL,
-  noMealTemplate: "template",
-  unavailableMealTemplate: "template",
-} as const satisfies Record<MealFromTemplateError, string>;
 
 export const MEAL_SLOT_ERROR_FIELDS = {
   noSlotCategory: "slotCategory",

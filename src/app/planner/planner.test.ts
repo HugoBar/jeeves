@@ -2,7 +2,7 @@ import { createElement, type ComponentProps } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { EditMealPanel, MealFormFields, MealMenuList, NewMealSlotsCard, ReopenSheet, type PlannerMeal, type PlannerMealSlot, type SlotWarnings } from "./meal-card";
-import { AddMealPanel, PlannerView } from "./planner";
+import { AddMealPanel, AddMealPanelView, PlannerView } from "./planner";
 
 type Props = ComponentProps<typeof PlannerView>;
 
@@ -13,6 +13,7 @@ const pickers: Props["pickers"] = {
   mealTypes: [],
   templates: [],
   slotCategories: [],
+  archivedSlotCategories: [],
   slotFoods: { recipes: [], products: [] },
 };
 
@@ -652,6 +653,161 @@ describe("the Meal panel", () => {
   it("names its main button for what it does", () => {
     expect(buttons(renderAdd("2026-10-30", "this"))).toContain("Add Meal");
     expect(buttons(renderEdit("this"))).toContain("Save");
+  });
+});
+
+describe("Add a Meal", () => {
+  type ViewProps = ComponentProps<typeof AddMealPanelView>;
+  const lunch = { id: "lunch", label: "Lunch", archived: false };
+  const slot = (slotCategoryId: string, label: string, archived = false) => ({ slotCategoryId, label, archived });
+  const weekdayLunch = {
+    id: "weekday-lunch",
+    label: "Weekday Lunch",
+    hour: "12:30",
+    mealType: lunch,
+    slots: [slot("main", "Main Dish"), slot("veg", "Vegetables"), slot("fruit", "Fruit")],
+  };
+  const familyLunch = {
+    id: "family-lunch",
+    label: "Family Lunch",
+    hour: "13:00",
+    mealType: lunch,
+    slots: [slot("main", "Main Dish"), slot("side", "Side Dish")],
+  };
+  const oats = {
+    id: "oats",
+    label: "Overnight oats",
+    hour: "08:00",
+    mealType: { id: "breakfast", label: "Breakfast", archived: false },
+    slots: [slot("grains", "Grains")],
+  };
+  const withTemplates: ViewProps["pickers"] = {
+    ...pickers,
+    mealTypes: [
+      { id: "dinner", label: "Dinner" },
+      { id: "lunch", label: "Lunch" },
+      { id: "breakfast", label: "Breakfast" },
+    ],
+    templates: [weekdayLunch, familyLunch, oats],
+    slotCategories: [
+      { id: "main", label: "Main Dish", kind: "role" },
+      { id: "side", label: "Side Dish", kind: "role" },
+    ],
+  };
+  const renderView = (step: ViewProps["step"], props: Partial<ViewProps> = {}) =>
+    renderToStaticMarkup(
+      createElement(AddMealPanelView, {
+        date: "2026-10-30",
+        week: "this",
+        pickers: withTemplates,
+        step,
+        onStep: () => {},
+        onClose: () => {},
+        ...props,
+      }),
+    );
+  const title = (html: string) => text(/<h2 [^>]*>(.*?)<\/h2>/.exec(html)![1]!);
+
+  describe("its first screen", () => {
+    const groups = (html: string) =>
+      [...html.matchAll(/<h4 class="meal-start-group">(.*?)<\/h4>\s*<ul[^>]*>(.*?)<\/ul>/gs)].map((group) => [
+        text(group[1]!),
+        [...group[2]!.matchAll(/<li>(.*?)<\/li>/gs)].map((row) => text(row[1]!)),
+      ]);
+
+    it("is where adding a Meal starts when there are Meal Templates", () => {
+      const html = renderToStaticMarkup(
+        createElement(AddMealPanel, { date: "2026-10-30", week: "this", pickers: withTemplates, onClose: () => {} }),
+      );
+      expect(title(html)).toBe("Add a Meal");
+      expect(html).not.toContain('name="hour"');
+    });
+
+    it("lists the Meal Templates by Meal Type, each with its hour, slot count and slot categories", () => {
+      expect(groups(renderView("start"))).toEqual([
+        [
+          "Lunch",
+          [
+            "Weekday Lunch 12:30 · 3 slots Main Dish Vegetables Fruit",
+            "Family Lunch 13:00 · 2 slots Main Dish Side Dish",
+          ],
+        ],
+        ["Breakfast", ["Overnight oats 08:00 · 1 slot Grains"]],
+      ]);
+    });
+
+    it("says what a template copies, and that the Meal keeps no link to it", () => {
+      expect(text(renderView("start"))).toContain(
+        "From a Meal Template Copies its name, Meal Type, hour and empty slots. The Meal keeps no link to it.",
+      );
+    });
+
+    it("offers each template, and Start from scratch below them, as buttons", () => {
+      const html = renderView("start");
+      const buttons = [...html.matchAll(/<button type="button"[^>]*>(.*?)<\/button>/gs)].map((b) => text(b[1]!));
+      expect(buttons.slice(1)).toEqual([
+        expect.stringMatching(/^Weekday Lunch /),
+        expect.stringMatching(/^Family Lunch /),
+        expect.stringMatching(/^Overnight oats /),
+        "Start from scratch Pick a Meal Type and an hour. Add slots if you want them.",
+      ]);
+    });
+  });
+
+  describe("New Meal from a template", () => {
+    const fromFamilyLunch = () => renderView({ template: familyLunch });
+    const input = (html: string, name: string) => new RegExp(`<input [^>]*name="${name}"[^>]*>`).exec(html)?.[0] ?? "";
+    const sent = (html: string, name: string) =>
+      [...html.matchAll(new RegExp(`<input type="hidden" name="${name}" value="([^"]*)"`, "g"))].map((m) => m[1]);
+
+    it("is titled with the template", () => {
+      expect(title(fromFamilyLunch())).toBe("New Meal from Family Lunch");
+    });
+
+    it("picks the template's Meal Type, saying it can still be changed now", () => {
+      const html = fromFamilyLunch();
+      expect(/<input type="radio" name="mealTypeId"[^>]*value="lunch"[^>]*>/.exec(html)![0]).toContain('checked=""');
+      expect(/<input type="radio" name="mealTypeId"[^>]*value="dinner"[^>]*>/.exec(html)![0]).not.toContain("checked");
+      expect(text(html)).toContain("Copied from Family Lunch. You can change it now, not after the Meal is added.");
+    });
+
+    it("fills in the template's hour and name", () => {
+      const html = fromFamilyLunch();
+      expect(input(html, "hour")).toContain('value="13:00"');
+      expect(input(html, "name")).toContain('value="Family Lunch"');
+    });
+
+    it("has the template's slots, all empty and in order, saying so", () => {
+      const html = fromFamilyLunch();
+      const rows = [...html.matchAll(/<li class="slot-row[^"]*"[^>]*>(.*?)<\/li>/gs)].map((row) => text(row[1]!));
+      expect(rows).toEqual(["Main Dish Not chosen yet", "Side Dish Not chosen yet"]);
+      expect(sent(html, "slotFood")).toEqual(["", ""]);
+      expect(sent(html, "slotCategoryId")).toEqual(["main", "side"]);
+      expect(text(html)).toContain("Copied from Family Lunch, all empty.");
+    });
+
+    // The Meal keeps it, as the template does, unless it is changed now.
+    it("offers the template's Meal Type even when it is Archived", () => {
+      const brunch = { ...familyLunch, mealType: { id: "brunch", label: "Brunch", archived: true } };
+      const html = renderView({ template: brunch });
+      expect(/<input type="radio" name="mealTypeId"[^>]*value="brunch"[^>]*>/.exec(html)![0]).toContain('checked=""');
+    });
+
+    it("shows a slot with an Archived Slot Category by its name", () => {
+      const sauces = { ...familyLunch, slots: [slot("sauces", "Sauces", true)] };
+      const html = renderView(
+        { template: sauces },
+        { pickers: { ...withTemplates, templates: [sauces], archivedSlotCategories: [{ id: "sauces", label: "Sauces" }] } },
+      );
+      expect(text(html)).toContain("Sauces Not chosen yet");
+    });
+  });
+
+  it("opens New Meal from scratch, with its own hints", () => {
+    const html = renderView("scratch");
+    expect(title(html)).toBe("New Meal");
+    expect(text(html)).toContain("It can't be changed after the Meal is added.");
+    expect(text(html)).toContain("Add slots now, or later from the Planner.");
   });
 });
 
