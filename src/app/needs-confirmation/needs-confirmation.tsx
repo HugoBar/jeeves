@@ -52,7 +52,9 @@ export function NeedsConfirmation({ meals, ...pickers }: { meals: PlannerMeal[] 
           </ul>
         </>
       )}
-      {editing && <EditMealPanel key={editing.id} meal={editing} week={null} onClose={() => setEditingId(null)} />}
+      {editing && (
+        <EditMealPanel key={editing.id} meal={editing} week={null} pickers={pickers} onClose={() => setEditingId(null)} />
+      )}
       {!resolving && (
         <p>
           <Link href="/planner" className="button button-quiet">

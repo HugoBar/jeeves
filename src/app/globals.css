@@ -1174,6 +1174,10 @@ html:has(.sheet[open]) {
     display: none;
   }
 
+  .slot-picker-sheet {
+    max-width: 560px;
+  }
+
   .sheet-close {
     --button-bg: var(--color-ground);
     --button-line: transparent;
@@ -2389,6 +2393,7 @@ a.back-link {
   --week-accent: var(--color-accent);
   --week-soft: var(--color-accent-soft);
   --week-ink: var(--color-accent-ink);
+  --week-selected: var(--color-selected);
 }
 
 /* A Meal panel takes its week's accent too. */
@@ -2397,6 +2402,7 @@ a.back-link {
   --week-accent: var(--color-next);
   --week-soft: var(--color-next-soft);
   --week-ink: var(--color-next-ink);
+  --week-selected: var(--color-next-selected);
 }
 
 /* The Planner heading, the week tabs and the week bar: stacked on phone, one
@@ -3165,40 +3171,197 @@ a.back-link {
   font-weight: 500;
 }
 
-/* The slot picker, opened under its slot. */
-.slot-picker {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  padding: 0 14px 12px;
+/* The slot picker: a sheet on phone, a dialog on desktop, or the Meal
+   panel's content. */
+.slot-picker-sheet {
+  overflow-y: auto;
 }
 
-.slot-picker-more {
+.slot-picker-scope {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 8px;
+  justify-content: space-between;
+  gap: 4px 12px;
+  margin: 0;
 }
 
-/* Fits a day's narrow column: fields take a row each, buttons wrap. */
-.slot-picker .item-form {
+.slot-picker-scope-label {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  color: var(--color-ink-muted);
+  font-size: var(--text-meta);
+}
+
+.slot-picker-scope .button-quiet {
   padding: 0;
+  font-size: var(--text-meta);
 }
 
-.slot-picker :is(select, input) {
-  min-width: 0;
-  max-width: 100%;
+.slot-picker-food,
+.slot-picker-amount,
+.slot-category-form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
 }
 
-.slot-picker .item-form > select,
-.slot-picker-more > form:has(select),
-.slot-picker-more select {
-  flex: 1 1 100%;
+.slot-picker-section {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.slot-picker-section h3 {
+  margin: 0;
+}
+
+.slot-picker-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.slot-picker-list li + li {
+  border-top: 1px solid var(--color-line-soft);
+}
+
+/* A food to pick: its name over its line, left-aligned across the row. */
+.slot-picker-option {
+  --button-bg: transparent;
+  --button-line: transparent;
+  justify-content: space-between;
   width: 100%;
+  min-height: 60px;
+  padding: 10px 4px;
+  border-radius: 0;
+  text-align: left;
 }
 
-.slot-picker button {
-  flex: 1 1 auto;
+.slot-picker-option-text,
+.slot-picker-picked {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.slot-picker-option-name {
+  color: var(--color-ink);
+  font-size: var(--text-item);
+  font-weight: 500;
+}
+
+.slot-picker-option-line {
+  color: var(--color-ink-muted);
+  font-size: var(--text-meta);
+  font-weight: 400;
+}
+
+.slot-picker-leftovers {
+  --button-bg: var(--color-surface);
+  --button-line: var(--color-border);
+  padding: 10px 14px;
+  border-radius: 14px;
+}
+
+.slot-picker-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 24px 16px;
+  border: 1px dashed var(--color-line-strong);
+  border-radius: 14px;
+  text-align: center;
+}
+
+.slot-picker-empty p {
+  margin: 0;
+}
+
+.slot-picker-empty-title {
+  font-size: var(--text-item);
+  font-weight: 600;
+}
+
+.slot-picker-empty-body {
+  color: var(--color-ink-muted);
+  font-size: var(--text-meta);
+}
+
+.slot-picker-empty-links {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+  padding-top: 4px;
+}
+
+.slot-picker-picked {
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: var(--color-inset);
+}
+
+.slot-picker-foot {
+  flex-wrap: wrap;
+}
+
+/* Change Slot Category: a row per Role and Kind, the picked one in the
+   week's accent. */
+.slot-category-choices {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.slot-category-choices legend {
+  margin-bottom: 8px;
+  padding: 0;
+  font-weight: 600;
+}
+
+.slot-category-choice {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 12px;
+  min-height: 52px;
+  padding: 8px 14px;
+  border: 1px solid var(--color-border);
+  border-radius: 14px;
+  background: var(--color-surface);
+  cursor: pointer;
+}
+
+.slot-category-choice:has(:checked) {
+  border-color: var(--week-accent, var(--color-accent));
+  background: var(--week-selected, var(--color-selected));
+}
+
+.slot-category-choice input {
+  flex: none;
+  width: 20px;
+  height: 20px;
+  margin: 0;
+  accent-color: var(--week-accent, var(--color-accent));
+}
+
+.slot-category-kind {
+  margin-left: auto;
+  color: var(--color-ink-muted);
+  font-size: var(--text-meta);
+  white-space: nowrap;
+}
+
+.slot-category-form .field-hint {
+  margin: 0;
 }
 
 @media (min-width: 768px) {
@@ -3226,8 +3389,7 @@ a.back-link {
     font-size: var(--text-meta);
   }
 
-  .slot-row-archived,
-  .slot-picker {
+  .slot-row-archived {
     padding: 0 9px 8px;
   }
 
@@ -3362,6 +3524,13 @@ a.back-link {
     flex: 1;
     min-height: 48px;
   }
+}
+
+/* Edit Meal's cards, hidden while the slot picker takes the panel. */
+.meal-panel-content:not([hidden]) {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
 }
 
 .meal-panel-delete {

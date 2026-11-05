@@ -10,7 +10,6 @@ import {
   mealCardStatus,
   newMealSlotPickable,
   parseNewMealSlot,
-  pickableForSlot,
   reopensAs,
   slotCategoryChoices,
   slotFoodValue,
@@ -27,11 +26,10 @@ import { localDate, localHour, type Week } from "@/core/planner";
 import { shortfallUrgency } from "@/core/projected-stock";
 import type { DefaultUnit } from "@/core/units";
 import { formatDayHeading, formatMealDate, mealPanelLabel, formatPortions, formatQuantity, t, type StringKey } from "@/strings";
-import { FORM_LEVEL, MEAL_ERROR_FIELDS, MEAL_SLOT_ERROR_FIELDS } from "../field-errors";
+import { FORM_LEVEL, MEAL_ERROR_FIELDS } from "../field-errors";
 import { FoodCategoryPill } from "../food-category-pill";
 import { FormCard } from "../form-card";
 import { AlertIcon, FormBanner, FormError, LockIcon, useFieldErrors, type InvalidProps } from "../form-error";
-import { RemoveButton } from "../remove-button";
 import { ConfirmSheet } from "../sheet";
 import { SidePanel } from "../side-panel";
 import { viewerToday } from "../viewer-clock";
@@ -39,20 +37,23 @@ import {
   addMealSlotAction,
   confirmMealAction,
   editMealAction,
-  emptyMealSlotAction,
-  fillMealSlotAction,
   removeMealAction,
-  removeMealSlotAction,
   reopenMealAction,
-  setMealSlotCategoryAction,
   skipMealAction,
   type ConfirmMealError,
   type MealChangesFormState,
-  type MealSlotCategoryFormState,
-  type MealSlotFillFormState,
   type NewMealSlotFormState,
   type SkipMealError,
 } from "./actions";
+import {
+  ChevronIcon,
+  SlotPickerBody,
+  slotPickerHeading,
+  SlotPickerSheet,
+  startScreen,
+  useSlotErrors,
+  type SlotPickerScreen,
+} from "./slot-picker";
 
 // A Meal with what its card shows. Its Meal Type may be Archived: the Meal
 // keeps it.
@@ -203,10 +204,10 @@ export function MealCard({
       {meal.slots.length > 0 && (
         <ol className="slot-list" aria-label={t("planner.slots")}>
           {meal.slots.map((slot) => (
-            // A new key once a Slot Category change is saved, so the row
-            // mounts with it, closed.
+            // Kept across a Slot Category change, so its picker stays open
+            // and goes on to the food for the new one.
             <SlotRow
-              key={`${slot.id}:${slot.slotCategoryId}`}
+              key={slot.id}
               slot={slot}
               meal={meal}
               today={today}
@@ -582,42 +583,11 @@ function SlotWarningStrips({ warnings, mealDate, today }: { warnings: SlotWarnin
   );
 }
 
-// A slot's Slot Category, saved as soon as one is picked. The picker offers
-// only non-Archived Food Categories, plus the slot's own if it is Archived.
-function SlotCategoryPicker({ slot, slotCategories }: { slot: PlannerMealSlot; slotCategories: SlotCategoryOption[] }) {
-  const [state, action, pending] = useActionState(
-    (previous: MealSlotCategoryFormState, formData: FormData) =>
-      setMealSlotCategoryAction(slot.id, previous, formData),
-    { error: null },
-  );
-  const { invalid, allMessages } = useSlotErrors(state.error);
-  return (
-    <form action={action}>
-      <select
-        name="slotCategoryId"
-        aria-label={t("planner.slotCategory")}
-        defaultValue={slot.slotCategoryId}
-        disabled={pending}
-        onChange={(event) => event.currentTarget.form?.requestSubmit()}
-        {...invalid("slotCategory")}
-      >
-        {slot.slotCategoryArchived && <option value={slot.slotCategoryId}>{slot.slotCategoryLabel}</option>}
-        {slotCategories.map((category) => (
-          <option key={category.id} value={category.id}>
-            {category.label}
-          </option>
-        ))}
-      </select>
-      {allMessages()}
-    </form>
-  );
-}
-
 // A slot on its Meal's card: its Slot Category pill, its Portions or quantity
 // and a chevron, over its food. On a Planned Meal a tap opens the slot
-// picker under it; a Confirmed or Skipped Meal's slots show as they were. An
+// slot picker; a Confirmed or Skipped Meal's slots show as they were. An
 // Archived Slot Category is struck through and asks for another, which opens
-// the picker without its food, since nothing can be picked for it.
+// the picker on Change Slot Category, since no food can be picked for it.
 function SlotRow({
   slot,
   meal,
@@ -655,11 +625,11 @@ function SlotRow({
         </div>
       )}
       {open && (
-        <SlotPicker
+        <SlotPickerSheet
+          meal={meal}
           slot={slot}
-          allowsLeftovers={meal.allowsLeftovers}
           pickers={pickers}
-          onDone={() => setOpen(false)}
+          onClose={() => setOpen(false)}
         />
       )}
       {slot.warnings && <SlotWarningStrips warnings={slot.warnings} mealDate={meal.date} today={today} />}
@@ -683,14 +653,6 @@ function SlotSummary({ slot, showAmount, chevron }: { slot: PlannerMealSlot; sho
       </span>
       <SlotFoodName food={slot.food} />
     </>
-  );
-}
-
-export function ChevronIcon() {
-  return (
-    <svg className="slot-row-chevron" aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M9 6l6 6-6 6" />
-    </svg>
   );
 }
 
@@ -725,52 +687,6 @@ function SlotFoodName({ food }: { food: PlannerSlotFood }) {
         </span>
       );
   }
-}
-
-// The slot picker, opened from its slot: what the slot holds, unless its Slot
-// Category is Archived, then its Slot Category, Empty and Remove Slot.
-function SlotPicker({
-  slot,
-  allowsLeftovers,
-  pickers,
-  onDone,
-}: {
-  slot: PlannerMealSlot;
-  allowsLeftovers: boolean;
-  pickers: SlotPickers;
-  onDone: () => void;
-}) {
-  return (
-    <div className="slot-picker">
-      {!slot.slotCategoryArchived && (
-        <SlotFillForm slot={slot} allowsLeftovers={allowsLeftovers} foods={pickers.slotFoods} onDone={onDone} />
-      )}
-      <div className="slot-picker-more">
-        <SlotCategoryPicker slot={slot} slotCategories={pickers.slotCategories} />
-        {slot.food.content !== "empty" && (
-          <form action={() => emptyMealSlotAction(slot.id)}>
-            <button type="submit">{t("planner.emptySlot")}</button>
-          </form>
-        )}
-        <RemoveButton
-          action={() => removeMealSlotAction(slot.id)}
-          label={t("planner.removeSlot")}
-          title={t("planner.removeSlotConfirm", { category: slot.slotCategoryLabel })}
-        />
-      </div>
-    </div>
-  );
-}
-
-// The picker's value for what the slot holds, if the picker still offers it:
-// "recipe:<id>", "product:<id>" or "leftovers"; "" otherwise.
-function pickedFood(food: PlannerSlotFood, offered: ReadonlySet<string>): { food: string; amount: string } {
-  const value =
-    food.content === "recipe" || food.content === "product" ? slotFoodValue(food.content, food.id) : food.content;
-  if (!offered.has(value)) return { food: "", amount: "" };
-  if (food.content === "recipe") return { food: value, amount: String(food.portions) };
-  if (food.content === "product") return { food: value, amount: String(food.quantity) };
-  return { food: value, amount: "" };
 }
 
 // A picked Recipe or Product and its Portions or quantity, as the food
@@ -871,58 +787,6 @@ function FoodFields({
         </label>
       )}
     </>
-  );
-}
-
-// Fills a slot, or changes what it holds. The picker offers only non-Archived
-// Recipes and Products carrying the slot's Slot Category, and Leftovers if
-// the Meal Type allows them. Unmounted when closed, so its errors go with it.
-function SlotFillForm({
-  slot,
-  allowsLeftovers,
-  foods,
-  onDone,
-}: {
-  slot: PlannerMealSlot;
-  allowsLeftovers: boolean;
-  foods: SlotFoods;
-  onDone: () => void;
-}) {
-  const recipes = pickableForSlot(foods.recipes, slot.slotCategoryId);
-  const products = pickableForSlot(foods.products, slot.slotCategoryId);
-  const offered = new Set([
-    ...recipes.map((recipe) => slotFoodValue("recipe", recipe.id)),
-    ...products.map((product) => slotFoodValue("product", product.id)),
-    ...(allowsLeftovers ? ["leftovers"] : []),
-  ]);
-  // Controlled, so a rejected submit keeps what was picked and typed.
-  const [values, setValues] = useState(() => pickedFood(slot.food, offered));
-  const [state, action, pending] = useActionState(async (previous: MealSlotFillFormState, formData: FormData) => {
-    const next = await fillMealSlotAction(slot.id, previous, formData);
-    if (!next.error) onDone();
-    return next;
-  }, { error: null });
-  const { invalid, allMessages } = useSlotErrors(state.error);
-
-  return (
-    <form action={action} className="item-form planner-form open-row">
-      <FoodFields
-        recipes={recipes}
-        products={products}
-        allowsLeftovers={allowsLeftovers}
-        emptyLabel={offered.size === 0 ? t("planner.nothingPickable") : t("planner.pickFood")}
-        values={values}
-        onChange={setValues}
-        invalid={invalid}
-      />
-      <button type="submit" className="button-primary" disabled={pending}>
-        {t("planner.save")}
-      </button>
-      <button type="button" onClick={onDone}>
-        {t("planner.cancel")}
-      </button>
-      {allMessages()}
-    </form>
   );
 }
 
@@ -1271,18 +1135,94 @@ export function MealPanelActions({
 
 // Edit Meal in the side panel, on a Planned Meal. Its Meal Type is shown but
 // never changes. Closing it without saving discards the changes quietly.
-export function EditMealPanel({ meal, week, onClose }: { meal: PlannerMeal; week: Week; onClose: () => void }) {
+export function EditMealPanel({
+  meal,
+  week,
+  pickers,
+  onClose,
+}: {
+  meal: PlannerMeal;
+  week: Week;
+  pickers: SlotPickers;
+  onClose: () => void;
+}) {
+  const [picking, setPicking] = useState<SlotPicking | null>(null);
+  return (
+    <EditMealPanelView
+      meal={meal}
+      week={week}
+      pickers={pickers}
+      picking={picking}
+      onPicking={setPicking}
+      onClose={onClose}
+    />
+  );
+}
+
+// A slot of the Meal being picked for, and the picker's screen.
+export type SlotPicking = { slotId: string; screen: SlotPickerScreen };
+
+// Edit Meal, or the slot picker for one of its slots in its place, headed
+// "Back to {Meal}": nothing stacks on top of the panel. The form stays
+// mounted, hidden, so what was typed in it is still there on the way back. A
+// slot removed meanwhile goes back to the form.
+export function EditMealPanelView({
+  meal,
+  week,
+  pickers,
+  picking,
+  onPicking,
+  onClose,
+}: {
+  meal: PlannerMeal;
+  week: Week;
+  pickers: SlotPickers;
+  picking: SlotPicking | null;
+  onPicking: (picking: SlotPicking | null) => void;
+  onClose: () => void;
+}) {
   const label = meal.name ?? meal.mealTypeLabel;
+  const pickedSlot = picking ? meal.slots.find((slot) => slot.id === picking.slotId) : undefined;
+  const back = () => onPicking(null);
+  const mealFormAndDelete = (
+    <>
+      <EditMealForm
+        meal={meal}
+        onPickSlot={(slot) => onPicking({ slotId: slot.id, screen: startScreen(slot) })}
+        onDone={onClose}
+      />
+      <DeleteMealCard meal={meal} label={label} onDeleted={onClose} />
+    </>
+  );
   return (
     <SidePanel
-      icon={<MealPanelIcon />}
-      label={mealPanelLabel(meal.date, week, "editing")}
-      title={t("planner.panel.editTitle", { name: label })}
       className={mealPanelClass(week)}
       onClose={onClose}
+      {...(picking && pickedSlot
+        ? {
+            ...slotPickerHeading(meal, pickedSlot, picking.screen),
+            back: { label: t("planner.picker.backTo", { meal: label }), onBack: back },
+          }
+        : {
+            icon: <MealPanelIcon />,
+            label: mealPanelLabel(meal.date, week, "editing"),
+            title: t("planner.panel.editTitle", { name: label }),
+          })}
     >
-      <EditMealForm meal={meal} onDone={onClose} />
-      <DeleteMealCard meal={meal} label={label} onDeleted={onClose} />
+      {picking && pickedSlot && (
+        <SlotPickerBody
+          meal={meal}
+          slot={pickedSlot}
+          pickers={pickers}
+          screen={picking.screen}
+          onScreen={(screen) => onPicking({ slotId: pickedSlot.id, screen })}
+          onDone={back}
+        />
+      )}
+      {/* The same element either way, so the form isn't mounted again. */}
+      <div className="meal-panel-content" hidden={pickedSlot !== undefined}>
+        {mealFormAndDelete}
+      </div>
     </SidePanel>
   );
 }
@@ -1312,6 +1252,7 @@ export function MealFormFields({
   mealTypeHint = t("planner.mealTypeHint"),
   slotsCard,
   editing,
+  onPickSlot,
 }: {
   errors: MealFieldError[];
   slotErrors?: NewMealSlotRowError[];
@@ -1320,6 +1261,8 @@ export function MealFormFields({
   mealTypeHint?: string;
   slotsCard?: ReactNode;
   editing?: Pick<PlannerMeal, "mealTypeLabel" | "slots">;
+  // Opens the slot picker for a slot of the Meal being edited.
+  onPickSlot?: (slot: PlannerMealSlot) => void;
 }) {
   const [picked, setPicked] = useState(values.mealTypeId ?? "");
   const { invalid, messages } = useMealErrors(errors);
@@ -1396,10 +1339,19 @@ export function MealFormFields({
           {editing.slots.length > 0 ? (
             <ol className="slot-list">
               {editing.slots.map((slot) => (
-                <li key={slot.id} className={slot.food.content === "empty" ? "slot-row slot-row-dashed" : "slot-row"}>
-                  <div className="slot-row-main">
-                    <SlotSummary slot={slot} showAmount chevron={false} />
-                  </div>
+                <li
+                  key={slot.id}
+                  className={slot.food.content === "empty" || slot.slotCategoryArchived ? "slot-row slot-row-dashed" : "slot-row"}
+                >
+                  {onPickSlot ? (
+                    <button type="button" className="slot-row-main" onClick={() => onPickSlot(slot)}>
+                      <SlotSummary slot={slot} showAmount chevron={!slot.slotCategoryArchived} />
+                    </button>
+                  ) : (
+                    <div className="slot-row-main">
+                      <SlotSummary slot={slot} showAmount chevron={false} />
+                    </div>
+                  )}
                 </li>
               ))}
             </ol>
@@ -1472,7 +1424,15 @@ function FixMessage({ count, editing }: { count: number; editing: boolean }) {
   );
 }
 
-function EditMealForm({ meal, onDone }: { meal: PlannerMeal; onDone: () => void }) {
+function EditMealForm({
+  meal,
+  onPickSlot,
+  onDone,
+}: {
+  meal: PlannerMeal;
+  onPickSlot: (slot: PlannerMealSlot) => void;
+  onDone: () => void;
+}) {
   const [state, action, pending] = useActionState(
     async ({ submits, ...previous }: Submitted<MealChangesFormState>, formData: FormData) => {
       const next = await editMealAction(meal.id, previous, formData);
@@ -1489,6 +1449,7 @@ function EditMealForm({ meal, onDone }: { meal: PlannerMeal; onDone: () => void 
         values={state.values}
         mealTypes={[]}
         editing={meal}
+        onPickSlot={onPickSlot}
       />
       <MealPanelActions submitLabel={t("planner.save")} pending={pending} onCancel={onDone} />
     </form>
@@ -1526,15 +1487,5 @@ export function useMealErrors(errors: MealFieldError[]) {
     errors,
     (error) => MEAL_ERROR_FIELDS[error],
     (error) => t(`planner.error.${error}`),
-  );
-}
-
-type SlotError = keyof typeof MEAL_SLOT_ERROR_FIELDS;
-
-function useSlotErrors(error: SlotError | null) {
-  return useFieldErrors(
-    error ? [error] : [],
-    (slotError) => MEAL_SLOT_ERROR_FIELDS[slotError],
-    (slotError) => t(`planner.error.${slotError}`),
   );
 }
