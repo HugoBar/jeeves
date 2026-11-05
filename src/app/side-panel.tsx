@@ -22,12 +22,15 @@ export function SidePanel({
   back,
   eyebrow,
   title,
+  screen = title,
   className = "",
   onClose,
   children,
 }: SidePanelHead & {
   eyebrow?: string;
   title: string;
+  // Which screen it shows, when screens share a title, as Add a slot's do.
+  screen?: string;
   className?: string;
   onClose: () => void;
   children: ReactNode;
@@ -52,14 +55,14 @@ export function SidePanel({
     };
   }, [opener]);
 
-  // A new title is a new screen in the panel, as when Add a Meal moves on to
-  // New Meal: the focus goes to it, since what was tapped is gone.
-  const shownTitle = useRef(title);
+  // A new screen in the panel, as when Add a Meal moves on to New Meal: the
+  // focus goes to its title, since what was tapped is gone.
+  const shownScreen = useRef(screen);
   useEffect(() => {
-    if (shownTitle.current === title) return;
-    shownTitle.current = title;
+    if (shownScreen.current === screen) return;
+    shownScreen.current = screen;
     heading.current?.focus();
-  }, [title]);
+  }, [screen]);
 
   // Escape closes it wherever the focus is, as the page beside it stays
   // usable. On the window, so a menu or sheet that takes Escape first and
