@@ -15,6 +15,8 @@ import {
   parseMealSlotFill,
   parseNewMealFromTemplate,
   parseNewMealSlot,
+  parseNewMealSlots,
+  newMealSlotPickable,
   pickableForSlot,
   confirmOrSkipAsksFirst,
   slotCategoryChoices,
@@ -333,6 +335,64 @@ describe("parseNewMealSlot", () => {
     expect(parseNewMealSlot({ food: "product:bread-id", amount: "", slotCategoryId: "" }, pickable)).toEqual({
       ok: false,
       error: "invalidQuantity",
+    });
+  });
+});
+
+describe("newMealSlotPickable", () => {
+  const categories = [
+    { id: "main-id", kind: "role" as const },
+    { id: "side-id", kind: "role" as const },
+    { id: "grains-id", kind: "kind" as const },
+  ];
+
+  it("offers each Recipe and Product with the Slot Categories it can give a slot, in the order listed", () => {
+    const pickable = newMealSlotPickable(
+      [{ id: "risotto-id", categoryIds: ["side-id", "grains-id", "main-id"] }],
+      [{ id: "bread-id", categoryIds: ["grains-id"] }, { id: "water-id", categoryIds: [] }],
+      categories,
+    );
+    expect(pickable.recipes).toEqual(new Map([["risotto-id", ["main-id", "side-id"]]]));
+    expect(pickable.products).toEqual(
+      new Map([
+        ["bread-id", ["grains-id"]],
+        ["water-id", []],
+      ]),
+    );
+  });
+});
+
+describe("parseNewMealSlots", () => {
+  const pickable = {
+    recipes: new Map([["risotto-id", ["main-id", "side-id"]]]),
+    products: new Map([["bread-id", ["grains-id"]]]),
+  };
+  const risotto = { food: "recipe:risotto-id", amount: "3", slotCategoryId: "side-id" };
+  const bread = { food: "product:bread-id", amount: "120", slotCategoryId: "" };
+
+  it("reads every slot, in the order given", () => {
+    expect(parseNewMealSlots([risotto, bread], pickable)).toEqual({
+      ok: true,
+      slots: [
+        { slotCategoryId: "side-id", fill: { content: "recipe", recipeId: "risotto-id", portions: 3 } },
+        { slotCategoryId: "grains-id", fill: { content: "product", productId: "bread-id", quantity: 120 } },
+      ],
+    });
+  });
+
+  it("takes no slots as none", () => {
+    expect(parseNewMealSlots([], pickable)).toEqual({ ok: true, slots: [] });
+  });
+
+  it("says which slots are refused and why, counting rows from 1", () => {
+    const gone = { food: "recipe:gone-id", amount: "2", slotCategoryId: "" };
+    const noPortions = { ...risotto, amount: "0" };
+    expect(parseNewMealSlots([gone, bread, noPortions], pickable)).toEqual({
+      ok: false,
+      errors: [
+        { row: 1, code: "unavailableFood" },
+        { row: 3, code: "invalidPortions" },
+      ],
     });
   });
 });

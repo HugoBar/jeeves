@@ -208,6 +208,43 @@ export function parseNewMealSlot(input: NewMealSlotInput, pickable: NewMealSlotP
   return { ok: true, slot: { slotCategoryId, fill } };
 }
 
+// What adding a slot by hand offers, built from the non-Archived Recipes
+// (with their final Food Categories) and Products, and the non-Archived Food
+// Categories in the order the chooser lists them. The planner checks a slot
+// against it on the server, and the Meal form before the slot is added.
+export function newMealSlotPickable<T extends { id: string; kind: CategoryKind }>(
+  recipes: readonly { id: string; categoryIds: readonly string[] }[],
+  products: readonly { id: string; categoryIds: readonly string[] }[],
+  categories: readonly T[],
+): NewMealSlotPickable {
+  const choices = (foods: readonly { id: string; categoryIds: readonly string[] }[]) =>
+    new Map(foods.map((food) => [food.id, slotCategoryChoices(food.categoryIds, categories).map((c) => c.id)]));
+  return { recipes: choices(recipes), products: choices(products) };
+}
+
+// A slot added on the Meal form, refused. `row` counts from 1, as the form
+// shows the slots.
+export type NewMealSlotRowError = { row: number; code: NewMealSlotError };
+
+// The slots added on the Meal form, all read, or why each refused one was.
+export type NewMealSlotsResult = { ok: true; slots: NewMealSlot[] } | { ok: false; errors: NewMealSlotRowError[] };
+
+// The slots added on the Meal form before the Meal exists, each checked as
+// parseNewMealSlot does, so none is written unless all of them can be.
+export function parseNewMealSlots(
+  inputs: readonly NewMealSlotInput[],
+  pickable: NewMealSlotPickable,
+): NewMealSlotsResult {
+  const slots: NewMealSlot[] = [];
+  const errors: NewMealSlotRowError[] = [];
+  inputs.forEach((input, index) => {
+    const parsed = parseNewMealSlot(input, pickable);
+    if (parsed.ok) slots.push(parsed.slot);
+    else errors.push({ row: index + 1, code: parsed.error });
+  });
+  return errors.length ? { ok: false, errors } : { ok: true, slots };
+}
+
 // The Recipes or Products a slot's picker offers: those carrying its Slot
 // Category. For a Recipe, `categoryIds` is its final Food Categories, after
 // overrides.
