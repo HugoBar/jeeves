@@ -3,17 +3,15 @@ import { and, asc, eq, gt, gte, inArray, lt, lte, max, sql } from "drizzle-orm";
 import {
   slotKeepsFood,
   type MealChanges,
+  type MealFormSlot,
   type MealSlotContent,
   type MealSlotFill,
   type MealStatus,
   type NewMealFields,
-  type NewMealSlot,
-  type NewMealFromTemplateFields,
 } from "@/core/meals";
 import type { DefaultUnit } from "@/core/units";
 import { activeCategoryIdsByProduct, type FoodCategory } from "./food-categories";
 import type { Db } from "./index";
-import { getMealTemplate } from "./meal-templates";
 import type { MealType } from "./meal-types";
 import { listActiveProducts } from "./products";
 import { finalCategoryIdsByRecipe, listActiveRecipes } from "./recipes";
@@ -167,41 +165,21 @@ export async function getMeal(db: Db, id: string): Promise<Meal | undefined> {
   return meal;
 }
 
-// A Meal made from scratch: Planned, and tracked unless `untracked` says
-// otherwise. `slots`, added on the Meal form, are added in order by
-// addMealSlot; each must already be checked by core's parseNewMealSlots. If
-// one can't be added, nothing is written.
+// A new Meal: Planned, and tracked unless `untracked` says otherwise.
+// `slots`, the ones on the Meal form, are added in order by addMealSlot: added
+// by hand, or copied empty from a Meal Template, which the Meal keeps no link
+// to (data-model Q5). Each must already be checked by core's
+// parseNewMealSlots. If one can't be added, nothing is written.
 export async function createMeal(
   db: Db,
   fields: Omit<NewMealFields, "untracked"> & Partial<Pick<NewMealFields, "untracked">>,
-  slots: readonly NewMealSlot[] = [],
+  slots: readonly MealFormSlot[] = [],
 ): Promise<{ id: string }> {
   return db.transaction(async (tx) => {
     const [row] = await tx.insert(meals).values(fields).returning({ id: meals.id });
     // One after another, so each goes after the one before.
     for (const slot of slots) await addMealSlot(tx, row!.id, slot);
     return row!;
-  });
-}
-
-// Copies the template's name, Meal Type, hour and slots, each empty with the
-// template slot's Slot Category, in order. The Meal keeps no link to the
-// template (data-model Q5). Undefined if the template is gone.
-export async function createMealFromTemplate(
-  db: Db,
-  { date, templateId }: NewMealFromTemplateFields,
-): Promise<{ id: string } | undefined> {
-  return db.transaction(async (tx) => {
-    const template = await getMealTemplate(tx, templateId);
-    if (!template) return undefined;
-    const { name, hour, mealTypeId, slotCategoryIds } = template;
-    const meal = await createMeal(tx, { date, hour, name, mealTypeId });
-    if (slotCategoryIds.length > 0) {
-      await tx
-        .insert(mealSlots)
-        .values(slotCategoryIds.map((slotCategoryId, position) => ({ mealId: meal.id, slotCategoryId, position })));
-    }
-    return meal;
   });
 }
 
@@ -226,9 +204,9 @@ export async function fillMealSlot(db: Db, slotId: string, fill: MealSlotFill): 
     .where(eq(mealSlots.id, slotId));
 }
 
-// A slot added by hand, after the Meal's others. It must already be checked by
-// core's parseNewMealSlot.
-export async function addMealSlot(db: Db, mealId: string, { slotCategoryId, fill }: NewMealSlot): Promise<void> {
+// A slot after the Meal's others. It must already be checked by core's
+// parseNewMealSlot, or parseNewMealSlots on the Meal form.
+export async function addMealSlot(db: Db, mealId: string, { slotCategoryId, fill }: MealFormSlot): Promise<void> {
   await db.transaction(async (tx) => {
     const [last] = await tx
       .select({ position: max(mealSlots.position) })

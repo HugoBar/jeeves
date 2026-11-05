@@ -9,16 +9,18 @@ import {
   formatDayHeading,
   formatLongDayHeading,
   formatMealCount,
+  formatSlotCount,
   formatWeekRange,
   mealPanelLabel,
   t,
 } from "@/strings";
-import { MEAL_FROM_TEMPLATE_ERROR_FIELDS } from "../field-errors";
-import { useFieldErrors } from "../form-error";
+import { FoodCategoryPill } from "../food-category-pill";
+import { FormCard } from "../form-card";
 import { SidePanel } from "../side-panel";
 import { useViewerNow } from "../viewer-clock";
-import { createMealAction, createMealFromTemplateAction, type MealFromTemplateFormState, type NewMealFormState } from "./actions";
+import { createMealAction, type NewMealFormState, type NewMealFormValues } from "./actions";
 import {
+  ChevronIcon,
   EditMealPanel,
   MealCard,
   MealPanelActions,
@@ -27,11 +29,10 @@ import {
   MealFormFields,
   mealPanelClass,
   NewMealSlotsCard,
-  type PickerOption,
   type Pickers,
   type PlannerMeal,
-  type SlotPickers,
   type Submitted,
+  type TemplateOption,
   type Week,
   UnconfirmedIcon,
 } from "./meal-card";
@@ -385,9 +386,10 @@ function PlannerDay({
   );
 }
 
-// New Meal in the side panel, on `date`. It starts from scratch; when there
-// are Meal Templates it can switch to adding from one. Closing it without
-// adding discards what was typed quietly.
+// Adding a Meal in the side panel, on `date`. With Meal Templates it starts
+// on Add a Meal, offering one of them or starting from scratch; without, it
+// starts on New Meal. Closing it without adding discards what was typed
+// quietly.
 export function AddMealPanel({
   date,
   week,
@@ -399,54 +401,130 @@ export function AddMealPanel({
   pickers: Pickers;
   onClose: () => void;
 }) {
-  const [fromTemplate, setFromTemplate] = useState(false);
-  // The picked Meal Template's name, for the title.
-  const [template, setTemplate] = useState<string | null>(null);
+  const [step, setStep] = useState<AddMealStep>(pickers.templates.length > 0 ? "start" : "scratch");
+  return <AddMealPanelView date={date} week={week} pickers={pickers} step={step} onStep={setStep} onClose={onClose} />;
+}
+
+// What the panel shows: Add a Meal, New Meal from scratch, or New Meal from
+// the picked Meal Template.
+export type AddMealStep = "start" | "scratch" | { template: TemplateOption };
+
+export function AddMealPanelView({
+  date,
+  week,
+  pickers,
+  step,
+  onStep,
+  onClose,
+}: {
+  date: string;
+  week: Week;
+  pickers: Pickers;
+  step: AddMealStep;
+  onStep: (step: AddMealStep) => void;
+  onClose: () => void;
+}) {
+  const template = typeof step === "object" ? step.template : undefined;
+  const title =
+    step === "start"
+      ? t("planner.panel.startTitle")
+      : template
+        ? t("planner.panel.newFromTemplateTitle", { template: template.label })
+        : t("planner.panel.newTitle");
   return (
     <SidePanel
       icon={<MealPanelIcon />}
       label={mealPanelLabel(date, week, "adding")}
-      title={fromTemplate && template ? t("planner.panel.newFromTemplateTitle", { template }) : t("planner.panel.newTitle")}
+      title={title}
       className={mealPanelClass(week)}
       onClose={onClose}
     >
-      {fromTemplate ? (
-        <AddMealFromTemplateForm
-          date={date}
+      {step === "start" ? (
+        <AddMealStart
           templates={pickers.templates}
-          onPick={setTemplate}
-          onFromScratch={() => {
-            setTemplate(null);
-            setFromTemplate(false);
-          }}
-          onDone={onClose}
+          onTemplate={(picked) => onStep({ template: picked })}
+          onFromScratch={() => onStep("scratch")}
         />
       ) : (
-        <AddMealForm
-          date={date}
-          mealTypes={pickers.mealTypes}
-          slotPickers={pickers}
-          onFromTemplate={pickers.templates.length > 0 ? () => setFromTemplate(true) : undefined}
-          onDone={onClose}
-        />
+        <AddMealForm date={date} pickers={pickers} template={template} onDone={onClose} />
       )}
     </SidePanel>
   );
 }
 
-// From scratch. `onFromTemplate`, given when there are Meal Templates, swaps
-// this form for the one that adds from a Meal Template.
+// Add a Meal: the Meal Templates grouped by Meal Type, in the order
+// `templates` comes in, then Start from scratch.
+function AddMealStart({
+  templates,
+  onTemplate,
+  onFromScratch,
+}: {
+  templates: TemplateOption[];
+  onTemplate: (template: TemplateOption) => void;
+  onFromScratch: () => void;
+}) {
+  const groups = Map.groupBy(templates, (template) => template.mealType.id);
+  return (
+    <div className="form-cards">
+      <FormCard title={t("planner.fromTemplate")} hint={t("planner.fromTemplateHint")} className="meal-start">
+        {[...groups.values()].map((group) => (
+          <Fragment key={group[0]!.mealType.id}>
+            <h4 className="meal-start-group">{group[0]!.mealType.label}</h4>
+            <ul className="meal-start-list">
+              {group.map((template) => (
+                <li key={template.id}>
+                  <button type="button" className="meal-start-option" onClick={() => onTemplate(template)}>
+                    <span className="meal-start-option-text">
+                      <span className="meal-start-template-head">
+                        <strong>{template.label}</strong>
+                        <span className="meal-start-template-meta">
+                          {t("planner.templateLine", { hour: template.hour, slots: formatSlotCount(template.slots.length) })}
+                        </span>
+                      </span>
+                      {template.slots.length > 0 && (
+                        <span className="meal-start-pills">
+                          {template.slots.map((slot, index) => (
+                            <FoodCategoryPill key={index} label={slot.label} archived={slot.archived} />
+                          ))}
+                        </span>
+                      )}
+                    </span>
+                    <ChevronIcon />
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </Fragment>
+        ))}
+      </FormCard>
+      <button type="button" className="card meal-start-option meal-start-scratch" onClick={onFromScratch}>
+        <span className="meal-start-scratch-icon">
+          <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round">
+            <path d="M12 5v14M5 12h14" />
+          </svg>
+        </span>
+        <span className="meal-start-option-text">
+          <strong>{t("planner.fromScratch")}</strong>
+          <span className="field-hint">{t("planner.fromScratchHint")}</span>
+        </span>
+        <ChevronIcon />
+      </button>
+    </div>
+  );
+}
+
+// New Meal, from scratch or filled in from `template` with its name, Meal
+// Type, hour and empty slots, all of which can still change before it is
+// added. The Meal keeps no link to the template.
 function AddMealForm({
   date,
-  mealTypes,
-  slotPickers,
-  onFromTemplate,
+  pickers,
+  template,
   onDone,
 }: {
   date: string;
-  mealTypes: PickerOption[];
-  slotPickers: SlotPickers;
-  onFromTemplate?: () => void;
+  pickers: Pickers;
+  template?: TemplateOption;
   onDone: () => void;
 }) {
   const [state, action, pending] = useActionState(
@@ -455,88 +533,45 @@ function AddMealForm({
       if (next.errors.length === 0 && next.slotErrors.length === 0) onDone();
       return { ...next, submits: submits + 1 };
     },
-    {
-      errors: [],
-      slotErrors: [],
-      values: { mealTypeId: "", hour: "", name: "", untracked: false, slots: [] },
-      submits: 0,
-    },
+    { errors: [], slotErrors: [], values: template ? valuesFrom(template) : NO_VALUES, submits: 0 },
   );
+  // An Archived Meal Type is offered only as the template's, which the Meal
+  // keeps unless another is picked.
+  const mealTypes = template?.mealType.archived ? [...pickers.mealTypes, template.mealType] : pickers.mealTypes;
+  const copied = template && template.slots.length > 0;
   return (
     <form action={action} className="form-cards" noValidate>
-      {onFromTemplate && (
-        <button type="button" className="button-soft meal-form-from-template" onClick={onFromTemplate}>
-          {t("planner.addFromTemplate")}
-        </button>
-      )}
       <MealFormFields
         key={state.submits}
         errors={state.errors}
         slotErrors={state.slotErrors}
         values={state.values}
         mealTypes={mealTypes}
-        slotsCard={<NewMealSlotsCard pickers={slotPickers} initial={state.values.slots} errors={state.slotErrors} />}
+        mealTypeHint={template && t("planner.mealTypeFromTemplate", { template: template.label })}
+        slotsCard={
+          <NewMealSlotsCard
+            pickers={pickers}
+            archivedCategories={pickers.archivedSlotCategories}
+            initial={state.values.slots}
+            errors={state.slotErrors}
+            hint={copied ? t("planner.slotsFromTemplate", { template: template.label }) : undefined}
+          />
+        }
       />
       <MealPanelActions submitLabel={t("planner.panel.addMeal")} pending={pending} onCancel={onDone} />
     </form>
   );
 }
 
-// Copies the picked template's name, Meal Type, hour and empty slots; the
-// Meal can be edited afterwards like any other.
-function AddMealFromTemplateForm({
-  date,
-  templates,
-  onPick,
-  onFromScratch,
-  onDone,
-}: {
-  date: string;
-  templates: PickerOption[];
-  onPick: (template: string | null) => void;
-  onFromScratch: () => void;
-  onDone: () => void;
-}) {
-  const [state, action, pending] = useActionState(
-    async ({ submits, ...previous }: Submitted<MealFromTemplateFormState>, formData: FormData) => {
-      const next = await createMealFromTemplateAction(date, previous, formData);
-      if (next.errors.length === 0) onDone();
-      return { ...next, submits: submits + 1 };
-    },
-    { errors: [], templateId: "", submits: 0 },
-  );
-  const { invalid, allMessages } = useFieldErrors(
-    state.errors,
-    (error) => MEAL_FROM_TEMPLATE_ERROR_FIELDS[error],
-    (error) => t(`planner.error.${error}`),
-  );
-  return (
-    <form action={action} className="form-cards">
-      <div className="card item-form planner-form">
-        <select
-          key={state.submits}
-          name="templateId"
-          aria-label={t("planner.template")}
-          defaultValue={state.templateId}
-          autoFocus
-          onChange={(event) => onPick(templates.find((template) => template.id === event.target.value)?.label ?? null)}
-          {...invalid("template")}
-        >
-          <option value="">{t("planner.pickTemplate")}</option>
-          {templates.map((template) => (
-            <option key={template.id} value={template.id}>
-              {template.label}
-            </option>
-          ))}
-        </select>
-        <button type="button" className="button-soft" onClick={onFromScratch}>
-          {t("planner.fromScratch")}
-        </button>
-        {allMessages()}
-      </div>
-      <MealPanelActions submitLabel={t("planner.panel.addMeal")} pending={pending} onCancel={onDone} />
-    </form>
-  );
+const NO_VALUES: NewMealFormValues = { mealTypeId: "", hour: "", name: "", untracked: false, slots: [] };
+
+// New Meal filled in from a Meal Template: its slots empty, with no food.
+function valuesFrom(template: TemplateOption): NewMealFormValues {
+  return {
+    mealTypeId: template.mealType.id,
+    hour: template.hour,
+    name: template.label,
+    untracked: false,
+    slots: template.slots.map(({ slotCategoryId }) => ({ food: "", amount: "", slotCategoryId })),
+  };
 }
-
-

@@ -56,7 +56,9 @@ export interface NewMealInput {
   untracked: boolean;
 }
 
-// `pickable` holds the Meal Types a new Meal can have: the non-Archived ones.
+// `pickable` holds the Meal Types a new Meal can have: the non-Archived ones,
+// plus an Archived one a Meal Template still uses, which a Meal copied from it
+// keeps.
 export function parseNewMeal(input: NewMealInput, pickable: ReadonlySet<string>): NewMealResult {
   const date = input.date.trim();
   const mealTypeId = input.mealTypeId.trim();
@@ -70,37 +72,6 @@ export function parseNewMeal(input: NewMealInput, pickable: ReadonlySet<string>)
   if (errors.length || !changes.ok) return { ok: false, errors };
 
   return { ok: true, fields: { date, mealTypeId, ...changes.changes } };
-}
-
-// A Meal made from a Meal Template copies its name, Meal Type, hour and empty
-// slots, and keeps no link to it (data-model Q5). The template's Meal Type may
-// be Archived: the Meal keeps it, as the template does.
-export interface NewMealFromTemplateFields {
-  date: string;
-  templateId: string;
-}
-
-export type MealFromTemplateError = "invalidDate" | "noMealTemplate" | "unavailableMealTemplate";
-
-export type NewMealFromTemplateResult =
-  | { ok: true; fields: NewMealFromTemplateFields }
-  | { ok: false; errors: MealFromTemplateError[] };
-
-// `templates` holds the ids of every Meal Template.
-export function parseNewMealFromTemplate(
-  input: NewMealFromTemplateFields,
-  templates: ReadonlySet<string>,
-): NewMealFromTemplateResult {
-  const date = input.date.trim();
-  const templateId = input.templateId.trim();
-
-  const errors: MealFromTemplateError[] = [];
-  if (!isDate(date)) errors.push("invalidDate");
-  if (!templateId) errors.push("noMealTemplate");
-  else if (!templates.has(templateId)) errors.push("unavailableMealTemplate");
-  if (errors.length) return { ok: false, errors };
-
-  return { ok: true, fields: { date, templateId } };
 }
 
 export type MealSlotCategoryError = "noSlotCategory" | "unavailableSlotCategory";
@@ -226,23 +197,39 @@ export function newMealSlotPickable<T extends { id: string; kind: CategoryKind }
 // shows the slots.
 export type NewMealSlotRowError = { row: number; code: NewMealSlotError };
 
-// The slots added on the Meal form, all read, or why each refused one was.
-export type NewMealSlotsResult = { ok: true; slots: NewMealSlot[] } | { ok: false; errors: NewMealSlotRowError[] };
+// A slot on the Meal form: one added by hand, filled, or one copied from a
+// Meal Template, empty with the template slot's Slot Category.
+export type MealFormSlot = NewMealSlot | { slotCategoryId: string; fill: { content: "empty" } };
 
-// The slots added on the Meal form before the Meal exists, each checked as
-// parseNewMealSlot does, so none is written unless all of them can be.
+// The slots on the Meal form, all read, or why each refused one was.
+export type NewMealSlotsResult = { ok: true; slots: MealFormSlot[] } | { ok: false; errors: NewMealSlotRowError[] };
+
+// The slots on the Meal form before the Meal exists, in the order shown, so
+// none is written unless all of them can be. One with food is checked as
+// parseNewMealSlot does. One without is an empty slot copied from a Meal
+// Template, whose Slot Category must be in `emptySlotCategories`.
 export function parseNewMealSlots(
   inputs: readonly NewMealSlotInput[],
   pickable: NewMealSlotPickable,
+  emptySlotCategories: ReadonlySet<string> = new Set(),
 ): NewMealSlotsResult {
-  const slots: NewMealSlot[] = [];
+  const slots: MealFormSlot[] = [];
   const errors: NewMealSlotRowError[] = [];
   inputs.forEach((input, index) => {
-    const parsed = parseNewMealSlot(input, pickable);
+    const parsed = input.food.trim() ? parseNewMealSlot(input, pickable) : parseEmptySlot(input, emptySlotCategories);
     if (parsed.ok) slots.push(parsed.slot);
     else errors.push({ row: index + 1, code: parsed.error });
   });
   return errors.length ? { ok: false, errors } : { ok: true, slots };
+}
+
+function parseEmptySlot(
+  input: NewMealSlotInput,
+  pickable: ReadonlySet<string>,
+): { ok: true; slot: MealFormSlot } | { ok: false; error: NewMealSlotError } {
+  const slotCategoryId = input.slotCategoryId.trim();
+  if (!pickable.has(slotCategoryId)) return { ok: false, error: "unavailableSlotCategory" };
+  return { ok: true, slot: { slotCategoryId, fill: { content: "empty" } } };
 }
 
 // The Recipes or Products a slot's picker offers: those carrying its Slot

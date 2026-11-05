@@ -8,13 +8,11 @@ import {
   parseMealSlotCategory,
   parseMealSlotFill,
   parseNewMeal,
-  parseNewMealFromTemplate,
   parseNewMealSlot,
   parseNewMealSlots,
   newMealSlotPickable,
   pickableForSlot,
   type MealFieldError,
-  type MealFromTemplateError,
   type MealSlotCategoryError,
   type MealSlotFillError,
   type NewMealInput,
@@ -34,12 +32,10 @@ import {
   type RefusedMeal,
 } from "@/db/confirmation";
 import { listActiveCategories } from "@/db/food-categories";
-import { listMealTemplates } from "@/db/meal-templates";
-import { listActiveMealTypes } from "@/db/meal-types";
+import { listMealTemplates, listPickableMealTypes, listPickableSlotCategories } from "@/db/meal-templates";
 import {
   addMealSlot,
   createMeal,
-  createMealFromTemplate,
   deleteMeal,
   fillMealSlot,
   getMeal,
@@ -57,7 +53,6 @@ export type NewMealFormValues = Omit<NewMealInput, "date"> & { slots: NewMealSlo
 export type NewMealFormState = { errors: MealFieldError[]; slotErrors: NewMealSlotRowError[]; values: NewMealFormValues };
 export type MealChangesFormValues = Pick<NewMealInput, "hour" | "name" | "untracked">;
 export type MealChangesFormState = { errors: MealFieldError[]; values: MealChangesFormValues };
-export type MealFromTemplateFormState = { errors: MealFromTemplateError[]; templateId: string };
 // "notChangeable": the Meal was Confirmed or Skipped since the planner was
 // loaded.
 export type MealSlotCategoryFormState = { error: MealSlotCategoryError | "notChangeable" | null };
@@ -88,11 +83,29 @@ async function newSlotPickable(db: Db): Promise<NewMealSlotPickable> {
   return newMealSlotPickable(recipes, products, sortCategories(active, foodCategoryLabel));
 }
 
-// Slots added on the Meal form, each checked as one added by hand on the
-// planner is.
-async function parseFormSlots(db: Db, inputs: NewMealSlotInput[]): Promise<NewMealSlotsResult> {
+// What a new Meal can have, by id: the non-Archived Meal Types and, for its
+// empty slots, Food Categories, plus the Archived ones a Meal Template still
+// uses, since a Meal copied from it keeps them (data-model Q5).
+async function newMealPickable(db: Db) {
+  const templateIds = (await listMealTemplates(db)).map((template) => template.id);
+  const [mealTypes, categories] = await Promise.all([
+    listPickableMealTypes(db, templateIds),
+    listPickableSlotCategories(db, templateIds),
+  ]);
+  const ids = (items: { id: string }[]) => new Set(items.map((item) => item.id));
+  return { mealTypes: ids(mealTypes), emptySlotCategories: ids(categories) };
+}
+
+// The slots on the Meal form: each added by hand checked as one added on the
+// planner is, and each copied empty from a Meal Template checked against
+// `emptySlotCategories`.
+async function parseFormSlots(
+  db: Db,
+  inputs: NewMealSlotInput[],
+  emptySlotCategories: ReadonlySet<string>,
+): Promise<NewMealSlotsResult> {
   if (inputs.length === 0) return { ok: true, slots: [] };
-  return parseNewMealSlots(inputs, await newSlotPickable(db));
+  return parseNewMealSlots(inputs, await newSlotPickable(db), emptySlotCategories);
 }
 
 // Runs `write`, which writes the Meal and the slots added on the form. A
@@ -107,22 +120,22 @@ async function writeWithSlots<T>(
   try {
     return { ok: true, written: await write() };
   } catch (error) {
-    const again = await parseFormSlots(db, inputs);
+    const again = await parseFormSlots(db, inputs, (await newMealPickable(db)).emptySlotCategories);
     if (again.ok) throw error;
     return { ok: false, errors: again.errors };
   }
 }
 
-// `date` is the planner day the form was opened on. The Meal and the slots
-// added on the form are written together, or not at all.
+// `date` is the planner day the form was opened on. The form is New Meal from
+// scratch or from a Meal Template, which only fills it in. The Meal and the
+// slots on the form are written together, or not at all.
 export async function createMealAction(
   date: string,
   _state: NewMealFormState,
   formData: FormData,
 ): Promise<NewMealFormState> {
   const db = getDb();
-  // A new Meal can only have a Meal Type that is not Archived.
-  const pickable = new Set((await listActiveMealTypes(db)).map((mealType) => mealType.id));
+  const pickable = await newMealPickable(db);
   const values = {
     mealTypeId: String(formData.get("mealTypeId") ?? ""),
     hour: String(formData.get("hour") ?? ""),
@@ -130,8 +143,8 @@ export async function createMealAction(
     untracked: formData.get("untracked") === "on",
     slots: newSlotInputs(formData),
   };
-  const parsed = parseNewMeal({ date, ...values }, pickable);
-  const slots = await parseFormSlots(db, values.slots);
+  const parsed = parseNewMeal({ date, ...values }, pickable.mealTypes);
+  const slots = await parseFormSlots(db, values.slots, pickable.emptySlotCategories);
   if (!parsed.ok || !slots.ok) {
     return { errors: parsed.ok ? [] : parsed.errors, slotErrors: slots.ok ? [] : slots.errors, values };
   }
@@ -139,25 +152,6 @@ export async function createMealAction(
   if (!written.ok) return { errors: [], slotErrors: written.errors, values };
   refresh();
   return { errors: [], slotErrors: [], values: { mealTypeId: "", hour: "", name: "", untracked: false, slots: [] } };
-}
-
-// `date` is the planner day the form was opened on. Any Meal Template can be
-// used, even one whose Meal Type is Archived: the Meal keeps it, as the
-// template does.
-export async function createMealFromTemplateAction(
-  date: string,
-  _state: MealFromTemplateFormState,
-  formData: FormData,
-): Promise<MealFromTemplateFormState> {
-  const db = getDb();
-  const templates = new Set((await listMealTemplates(db)).map((template) => template.id));
-  const templateId = String(formData.get("templateId") ?? "");
-  const parsed = parseNewMealFromTemplate({ date, templateId }, templates);
-  if (!parsed.ok) return { errors: parsed.errors, templateId };
-  // Deleted after it was checked.
-  if (!(await createMealFromTemplate(db, parsed.fields))) return { errors: ["unavailableMealTemplate"], templateId };
-  refresh();
-  return { errors: [], templateId: "" };
 }
 
 export async function editMealAction(

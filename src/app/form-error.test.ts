@@ -3,7 +3,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import {
   ingredientErrorField,
-  MEAL_FROM_TEMPLATE_ERROR_FIELDS,
+  MEAL_ERROR_FIELDS,
   MEAL_SLOT_ERROR_FIELDS,
   PRODUCT_ERROR_FIELDS,
   templateSlotErrorField,
@@ -82,6 +82,6 @@ describe("which field an error belongs to", () => {
   });
 
   it("puts a bad date on no field, as no form has one", () => {
-    expect(MEAL_FROM_TEMPLATE_ERROR_FIELDS.invalidDate).toBe("form");
+    expect(MEAL_ERROR_FIELDS.invalidDate).toBe("form");
   });
 });

@@ -5,12 +5,10 @@ import type { CategorySeedKey } from "@/core/food-categories";
 import type { CategoryOverride } from "@/core/recipes";
 import { createCategory, getCategory, listActiveCategories, removeCategory } from "./food-categories";
 import { confirmMeal, skipMeal } from "./confirmation";
-import { createMealTemplate, deleteMealTemplate, updateMealTemplate } from "./meal-templates";
 import { createMealType, getMealType, listActiveMealTypes, removeMealType } from "./meal-types";
 import {
   addMealSlot,
   createMeal,
-  createMealFromTemplate,
   deleteMeal,
   fillMealSlot,
   getMeal,
@@ -66,19 +64,20 @@ function aRecipe(name: string, productIds: string[] = [], categoryOverrides: Cat
   });
 }
 
+// Empty slots with the given Slot Categories, as copied from a Meal Template.
+const emptySlots = (slotCategoryIds: string[]) =>
+  slotCategoryIds.map((slotCategoryId) => ({ slotCategoryId, fill: { content: "empty" as const } }));
+
 // One empty slot with the given Slot Category, on a Meal of the given Meal
 // Type. Lunch allows Leftovers.
 async function anEmptySlot(slotCategoryId: string, mealType: MealTypeSeedKey = "lunch") {
-  const template = await createMealTemplate(db, {
-    name: "One Slot",
-    hour: "12:00",
-    mealTypeId: await seededMealTypeId(mealType),
-    slotCategoryIds: [slotCategoryId],
-  });
-  const meal = await createMealFromTemplate(db, { date: "2026-11-10", templateId: template.id });
-  await deleteMealTemplate(db, template.id);
-  const slot = (await getMeal(db, meal!.id))!.slots[0]!;
-  return { mealId: meal!.id, slotId: slot.id };
+  const meal = await createMeal(
+    db,
+    { date: "2026-11-10", hour: "12:00", name: "One Slot", mealTypeId: await seededMealTypeId(mealType) },
+    emptySlots([slotCategoryId]),
+  );
+  const slot = (await getMeal(db, meal.id))!.slots[0]!;
+  return { mealId: meal.id, slotId: slot.id };
 }
 
 async function slotOf(mealId: string) {
@@ -150,6 +149,27 @@ describe("createMeal", () => {
     ]);
   });
 
+  it("adds empty slots, as copied from a Meal Template, in order among filled ones", async () => {
+    const [grains, fruit] = await Promise.all([seededCategoryId("grains"), seededCategoryId("fruit")]);
+    const bread = await aProduct("Template Meal Bread", [grains]);
+
+    const meal = await createMeal(
+      db,
+      { date: "2026-10-29", hour: "12:30", name: "Office Lunch", mealTypeId: await seededMealTypeId("lunch") },
+      [
+        { slotCategoryId: fruit, fill: { content: "empty" } },
+        { slotCategoryId: grains, fill: { content: "product", productId: bread.id, quantity: 150 } },
+        { slotCategoryId: fruit, fill: { content: "empty" } },
+      ],
+    );
+
+    expect((await getMeal(db, meal.id))?.slots.map((slot) => [slot.slotCategoryId, slot.content])).toEqual([
+      [fruit, "empty"],
+      [grains, "product"],
+      [fruit, "empty"],
+    ]);
+  });
+
   it("writes nothing if a slot can't be added", async () => {
     const grains = await seededCategoryId("grains");
     const missing = "00000000-0000-4000-8000-000000000000";
@@ -177,83 +197,6 @@ describe("createMeal", () => {
   });
 });
 
-describe("createMealFromTemplate", () => {
-  it("copies the template's name, Meal Type, hour and slots, empty and in order", async () => {
-    const lunchId = await seededMealTypeId("lunch");
-    const [grains, vegetables, fruit] = await Promise.all([
-      seededCategoryId("grains"),
-      seededCategoryId("vegetables"),
-      seededCategoryId("fruit"),
-    ]);
-    const template = await createMealTemplate(db, {
-      name: "Office Lunch",
-      hour: "12:30",
-      mealTypeId: lunchId,
-      slotCategoryIds: [vegetables, grains, fruit],
-    });
-
-    const meal = await createMealFromTemplate(db, { date: "2026-11-03", templateId: template.id });
-
-    const created = await getMeal(db, meal!.id);
-    expect(created).toMatchObject({
-      date: "2026-11-03",
-      hour: "12:30",
-      name: "Office Lunch",
-      mealTypeId: lunchId,
-      status: "planned",
-      untracked: false,
-    });
-    expect(created?.slots.map((slot) => [slot.slotCategoryId, slot.content])).toEqual([
-      [vegetables, "empty"],
-      [grains, "empty"],
-      [fruit, "empty"],
-    ]);
-  });
-
-  it("copies a template with no slots as a Meal with none", async () => {
-    const template = await createMealTemplate(db, {
-      name: "Coffee",
-      hour: "16:00",
-      mealTypeId: await seededMealTypeId("snack"),
-      slotCategoryIds: [],
-    });
-
-    const meal = await createMealFromTemplate(db, { date: "2026-11-03", templateId: template.id });
-
-    expect((await getMeal(db, meal!.id))?.slots).toEqual([]);
-  });
-
-  it("keeps the Meal as created when the template is edited, then deleted", async () => {
-    const dinnerId = await seededMealTypeId("dinner");
-    const [grains, fruit] = await Promise.all([seededCategoryId("grains"), seededCategoryId("fruit")]);
-    const template = await createMealTemplate(db, {
-      name: "Light Dinner",
-      hour: "19:30",
-      mealTypeId: dinnerId,
-      slotCategoryIds: [grains],
-    });
-    const meal = await createMealFromTemplate(db, { date: "2026-11-04", templateId: template.id });
-
-    await updateMealTemplate(db, template.id, {
-      name: "Big Dinner",
-      hour: "20:30",
-      mealTypeId: await seededMealTypeId("lunch"),
-      slotCategoryIds: [fruit, fruit],
-    });
-    await deleteMealTemplate(db, template.id);
-
-    const kept = await getMeal(db, meal!.id);
-    expect(kept).toMatchObject({ name: "Light Dinner", hour: "19:30", mealTypeId: dinnerId });
-    expect(kept?.slots.map((slot) => slot.slotCategoryId)).toEqual([grains]);
-  });
-
-  it("creates nothing from a template that is gone", async () => {
-    expect(
-      await createMealFromTemplate(db, { date: "2026-11-04", templateId: "00000000-0000-4000-8000-000000000000" }),
-    ).toBeUndefined();
-  });
-});
-
 describe("setMealSlotCategory", () => {
   it("changes one slot's Slot Category, keeping its place", async () => {
     const [grains, vegetables, fruit] = await Promise.all([
@@ -261,18 +204,16 @@ describe("setMealSlotCategory", () => {
       seededCategoryId("vegetables"),
       seededCategoryId("fruit"),
     ]);
-    const template = await createMealTemplate(db, {
-      name: "Lunch Box",
-      hour: "12:00",
-      mealTypeId: await seededMealTypeId("lunch"),
-      slotCategoryIds: [grains, vegetables],
-    });
-    const meal = await createMealFromTemplate(db, { date: "2026-11-05", templateId: template.id });
-    const [first] = (await getMeal(db, meal!.id))!.slots;
+    const meal = await createMeal(
+      db,
+      { date: "2026-11-05", hour: "12:00", name: "Lunch Box", mealTypeId: await seededMealTypeId("lunch") },
+      emptySlots([grains, vegetables]),
+    );
+    const [first] = (await getMeal(db, meal.id))!.slots;
 
     await setMealSlotCategory(db, first!.id, fruit);
 
-    const slots = (await getMeal(db, meal!.id))!.slots;
+    const slots = (await getMeal(db, meal.id))!.slots;
     expect(slots.map((slot) => slot.slotCategoryId)).toEqual([fruit, vegetables]);
   });
 });
@@ -581,21 +522,19 @@ describe("addMealSlot", () => {
       seededCategoryId("vegetables"),
       seededCategoryId("main_dish"),
     ]);
-    const template = await createMealTemplate(db, {
-      name: "Two Slots",
-      hour: "12:00",
-      mealTypeId: await seededMealTypeId("lunch"),
-      slotCategoryIds: [vegetables, grains],
-    });
-    const meal = await createMealFromTemplate(db, { date: "2026-11-12", templateId: template.id });
+    const meal = await createMeal(
+      db,
+      { date: "2026-11-12", hour: "12:00", name: "Two Slots", mealTypeId: await seededMealTypeId("lunch") },
+      emptySlots([vegetables, grains]),
+    );
     const risotto = await aRecipe("Added Risotto", [], [{ categoryId: mainDish, mode: "add" }]);
 
-    await addMealSlot(db, meal!.id, {
+    await addMealSlot(db, meal.id, {
       slotCategoryId: mainDish,
       fill: { content: "recipe", recipeId: risotto.id, portions: 2 },
     });
 
-    expect((await getMeal(db, meal!.id))?.slots.map((slot) => [slot.slotCategoryId, slot.content])).toEqual([
+    expect((await getMeal(db, meal.id))?.slots.map((slot) => [slot.slotCategoryId, slot.content])).toEqual([
       [vegetables, "empty"],
       [grains, "empty"],
       [mainDish, "recipe"],
@@ -604,17 +543,14 @@ describe("addMealSlot", () => {
 });
 
 describe("removeMealSlot", () => {
-  // A Meal from a template with the given slots, all empty.
+  // A Meal with the given slots, all empty.
   async function aMealWithSlots(slotCategoryIds: string[]) {
-    const template = await createMealTemplate(db, {
-      name: "Removing",
-      hour: "12:00",
-      mealTypeId: await seededMealTypeId("lunch"),
-      slotCategoryIds,
-    });
-    const meal = await createMealFromTemplate(db, { date: "2026-11-13", templateId: template.id });
-    await deleteMealTemplate(db, template.id);
-    return (await getMeal(db, meal!.id))!;
+    const meal = await createMeal(
+      db,
+      { date: "2026-11-13", hour: "12:00", name: "Removing", mealTypeId: await seededMealTypeId("lunch") },
+      emptySlots(slotCategoryIds),
+    );
+    return (await getMeal(db, meal.id))!;
   }
 
   it("removes a middle slot, the others keeping their order and renumbered", async () => {
@@ -761,18 +697,16 @@ describe("updateMeal", () => {
 
 describe("deleteMeal", () => {
   it("removes the Meal with its slots", async () => {
-    const template = await createMealTemplate(db, {
-      name: "Breakfast Plate",
-      hour: "08:00",
-      mealTypeId: await seededMealTypeId("breakfast"),
-      slotCategoryIds: [await seededCategoryId("grains"), await seededCategoryId("fruit")],
-    });
-    const meal = await createMealFromTemplate(db, { date: "2026-11-06", templateId: template.id });
+    const meal = await createMeal(
+      db,
+      { date: "2026-11-06", hour: "08:00", name: "Breakfast Plate", mealTypeId: await seededMealTypeId("breakfast") },
+      emptySlots([await seededCategoryId("grains"), await seededCategoryId("fruit")]),
+    );
 
-    await deleteMeal(db, meal!.id);
+    await deleteMeal(db, meal.id);
 
-    expect(await getMeal(db, meal!.id)).toBeUndefined();
-    expect(await db.select().from(mealSlots).where(eq(mealSlots.mealId, meal!.id))).toEqual([]);
+    expect(await getMeal(db, meal.id)).toBeUndefined();
+    expect(await db.select().from(mealSlots).where(eq(mealSlots.mealId, meal.id))).toEqual([]);
   });
 
   it("removes the Meal", async () => {
@@ -792,34 +726,28 @@ describe("deleteMeal", () => {
 describe("the Slot Category reference", () => {
   it("Archives a removed Food Category a Meal Slot uses, and the slot keeps showing it", async () => {
     const sauces = await createCategory(db, { name: "Sauces", kind: "kind" });
-    const template = await createMealTemplate(db, {
-      name: "Pasta Night",
-      hour: "20:00",
-      mealTypeId: await seededMealTypeId("dinner"),
-      slotCategoryIds: [sauces.id],
-    });
-    const meal = await createMealFromTemplate(db, { date: "2026-11-07", templateId: template.id });
-    await deleteMealTemplate(db, template.id);
+    const meal = await createMeal(
+      db,
+      { date: "2026-11-07", hour: "20:00", name: "Pasta Night", mealTypeId: await seededMealTypeId("dinner") },
+      emptySlots([sauces.id]),
+    );
 
     expect(await removeCategory(db, sauces.id)).toBe("archived");
 
     expect((await getCategory(db, sauces.id))?.archivedAt).toBeInstanceOf(Date);
-    expect((await getMeal(db, meal!.id))?.slots).toMatchObject([
+    expect((await getMeal(db, meal.id))?.slots).toMatchObject([
       { slotCategoryId: sauces.id, slotCategory: { name: "Sauces", archived: true } },
     ]);
   });
 
   it("still hard deletes a Food Category once its last Meal Slot is removed", async () => {
     const dips = await createCategory(db, { name: "Dips", kind: "kind" });
-    const template = await createMealTemplate(db, {
-      name: "Party",
-      hour: "21:00",
-      mealTypeId: await seededMealTypeId("snack"),
-      slotCategoryIds: [dips.id],
-    });
-    const meal = await createMealFromTemplate(db, { date: "2026-11-07", templateId: template.id });
-    await deleteMealTemplate(db, template.id);
-    await deleteMeal(db, meal!.id);
+    const meal = await createMeal(
+      db,
+      { date: "2026-11-07", hour: "21:00", name: "Party", mealTypeId: await seededMealTypeId("snack") },
+      emptySlots([dips.id]),
+    );
+    await deleteMeal(db, meal.id);
 
     expect(await removeCategory(db, dips.id)).toBe("deleted");
   });

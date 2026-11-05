@@ -3408,10 +3408,6 @@ a.back-link {
   text-align: center;
 }
 
-.meal-form-from-template {
-  align-self: flex-start;
-}
-
 /* A slot added on New Meal: × to remove it at its top right, and why it was
    refused under it. */
 /* Not wrapping: in a column, the error's full-width basis would wrap it into
@@ -3470,6 +3466,93 @@ a.back-link {
   height: 36px;
   border-radius: 50%;
   background: var(--color-accent-soft);
+}
+
+/* Add a Meal: the Meal Templates under their Meal Type's small caps heading,
+   each a tappable row with its name, hour and slot count over its pills,
+   then Start from scratch as a card of its own. */
+.meal-start-group {
+  margin: 4px 0 -4px;
+  color: var(--color-ink-muted);
+  font-size: var(--text-meta);
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.meal-start-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.meal-start-option {
+  --button-bg: var(--color-inset);
+  --button-line: transparent;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  min-height: 64px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  font-weight: 400;
+  text-align: left;
+}
+
+.meal-start-option-text {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.meal-start-template-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 4px 12px;
+}
+
+.meal-start-template-head > strong {
+  font-weight: 600;
+}
+
+.meal-start-template-meta {
+  color: var(--color-ink-muted);
+  font-size: var(--text-meta);
+}
+
+.meal-start-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.form-cards > .meal-start-scratch {
+  --button-bg: var(--color-surface);
+  --button-line: var(--color-border);
+  padding: 16px;
+  border-radius: 16px;
+}
+
+.meal-start-scratch .meal-start-option-text {
+  gap: 2px;
+}
+
+.meal-start-scratch-icon {
+  display: inline-grid;
+  flex: none;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: var(--week-soft);
+  color: var(--week-ink);
 }
 
 /* The Untracked switch: its name over what it means, and the switch on the

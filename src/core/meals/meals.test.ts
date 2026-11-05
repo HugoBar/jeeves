@@ -13,7 +13,6 @@ import {
   parseMealSlotCategory,
   parseNewMeal,
   parseMealSlotFill,
-  parseNewMealFromTemplate,
   parseNewMealSlot,
   parseNewMealSlots,
   newMealSlotPickable,
@@ -84,40 +83,6 @@ describe("parseNewMeal rejects", () => {
     expect(parseNewMeal({ date: "", hour: "", name: "", mealTypeId: "", untracked: false }, pickable)).toEqual({
       ok: false,
       errors: ["invalidDate", "invalidHour", "noMealType"],
-    });
-  });
-});
-
-describe("parseNewMealFromTemplate", () => {
-  // The Meal Templates that exist in these tests.
-  const templates = new Set(["office-lunch-id"]);
-
-  it("reads the planner day and the picked template", () => {
-    expect(parseNewMealFromTemplate({ date: "2026-10-27", templateId: " office-lunch-id " }, templates)).toEqual({
-      ok: true,
-      fields: { date: "2026-10-27", templateId: "office-lunch-id" },
-    });
-  });
-
-  it.each([[""], ["  "]])("rejects a missing template (%j)", (templateId) => {
-    expect(parseNewMealFromTemplate({ date: "2026-10-27", templateId }, templates)).toEqual({
-      ok: false,
-      errors: ["noMealTemplate"],
-    });
-  });
-
-  // Deleted since the planner loaded, or a crafted id.
-  it("rejects a template that does not exist", () => {
-    expect(parseNewMealFromTemplate({ date: "2026-10-27", templateId: "deleted-id" }, templates)).toEqual({
-      ok: false,
-      errors: ["unavailableMealTemplate"],
-    });
-  });
-
-  it("rejects a date that is no day", () => {
-    expect(parseNewMealFromTemplate({ date: "2026-02-30", templateId: "office-lunch-id" }, templates)).toEqual({
-      ok: false,
-      errors: ["invalidDate"],
     });
   });
 });
@@ -393,6 +358,36 @@ describe("parseNewMealSlots", () => {
         { row: 1, code: "unavailableFood" },
         { row: 3, code: "invalidPortions" },
       ],
+    });
+  });
+
+  // Copied from a Meal Template: a Slot Category and no food.
+  describe("an empty slot", () => {
+    const emptyCategories = new Set(["fruit-id", "sauces-id"]);
+    const fruit = { food: "", amount: "", slotCategoryId: " fruit-id " };
+
+    it("reads it in its place among filled slots", () => {
+      expect(parseNewMealSlots([fruit, bread], pickable, emptyCategories)).toEqual({
+        ok: true,
+        slots: [
+          { slotCategoryId: "fruit-id", fill: { content: "empty" } },
+          { slotCategoryId: "grains-id", fill: { content: "product", productId: "bread-id", quantity: 120 } },
+        ],
+      });
+    });
+
+    it.each([["gone-id"], [""]])("refuses one with a Slot Category it can't have (%j)", (slotCategoryId) => {
+      expect(parseNewMealSlots([bread, { ...fruit, slotCategoryId }], pickable, emptyCategories)).toEqual({
+        ok: false,
+        errors: [{ row: 2, code: "unavailableSlotCategory" }],
+      });
+    });
+
+    it("can have none without being told which Slot Categories it can have", () => {
+      expect(parseNewMealSlots([fruit], pickable)).toEqual({
+        ok: false,
+        errors: [{ row: 1, code: "unavailableSlotCategory" }],
+      });
     });
   });
 });
