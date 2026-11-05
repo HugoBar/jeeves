@@ -3412,6 +3412,66 @@ a.back-link {
   align-self: flex-start;
 }
 
+/* A slot added on New Meal: × to remove it at its top right, and why it was
+   refused under it. */
+/* Not wrapping: in a column, the error's full-width basis would wrap it into
+   a second column. */
+.slot-list > .meal-form-slot {
+  position: relative;
+  flex-wrap: nowrap;
+}
+
+.meal-form-slot > .slot-row-main {
+  position: relative;
+  padding-right: 52px;
+}
+
+/* The chevron sits at the right of the food's line, under the ×. */
+.meal-form-slot .slot-row-main > .slot-row-chevron {
+  position: absolute;
+  right: 14px;
+  bottom: 14px;
+}
+
+.meal-form-slot-remove {
+  --button-bg: transparent;
+  --button-line: transparent;
+  --button-ink: var(--color-icon-muted);
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 44px;
+  min-height: 44px;
+  padding: 0;
+}
+
+.meal-form-slot > .form-error {
+  flex: none;
+  margin: 0;
+  padding: 0 14px 12px;
+}
+
+/* "+ Add slot" under the slots, the + in a soft circle. */
+.meal-form-add-slot {
+  --button-bg: transparent;
+  --button-line: transparent;
+  --button-ink: var(--color-accent-ink);
+  align-self: flex-start;
+  gap: 12px;
+  min-height: 44px;
+  padding: 0;
+  font-weight: 600;
+}
+
+.meal-form-add-slot-icon {
+  display: inline-grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: var(--color-accent-soft);
+}
+
 /* The Untracked switch: its name over what it means, and the switch on the
    right, a checkbox drawn as a track and knob. */
 .form-cards .meal-form-switch {

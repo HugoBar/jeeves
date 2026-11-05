@@ -38,7 +38,7 @@ I want one place that knows what food is in my Pantry, what I can cook from it, 
 ### Planning
 - Planner covers the current week and next week (Monday–Sunday), both always editable.
 - The two weeks must look different: header ("THIS WEEK · 20–26 Oct" / "NEXT WEEK · 27 Oct–2 Nov"), a distinct accent colour for next week, and an "Editing: next Tuesday" label on Meal forms. Today is highlighted.
-- A Meal is created on a date either from scratch (pick a Meal Type and an hour; no slots) or from a Meal Template. A day can have several Meals of the same Meal Type. Meals are sorted by hour.
+- A Meal is created on a date either from scratch (pick a Meal Type and an hour) or from a Meal Template. A Meal made from scratch can have slots added on its form before it is saved; they are added the same way as on the planner, and the Meal and its slots are saved together or not at all. A day can have several Meals of the same Meal Type. Meals are sorted by hour.
 - A Meal has its own hour and optional name, both editable; its Meal Type never changes. Its card shows the name if set, else the Meal Type.
 - Picking for a slot shows only Recipes/Products carrying its Slot Category. A Meal Slot holds a Recipe (Portions, default = Recipe's Portions), a Product (quantity), or Leftovers (only if the Meal Type allows).
 - Slots can be added/removed per Meal. A hand-added slot takes the picked item's Role, else its Kind; if several, the user chooses (first pre-selected).

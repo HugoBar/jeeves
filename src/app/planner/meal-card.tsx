@@ -8,6 +8,8 @@ import {
   confirmOrSkipAsksFirst,
   isUnconfirmed,
   mealCardStatus,
+  newMealSlotPickable,
+  parseNewMealSlot,
   pickableForSlot,
   reopensAs,
   slotCategoryChoices,
@@ -15,6 +17,9 @@ import {
   type MealCardStatus,
   type MealFieldError,
   type MealStatus,
+  type NewMealSlotError,
+  type NewMealSlotInput,
+  type NewMealSlotRowError,
 } from "@/core/meals";
 import type { CategoryKind } from "@/core/food-categories";
 import type { AddedBack } from "@/db/confirmation";
@@ -127,7 +132,7 @@ export interface Pickers {
 }
 
 // What a slot's picker offers: Slot Categories and food.
-type SlotPickers = Pick<Pickers, "slotCategories" | "slotFoods">;
+export type SlotPickers = Pick<Pickers, "slotCategories" | "slotFoods">;
 
 export type { Week };
 
@@ -759,9 +764,28 @@ function pickedFood(food: PlannerSlotFood, offered: ReadonlySet<string>): { food
 // picker's fields hold them.
 type FoodValues = { food: string; amount: string };
 
+// The names a slot's picking fields are sent under.
+export interface SlotFieldNames {
+  food: string;
+  amount: string;
+  slotCategoryId: string;
+}
+
+// The planner's slot forms, which each send one slot.
+const SLOT_FORM_FIELDS: SlotFieldNames = { food: "food", amount: "amount", slotCategoryId: "slotCategoryId" };
+
+// The Meal form's added slots, each sent under these same names in the order
+// shown. createMealAction reads them.
+const MEAL_FORM_SLOT_FIELDS: SlotFieldNames = {
+  food: "slotFood",
+  amount: "slotAmount",
+  slotCategoryId: "slotCategoryId",
+};
+
 // The food picker and its amount, shared by filling a slot and adding one.
 // Picking a Recipe sets the Portions to the Recipe's own, which can then be
-// changed. `emptyLabel` is the picker's blank first option.
+// changed. `emptyLabel` is the picker's blank first option. Nothing is sent
+// until something is picked.
 function FoodFields({
   recipes,
   products,
@@ -770,6 +794,7 @@ function FoodFields({
   values,
   onChange,
   invalid,
+  fieldNames = SLOT_FORM_FIELDS,
 }: {
   recipes: SlotFoods["recipes"];
   products: SlotFoods["products"];
@@ -778,6 +803,7 @@ function FoodFields({
   values: FoodValues;
   onChange: (values: FoodValues) => void;
   invalid: (field: "food" | "amount") => InvalidProps;
+  fieldNames?: SlotFieldNames;
 }) {
   const recipeFor = (food: string) => recipes.find((option) => slotFoodValue("recipe", option.id) === food);
   const recipe = recipeFor(values.food);
@@ -790,7 +816,7 @@ function FoodFields({
   return (
     <>
       <select
-        name="food"
+        name={values.food ? fieldNames.food : undefined}
         aria-label={t("planner.food")}
         value={values.food}
         onChange={(event) => pick(event.target.value)}
@@ -821,7 +847,7 @@ function FoodFields({
       {(recipe || product) && (
         <label className="planner-amount">
           <input
-            name="amount"
+            name={fieldNames.amount}
             inputMode={recipe ? "numeric" : "decimal"}
             value={values.amount}
             onChange={(event) => onChange({ ...values, amount: event.target.value })}
@@ -904,44 +930,86 @@ function AddSlotForm({
   onDone: () => void;
 }) {
   // Controlled, so a rejected submit keeps what was picked and typed.
-  const [values, setValues] = useState<FoodValues>({ food: "", amount: "" });
-  const [slotCategoryId, setSlotCategoryId] = useState("");
+  const [values, setValues] = useState<NewMealSlotInput>(NO_NEW_SLOT);
   const [state, action, pending] = useActionState(async (previous: NewMealSlotFormState, formData: FormData) => {
     const next = await addMealSlotAction(mealId, previous, formData);
     if (!next.error) onDone();
     return next;
   }, { error: null });
-
-  const picked =
-    foods.recipes.find((option) => slotFoodValue("recipe", option.id) === values.food) ??
-    foods.products.find((option) => slotFoodValue("product", option.id) === values.food);
-  const choices = picked ? slotCategoryChoices(picked.categoryIds, slotCategories) : [];
-  const uncategorised = picked !== undefined && choices.length === 0;
-  function pick(next: FoodValues) {
-    // Other food pre-selects its own first Slot Category.
-    if (next.food !== values.food) setSlotCategoryId("");
-    setValues(next);
-  }
+  const { uncategorised } = slotChoicesFor(values.food, { slotFoods: foods, slotCategories });
   const { invalid, allMessages } = useSlotErrors(uncategorised ? "uncategorisedFood" : state.error);
 
   return (
     <form action={action} className="item-form planner-form open-row">
+      <AddSlotFields
+        pickers={{ slotFoods: foods, slotCategories }}
+        values={values}
+        onChange={setValues}
+        invalid={invalid}
+      />
+      <button type="submit" className="button-primary" disabled={pending || uncategorised}>
+        {t("planner.add")}
+      </button>
+      <button type="button" onClick={onDone}>
+        {t("planner.cancel")}
+      </button>
+      {allMessages()}
+    </form>
+  );
+}
+
+// A slot added by hand before anything is picked for it.
+const NO_NEW_SLOT: NewMealSlotInput = { food: "", amount: "", slotCategoryId: "" };
+
+// The Recipe or Product picked for a slot added by hand, and the Slot
+// Categories it can give the slot: its Roles, else its Kinds. With none it
+// can't be added.
+function slotChoicesFor(food: string, { slotFoods, slotCategories }: SlotPickers) {
+  const picked =
+    slotFoods.recipes.find((option) => slotFoodValue("recipe", option.id) === food) ??
+    slotFoods.products.find((option) => slotFoodValue("product", option.id) === food);
+  const choices = picked ? slotCategoryChoices(picked.categoryIds, slotCategories) : [];
+  return { picked, choices, uncategorised: picked !== undefined && choices.length === 0 };
+}
+
+// The picking steps of adding a slot by hand, on the planner or on the Meal
+// form: any non-Archived Recipe or Product and its amount, then its Slot
+// Category, with a chooser when it can take several, the first pre-selected.
+// Leftovers are not offered: they have no Food Category to give the slot.
+function AddSlotFields({
+  pickers,
+  values,
+  onChange,
+  invalid,
+  fieldNames = SLOT_FORM_FIELDS,
+}: {
+  pickers: SlotPickers;
+  values: NewMealSlotInput;
+  onChange: (values: NewMealSlotInput) => void;
+  invalid: (field: "food" | "amount" | "slotCategory") => InvalidProps;
+  fieldNames?: SlotFieldNames;
+}) {
+  const { choices } = slotChoicesFor(values.food, pickers);
+  return (
+    <>
       <FoodFields
-        recipes={foods.recipes}
-        products={foods.products}
+        recipes={pickers.slotFoods.recipes}
+        products={pickers.slotFoods.products}
         allowsLeftovers={false}
         emptyLabel={t("planner.pickFood")}
         values={values}
-        onChange={pick}
+        // Other food pre-selects its own first Slot Category.
+        onChange={(next) => onChange({ ...next, slotCategoryId: next.food === values.food ? values.slotCategoryId : "" })}
         invalid={invalid}
+        fieldNames={fieldNames}
       />
-      {choices.length === 1 && <input type="hidden" name="slotCategoryId" value={choices[0]!.id} />}
+      {choices.length === 1 && <input type="hidden" name={fieldNames.slotCategoryId} value={choices[0]!.id} />}
       {choices.length > 1 && (
         <select
-          name="slotCategoryId"
+          name={fieldNames.slotCategoryId}
           aria-label={t("planner.slotCategory")}
-          value={slotCategoryId || choices[0]!.id}
-          onChange={(event) => setSlotCategoryId(event.target.value)}
+          value={values.slotCategoryId || choices[0]!.id}
+          onChange={(event) => onChange({ ...values, slotCategoryId: event.target.value })}
           {...invalid("slotCategory")}
         >
           {choices.map((category) => (
@@ -951,14 +1019,187 @@ function AddSlotForm({
           ))}
         </select>
       )}
-      <button type="submit" className="button-primary" disabled={pending || uncategorised}>
+    </>
+  );
+}
+
+// Adds a slot on the Meal form, before the Meal exists, with the same steps
+// as adding one on the planner. It sits inside the Meal form, so its buttons
+// don't submit it; Enter adds the slot too. It is checked here as the server
+// will check it, and handed over with its Slot Category and amount as they
+// were read. Its fields are sent as the last added slot, so saving the Meal
+// while it is open keeps what was picked rather than dropping it.
+function NewSlotPicker({
+  pickers,
+  onAdd,
+  onCancel,
+}: {
+  pickers: SlotPickers;
+  onAdd: (slot: NewMealSlotInput) => void;
+  onCancel: () => void;
+}) {
+  const [values, setValues] = useState<NewMealSlotInput>(NO_NEW_SLOT);
+  const [error, setError] = useState<NewMealSlotError | null>(null);
+  const { uncategorised } = slotChoicesFor(values.food, pickers);
+  const { invalid, allMessages } = useSlotErrors(uncategorised ? "uncategorisedFood" : error);
+
+  function add() {
+    const { slotFoods, slotCategories } = pickers;
+    const parsed = parseNewMealSlot(
+      values,
+      newMealSlotPickable(slotFoods.recipes, slotFoods.products, slotCategories),
+    );
+    if (!parsed.ok) return setError(parsed.error);
+    const { slotCategoryId, fill } = parsed.slot;
+    onAdd({ food: values.food, amount: String(fill.content === "recipe" ? fill.portions : fill.quantity), slotCategoryId });
+  }
+
+  return (
+    <div
+      className="item-form planner-form open-row"
+      onKeyDown={(event) => {
+        if (event.key !== "Enter" || !(event.target instanceof HTMLInputElement)) return;
+        event.preventDefault();
+        add();
+      }}
+    >
+      <AddSlotFields
+        pickers={pickers}
+        values={values}
+        onChange={(next) => {
+          setError(null);
+          setValues(next);
+        }}
+        invalid={invalid}
+        fieldNames={MEAL_FORM_SLOT_FIELDS}
+      />
+      <button type="button" className="button-primary" disabled={uncategorised} onClick={add}>
         {t("planner.add")}
       </button>
-      <button type="button" onClick={onDone}>
+      <button type="button" onClick={onCancel}>
         {t("planner.cancel")}
       </button>
       {allMessages()}
-    </form>
+    </div>
+  );
+}
+
+// A slot added on the Meal form, as its row shows it: its Slot Category and
+// what it holds, which is empty if its Recipe or Product is no longer
+// offered. It isn't saved yet, so it has no warnings.
+function draftSlot(key: string, input: NewMealSlotInput, { slotFoods, slotCategories }: SlotPickers): PlannerMealSlot {
+  const category = slotCategories.find((option) => option.id === input.slotCategoryId);
+  return {
+    id: key,
+    slotCategoryId: input.slotCategoryId,
+    slotCategoryLabel: category?.label ?? "",
+    slotCategoryArchived: false,
+    food: draftFood(input, slotFoods),
+    warnings: null,
+  };
+}
+
+function draftFood(input: NewMealSlotInput, slotFoods: SlotFoods): PlannerSlotFood {
+  const amount = Number(input.amount);
+  const recipe = slotFoods.recipes.find((option) => slotFoodValue("recipe", option.id) === input.food);
+  if (recipe) return { content: "recipe", id: recipe.id, label: recipe.label, portions: amount, archived: false };
+  const product = slotFoods.products.find((option) => slotFoodValue("product", option.id) === input.food);
+  if (product) {
+    const { id, label, defaultUnit } = product;
+    return { content: "product", id, label, quantity: amount, defaultUnit, archived: false };
+  }
+  return { content: "empty" };
+}
+
+// "Slot 2 (Rice): Enter a quantity above 0.", or without the food when it is
+// no longer offered.
+function slotErrorMessage(row: number, food: PlannerSlotFood, error: NewMealSlotError): string {
+  const reason = t(`planner.error.${error}`);
+  return "label" in food
+    ? t("planner.error.slot", { row, food: food.label, reason })
+    : t("planner.error.slotNoFood", { row, reason });
+}
+
+// A slot added on the Meal form, with the key its row keeps when others are
+// removed, and why it was refused, if it was.
+type FormSlot = { key: number; input: NewMealSlotInput; error?: NewMealSlotError };
+
+// New Meal's Slots card. Slots added here can be removed with ×, and are
+// sent with the form in the order shown, each under the same three names.
+// `errors` count rows from 1, and each shows under its slot. Mounted again
+// on every submit, so it starts from `initial`, what was sent.
+export function NewMealSlotsCard({
+  pickers,
+  initial = [],
+  errors = [],
+}: {
+  pickers: SlotPickers;
+  initial?: NewMealSlotInput[];
+  errors?: NewMealSlotRowError[];
+}) {
+  const [slots, setSlots] = useState<FormSlot[]>(() =>
+    initial.map((input, index) => ({
+      key: index,
+      input,
+      error: errors.find((error) => error.row === index + 1)?.code,
+    })),
+  );
+  const nextKey = useRef(initial.length);
+  const [adding, setAdding] = useState(false);
+  const names = MEAL_FORM_SLOT_FIELDS;
+
+  return (
+    <FormCard title={t("planner.slots")} hint={t("planner.slotsHint")}>
+      {slots.length > 0 && (
+        <ol className="slot-list">
+          {slots.map(({ key, input, error }, index) => {
+            const slot = draftSlot(String(key), input, pickers);
+            return (
+              <li key={key} className="slot-row meal-form-slot">
+                <div className="slot-row-main">
+                  <SlotSummary slot={slot} showAmount chevron={false} />
+                  {/* On the food's line, as the design has it: × takes the top. */}
+                  <SlotChevron />
+                </div>
+                <button
+                  type="button"
+                  className="meal-form-slot-remove"
+                  aria-label={t("planner.newMeal.removeSlot", { category: slot.slotCategoryLabel })}
+                  onClick={() => setSlots(slots.filter((slot) => slot.key !== key))}
+                >
+                  <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                    <path d="M6 6l12 12M18 6L6 18" />
+                  </svg>
+                </button>
+                <input type="hidden" name={names.food} value={input.food} />
+                <input type="hidden" name={names.amount} value={input.amount} />
+                <input type="hidden" name={names.slotCategoryId} value={input.slotCategoryId} />
+                {error && <FormError>{slotErrorMessage(index + 1, slot.food, error)}</FormError>}
+              </li>
+            );
+          })}
+        </ol>
+      )}
+      {adding ? (
+        <NewSlotPicker
+          pickers={pickers}
+          onAdd={(input) => {
+            setSlots([...slots, { key: nextKey.current++, input }]);
+            setAdding(false);
+          }}
+          onCancel={() => setAdding(false)}
+        />
+      ) : (
+        <button type="button" className="meal-form-add-slot" onClick={() => setAdding(true)}>
+          <span className="meal-form-add-slot-icon">
+            <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round">
+              <path d="M12 5v14M5 12h14" />
+            </svg>
+          </span>
+          {t("planner.newMeal.addSlot")}
+        </button>
+      )}
+    </FormCard>
   );
 }
 
@@ -1024,41 +1265,38 @@ export interface MealFormValues {
   hour: string;
   name: string;
   untracked: boolean;
+  // The slots added while adding.
+  slots?: NewMealSlotInput[];
 }
 
 // The Meal form's cards, without its buttons: Basics, Slots, and Tracking and
-// repeat, under a banner
-// counting the errors once a submit is rejected. Adding offers `mealTypes` as
-// chips; `editing` shows its Meal Type locked and lists its slots. Mounted
-// again on every submit, so it starts from what was sent.
+// repeat, under a banner counting the errors once a submit is rejected.
+// Adding offers `mealTypes` as chips and shows `slotsCard`, its
+// NewMealSlotsCard, whose refused slots `slotErrors` holds; `editing` shows
+// its Meal Type locked and lists its slots. Mounted again on every submit,
+// so it starts from what was sent.
 export function MealFormFields({
   errors,
+  slotErrors = [],
   values,
   mealTypes,
+  slotsCard,
   editing,
 }: {
   errors: MealFieldError[];
+  slotErrors?: NewMealSlotRowError[];
   values: MealFormValues;
   mealTypes: PickerOption[];
+  slotsCard?: ReactNode;
   editing?: Pick<PlannerMeal, "mealTypeLabel" | "slots">;
 }) {
   const [picked, setPicked] = useState(values.mealTypeId ?? "");
   const { invalid, messages } = useMealErrors(errors);
   const mealType = editing?.mealTypeLabel ?? mealTypes.find((option) => option.id === picked)?.label;
 
-  // The buttons are below the fields, so a rejected submit scrolls back up.
-  const banner = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    banner.current?.scrollIntoView({ block: "nearest" });
-  }, []);
-
   return (
     <>
-      {errors.length > 0 && (
-        <FormBanner ref={banner}>
-          <FixMessage count={errors.length} editing={editing !== undefined} />
-        </FormBanner>
-      )}
+      <MealFormBanner count={errors.length + slotErrors.length} editing={editing !== undefined} />
       {messages(FORM_LEVEL)}
       <FormCard title={t("planner.basics")}>
         {editing ? (
@@ -1122,21 +1360,25 @@ export function MealFormFields({
           {messages("hour")}
         </div>
       </FormCard>
-      <FormCard title={t("planner.slots")}>
-        {editing && editing.slots.length > 0 ? (
-          <ol className="slot-list">
-            {editing.slots.map((slot) => (
-              <li key={slot.id} className={slot.food.content === "empty" ? "slot-row slot-row-dashed" : "slot-row"}>
-                <div className="slot-row-main">
-                  <SlotSummary slot={slot} showAmount chevron={false} />
-                </div>
-              </li>
-            ))}
-          </ol>
-        ) : (
-          <p className="meal-form-no-slots">{t("planner.noSlots")}</p>
-        )}
-      </FormCard>
+      {editing ? (
+        <FormCard title={t("planner.slots")}>
+          {editing.slots.length > 0 ? (
+            <ol className="slot-list">
+              {editing.slots.map((slot) => (
+                <li key={slot.id} className={slot.food.content === "empty" ? "slot-row slot-row-dashed" : "slot-row"}>
+                  <div className="slot-row-main">
+                    <SlotSummary slot={slot} showAmount chevron={false} />
+                  </div>
+                </li>
+              ))}
+            </ol>
+          ) : (
+            <p className="meal-form-no-slots">{t("planner.noSlots")}</p>
+          )}
+        </FormCard>
+      ) : (
+        slotsCard
+      )}
       <FormCard title={t("planner.trackingAndRepeat")}>
         <UntrackedSwitch untracked={values.untracked} />
       </FormCard>
@@ -1166,6 +1408,23 @@ function UntrackedSwitch({ untracked }: { untracked: boolean }) {
         aria-describedby={`${id}-hint`}
       />
     </label>
+  );
+}
+
+// Over a Meal form once a submit is rejected: "Fix 2 things to add this
+// Meal. They're marked in red below." `count` is every error, the refused
+// slots' too; none shows nothing. The buttons are below the fields, so it
+// scrolls back up to it. Mounted again on every submit, as the form is.
+function MealFormBanner({ count, editing = false }: { count: number; editing?: boolean }) {
+  const banner = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    banner.current?.scrollIntoView({ block: "nearest" });
+  }, []);
+  if (count === 0) return null;
+  return (
+    <FormBanner ref={banner}>
+      <FixMessage count={count} editing={editing} />
+    </FormBanner>
   );
 }
 

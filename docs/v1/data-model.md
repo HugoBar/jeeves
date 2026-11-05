@@ -22,7 +22,7 @@ Started 2026-10-20 with `/grill-with-docs`. Resume by re-running it and pointing
 - **Q12 Reopen**: reopening writes opposite Stock Movements that add back exactly what the Confirmation removed (respecting clamping); Meal-caused movements link to their Meal. Glossary entry **Reopen** added; Stock Movement causes now include Reopen. Spec and #10 updated. The "stock was probably wrong" flag clears on Reopen only if that Confirmation's clamp was all that set it since the last Correction; each movement stores `clamped` so this can be told ([#70](https://github.com/HugoBar/jeeves/issues/70)).
 
 - **Q5 Meals, Meal Templates, Meal Series** (re-evaluated in a dedicated session, 2026-10-21):
-  - A Meal Template is only a prefill shortcut. A Meal can be created from scratch (Meal Type + hour, no slots). Creating from a template copies name, Meal Type, hour and empty slots; `meals` has **no** template link.
+  - A Meal Template is only a prefill shortcut. A Meal can be created from scratch (Meal Type + hour, plus any slots added on the form). Creating from a template copies name, Meal Type, hour and empty slots; `meals` has **no** template link.
   - A Meal owns its hour and optional `name` (card shows name ?? Meal Type); its Meal Type is fixed.
   - The one-Meal-per-Meal-Type-per-day rule is **dropped** (no unique `(date, meal_type_id)`). Projected Stock tie-break: date, priority, hour, then `created_at`.
   - Seeded Meal Types: Breakfast P2, Lunch P1 (Leftovers), Snack P3, Dinner P1 (Leftovers). "Morning Snack" etc. are names. No seeded templates.
