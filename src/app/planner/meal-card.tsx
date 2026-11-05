@@ -365,13 +365,9 @@ export function MealMenuList({
 // date.
 export function ReopenSheet({ meal, today, onClose }: { meal: PlannerMeal; today: string; onClose: () => void }) {
   const status = mealCardStatus(meal, today);
-  const day = formatMealDate(meal.date);
   return (
     <ConfirmSheet
-      eyebrow={t(meal.date === today ? "planner.reopenSheet.eyebrowToday" : "planner.reopenSheet.eyebrow", {
-        day,
-        hour: meal.hour,
-      })}
+      eyebrow={mealSheetEyebrow(meal, today)}
       title={t("planner.reopenSheet.title", { name: meal.name ?? meal.mealTypeLabel })}
       confirmLabel={t("planner.reopen")}
       onConfirm={() => reopenMealAction(meal.id)}
@@ -403,6 +399,15 @@ export function ReopenSheet({ meal, today, onClose }: { meal: PlannerMeal; today
       )}
     </ConfirmSheet>
   );
+}
+
+// "Today · Thu 29 Oct · 12:30" over a sheet about a Meal, or without Today
+// on another day.
+function mealSheetEyebrow(meal: PlannerMeal, today: string): string {
+  return t(meal.date === today ? "planner.mealSheet.eyebrowToday" : "planner.mealSheet.eyebrow", {
+    day: formatMealDate(meal.date),
+    hour: meal.hour,
+  });
 }
 
 // Why a Reopen adds nothing back: Skipped, Confirmed as Untracked, or
