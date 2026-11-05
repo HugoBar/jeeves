@@ -7,17 +7,26 @@ import { t } from "@/strings";
 // still in view and usable beside it, and filling the screen on phone. Never
 // a dialog. Mount it to open it and unmount it to close it, so what was typed
 // goes with it. Its close button and Escape close it. `label` is the line
-// above the title, saying what the panel works on, after `icon`.
+// above the title, saying what the panel works on, after `icon`. A screen
+// opened from the panel's own content, such as the slot picker, takes
+// `back` in its place, a button back to that content, and may put `eyebrow`
+// over its title.
+// The line above a panel's title: what it works on, or a way back.
+type SidePanelHead =
+  | { icon?: ReactNode; label: string; back?: never }
+  | { back: { label: string; onBack: () => void }; icon?: never; label?: never };
+
 export function SidePanel({
   icon,
   label,
+  back,
+  eyebrow,
   title,
   className = "",
   onClose,
   children,
-}: {
-  icon?: ReactNode;
-  label: string;
+}: SidePanelHead & {
+  eyebrow?: string;
   title: string;
   className?: string;
   onClose: () => void;
@@ -68,16 +77,26 @@ export function SidePanel({
   return (
     <aside ref={panel} className={`side-panel ${className}`} aria-labelledby={titleId}>
       <div className="side-panel-head">
-        <p className="side-panel-label">
-          {icon}
-          {label}
-        </p>
+        {back ? (
+          <button type="button" className="side-panel-back" onClick={back.onBack}>
+            <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M15 6l-6 6 6 6" />
+            </svg>
+            {back.label}
+          </button>
+        ) : (
+          <p className="side-panel-label">
+            {icon}
+            {label}
+          </p>
+        )}
         <button type="button" className="side-panel-close" aria-label={t("sheet.close")} onClick={onClose}>
           <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
             <path d="M6 6l12 12M18 6L6 18" />
           </svg>
         </button>
       </div>
+      {eyebrow && <p className="side-panel-eyebrow">{eyebrow}</p>}
       <h2 ref={heading} id={titleId} tabIndex={-1}>
         {title}
       </h2>

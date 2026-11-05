@@ -954,6 +954,7 @@ html:has(.sheet[open]) {
 }
 
 .sheet-eyebrow,
+.side-panel-eyebrow,
 .stock-list-head,
 .recipe-list-head,
 .eyebrow {
@@ -3288,6 +3289,19 @@ a.back-link {
   color: var(--week-ink, var(--color-accent-ink));
   font-size: var(--text-meta);
   font-weight: 600;
+}
+
+.side-panel-back {
+  --button-bg: transparent;
+  --button-line: transparent;
+  --button-ink: var(--color-ink-soft);
+  gap: 4px;
+  padding: 0;
+  font-size: var(--text-meta);
+}
+
+.side-panel-eyebrow {
+  margin: 0 0 -8px;
 }
 
 .side-panel-close {
