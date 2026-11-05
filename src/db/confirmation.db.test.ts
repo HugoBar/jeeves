@@ -1,6 +1,13 @@
 import { beforeAll, describe, expect, it } from "vitest";
 import type { MealSlotFill } from "@/core/meals";
-import { confirmMeal, confirmMealsAsPlanned, listReopenAddsBack, reopenMeal, skipMeal } from "./confirmation";
+import {
+  confirmMeal,
+  confirmMealsAsPlanned,
+  listConfirmTakes,
+  listReopenAddsBack,
+  reopenMeal,
+  skipMeal,
+} from "./confirmation";
 import { listActiveCategories } from "./food-categories";
 import { listActiveMealTypes } from "./meal-types";
 import { createMeal, deleteMeal, getMeal, updateMeal } from "./meals";
@@ -488,6 +495,67 @@ describe("listReopenAddsBack", () => {
 
   it("returns nothing when given no Meals", async () => {
     expect(await listReopenAddsBack(db, [])).toEqual(new Map());
+  });
+});
+
+describe("listConfirmTakes", () => {
+  it("lists what Confirming each Meal would take, by Product name, as Confirm then takes it", async () => {
+    const farro = await aProduct("Farro", 1000, { defaultUnit: "g", density: null });
+    const kale = await aProduct("Kale", 150, { defaultUnit: "g", density: null });
+    // For 2 Portions.
+    const recipe = await createRecipe(db, {
+      name: "Farro Salad",
+      portions: 2,
+      steps: "Toss",
+      prepTimeMinutes: 20,
+      sourceUrl: null,
+      ingredients: [
+        { productId: farro.id, amount: 300, unit: "g", minor: false },
+        { productId: kale.id, amount: 250, unit: "g", minor: false },
+      ],
+      categoryOverrides: [],
+    });
+    const meal = await aMeal(TODAY, [
+      { content: "recipe", recipeId: recipe.id, portions: 4 },
+      { content: "leftovers" },
+      { content: "product", productId: farro.id, quantity: 100 },
+    ]);
+
+    // 300 g x 4/2 + 100 g Farro, and 500 g Kale with only 150 g in Stock.
+    expect((await listConfirmTakes(db, [meal.id])).get(meal.id)).toEqual({
+      ok: true,
+      products: [
+        { name: "Farro", defaultUnit: "g", needs: 700, takes: 700 },
+        { name: "Kale", defaultUnit: "g", needs: 500, takes: 150 },
+      ],
+    });
+    await confirmMeal(db, meal.id, { untracked: false, today: TODAY });
+    expect((await movements(farro.id, "confirmation"))[0]).toMatchObject({ delta: -700 });
+    expect((await movements(kale.id, "confirmation"))[0]).toMatchObject({ delta: -150 });
+  });
+
+  it("gives the refusal Confirm would give when an Ingredient cannot be converted", async () => {
+    const spelt = await aProduct("Spelt", 500, { defaultUnit: "g", density: null });
+    const recipe = await createRecipe(db, {
+      name: "Spelt Scones",
+      portions: 1,
+      steps: "Bake",
+      prepTimeMinutes: 30,
+      sourceUrl: null,
+      ingredients: [{ productId: spelt.id, amount: 1, unit: "cup", minor: false }],
+      categoryOverrides: [],
+    });
+    const meal = await aMeal(TODAY, [{ content: "recipe", recipeId: recipe.id, portions: 1 }]);
+
+    const takes = (await listConfirmTakes(db, [meal.id])).get(meal.id);
+    expect(takes).toEqual(await confirmMeal(db, meal.id, { untracked: false, today: TODAY }));
+    expect(takes).toMatchObject({ ok: false, error: "unconvertible", product: { name: "Spelt" } });
+  });
+
+  it("has an entry for every Meal given, and none for none", async () => {
+    const meal = await aMeal(TODAY, [{ content: "empty" }]);
+    expect(await listConfirmTakes(db, [meal.id])).toEqual(new Map([[meal.id, { ok: true, products: [] }]]));
+    expect(await listConfirmTakes(db, [])).toEqual(new Map());
   });
 });
 
