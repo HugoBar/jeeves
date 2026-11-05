@@ -10,16 +10,21 @@ import {
   parseNewMeal,
   parseNewMealFromTemplate,
   parseNewMealSlot,
+  parseNewMealSlots,
+  newMealSlotPickable,
   pickableForSlot,
-  slotCategoryChoices,
   type MealFieldError,
   type MealFromTemplateError,
   type MealSlotCategoryError,
   type MealSlotFillError,
   type NewMealInput,
   type NewMealSlotError,
+  type NewMealSlotInput,
+  type NewMealSlotPickable,
+  type NewMealSlotRowError,
+  type NewMealSlotsResult,
 } from "@/core/meals";
-import { getDb } from "@/db";
+import { getDb, type Db } from "@/db";
 import {
   confirmMeal,
   confirmMealsAsPlanned,
@@ -46,9 +51,10 @@ import {
 } from "@/db/meals";
 import { foodCategoryLabel } from "@/strings";
 
-// `values` refills the form after a rejected submit, which React resets.
-export type NewMealFormValues = Omit<NewMealInput, "date">;
-export type NewMealFormState = { errors: MealFieldError[]; values: NewMealFormValues };
+// `values` refills the form after a rejected submit, which React resets. The
+// slots are the ones added on the form, before the Meal exists.
+export type NewMealFormValues = Omit<NewMealInput, "date"> & { slots: NewMealSlotInput[] };
+export type NewMealFormState = { errors: MealFieldError[]; slotErrors: NewMealSlotRowError[]; values: NewMealFormValues };
 export type MealChangesFormValues = Pick<NewMealInput, "hour" | "name" | "untracked">;
 export type MealChangesFormState = { errors: MealFieldError[]; values: MealChangesFormValues };
 export type MealFromTemplateFormState = { errors: MealFromTemplateError[]; templateId: string };
@@ -62,7 +68,53 @@ export type { RefusedMeal };
 // The Meal is gone, already Confirmed or Skipped, or after the viewer's date.
 export type SkipMealError = { error: "notSkippable" };
 
-// `date` is the planner day the form was opened on.
+// The slots added on a Meal form before the Meal exists, in the order shown.
+// Each sends its food, amount and Slot Category under the same three names.
+function newSlotInputs(formData: FormData): NewMealSlotInput[] {
+  const all = (name: string) => formData.getAll(name).map(String);
+  const [amounts, categories] = [all("slotAmount"), all("slotCategoryId")];
+  return all("slotFood").map((food, index) => ({
+    food,
+    amount: amounts[index] ?? "",
+    slotCategoryId: categories[index] ?? "",
+  }));
+}
+
+// What a slot added by hand can be filled with: every non-Archived Recipe and
+// Product, each with the Slot Categories it can give the slot, in the order
+// the planner's chooser lists them.
+async function newSlotPickable(db: Db): Promise<NewMealSlotPickable> {
+  const [{ recipes, products }, active] = await Promise.all([listFoodsForSlots(db), listActiveCategories(db)]);
+  return newMealSlotPickable(recipes, products, sortCategories(active, foodCategoryLabel));
+}
+
+// Slots added on the Meal form, each checked as one added by hand on the
+// planner is.
+async function parseFormSlots(db: Db, inputs: NewMealSlotInput[]): Promise<NewMealSlotsResult> {
+  if (inputs.length === 0) return { ok: true, slots: [] };
+  return parseNewMealSlots(inputs, await newSlotPickable(db));
+}
+
+// Runs `write`, which writes the Meal and the slots added on the form. A
+// Recipe or Product deleted after they were checked makes it fail, writing
+// nothing; checking them again then says which slot it was. Any other
+// failure is thrown on.
+async function writeWithSlots<T>(
+  db: Db,
+  inputs: NewMealSlotInput[],
+  write: () => Promise<T>,
+): Promise<{ ok: true; written: T } | { ok: false; errors: NewMealSlotRowError[] }> {
+  try {
+    return { ok: true, written: await write() };
+  } catch (error) {
+    const again = await parseFormSlots(db, inputs);
+    if (again.ok) throw error;
+    return { ok: false, errors: again.errors };
+  }
+}
+
+// `date` is the planner day the form was opened on. The Meal and the slots
+// added on the form are written together, or not at all.
 export async function createMealAction(
   date: string,
   _state: NewMealFormState,
@@ -76,12 +128,17 @@ export async function createMealAction(
     hour: String(formData.get("hour") ?? ""),
     name: String(formData.get("name") ?? ""),
     untracked: formData.get("untracked") === "on",
+    slots: newSlotInputs(formData),
   };
   const parsed = parseNewMeal({ date, ...values }, pickable);
-  if (!parsed.ok) return { errors: parsed.errors, values };
-  await createMeal(db, parsed.fields);
+  const slots = await parseFormSlots(db, values.slots);
+  if (!parsed.ok || !slots.ok) {
+    return { errors: parsed.ok ? [] : parsed.errors, slotErrors: slots.ok ? [] : slots.errors, values };
+  }
+  const written = await writeWithSlots(db, values.slots, () => createMeal(db, parsed.fields, slots.slots));
+  if (!written.ok) return { errors: [], slotErrors: written.errors, values };
   refresh();
-  return { errors: [], values: { mealTypeId: "", hour: "", name: "", untracked: false } };
+  return { errors: [], slotErrors: [], values: { mealTypeId: "", hour: "", name: "", untracked: false, slots: [] } };
 }
 
 // `date` is the planner day the form was opened on. Any Meal Template can be
@@ -181,17 +238,13 @@ export async function addMealSlotAction(
   const meal = await getMeal(db, mealId);
   if (!meal) throw new Error("Meal not found");
   if (!canChangeMeal(meal)) return { error: "notChangeable" };
-  const [{ recipes, products }, active] = await Promise.all([listFoodsForSlots(db), listActiveCategories(db)]);
-  const categories = sortCategories(active, foodCategoryLabel);
-  const choices = (foods: { id: string; categoryIds: string[] }[]) =>
-    new Map(foods.map((food) => [food.id, slotCategoryChoices(food.categoryIds, categories).map((c) => c.id)]));
   const parsed = parseNewMealSlot(
     {
       food: String(formData.get("food") ?? ""),
       amount: String(formData.get("amount") ?? ""),
       slotCategoryId: String(formData.get("slotCategoryId") ?? ""),
     },
-    { recipes: choices(recipes), products: choices(products) },
+    await newSlotPickable(db),
   );
   if (!parsed.ok) return { error: parsed.error };
   await addMealSlot(db, mealId, parsed.slot);

@@ -26,9 +26,11 @@ import {
   mealOnLabel,
   MealFormFields,
   mealPanelClass,
+  NewMealSlotsCard,
   type PickerOption,
   type Pickers,
   type PlannerMeal,
+  type SlotPickers,
   type Submitted,
   type Week,
   UnconfirmedIcon,
@@ -394,7 +396,7 @@ export function AddMealPanel({
 }: {
   date: string;
   week: Week;
-  pickers: Pick<Pickers, "mealTypes" | "templates">;
+  pickers: Pickers;
   onClose: () => void;
 }) {
   const [fromTemplate, setFromTemplate] = useState(false);
@@ -423,6 +425,7 @@ export function AddMealPanel({
         <AddMealForm
           date={date}
           mealTypes={pickers.mealTypes}
+          slotPickers={pickers}
           onFromTemplate={pickers.templates.length > 0 ? () => setFromTemplate(true) : undefined}
           onDone={onClose}
         />
@@ -436,21 +439,28 @@ export function AddMealPanel({
 function AddMealForm({
   date,
   mealTypes,
+  slotPickers,
   onFromTemplate,
   onDone,
 }: {
   date: string;
   mealTypes: PickerOption[];
+  slotPickers: SlotPickers;
   onFromTemplate?: () => void;
   onDone: () => void;
 }) {
   const [state, action, pending] = useActionState(
     async ({ submits, ...previous }: Submitted<NewMealFormState>, formData: FormData) => {
       const next = await createMealAction(date, previous, formData);
-      if (next.errors.length === 0) onDone();
+      if (next.errors.length === 0 && next.slotErrors.length === 0) onDone();
       return { ...next, submits: submits + 1 };
     },
-    { errors: [], values: { mealTypeId: "", hour: "", name: "", untracked: false }, submits: 0 },
+    {
+      errors: [],
+      slotErrors: [],
+      values: { mealTypeId: "", hour: "", name: "", untracked: false, slots: [] },
+      submits: 0,
+    },
   );
   return (
     <form action={action} className="form-cards" noValidate>
@@ -459,7 +469,14 @@ function AddMealForm({
           {t("planner.addFromTemplate")}
         </button>
       )}
-      <MealFormFields key={state.submits} errors={state.errors} values={state.values} mealTypes={mealTypes} />
+      <MealFormFields
+        key={state.submits}
+        errors={state.errors}
+        slotErrors={state.slotErrors}
+        values={state.values}
+        mealTypes={mealTypes}
+        slotsCard={<NewMealSlotsCard pickers={slotPickers} initial={state.values.slots} errors={state.slotErrors} />}
+      />
       <MealPanelActions submitLabel={t("planner.panel.addMeal")} pending={pending} onCancel={onDone} />
     </form>
   );

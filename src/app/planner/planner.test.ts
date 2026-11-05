@@ -1,7 +1,7 @@
 import { createElement, type ComponentProps } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
-import { EditMealPanel, MealFormFields, MealMenuList, ReopenSheet, type PlannerMeal, type PlannerMealSlot, type SlotWarnings } from "./meal-card";
+import { EditMealPanel, MealFormFields, MealMenuList, NewMealSlotsCard, ReopenSheet, type PlannerMeal, type PlannerMealSlot, type SlotWarnings } from "./meal-card";
 import { AddMealPanel, PlannerView } from "./planner";
 
 type Props = ComponentProps<typeof PlannerView>;
@@ -719,8 +719,77 @@ describe("the Meal form", () => {
     expect(errorTexts(one)).toEqual(["Enter an hour, like 19:30."]);
   });
 
-  it("says No slots yet when there are none, and lists the Meal's slots when editing", () => {
-    expect(text(renderForm())).toContain("No slots yet");
+  describe("its Slots card when adding", () => {
+    type CardProps = ComponentProps<typeof NewMealSlotsCard>;
+    const slotPickers: CardProps["pickers"] = {
+      slotCategories: [
+        { id: "main", label: "Main Dish", kind: "role" },
+        { id: "side", label: "Side Dish", kind: "role" },
+      ],
+      slotFoods: {
+        recipes: [{ id: "curry", label: "Chicken curry", portions: 4, categoryIds: ["main"] }],
+        products: [{ id: "rice", label: "Basmati rice", defaultUnit: "g", categoryIds: ["side"] }],
+      },
+    };
+    const added = [
+      { food: "recipe:curry", amount: "4", slotCategoryId: "main" },
+      { food: "product:rice", amount: "150", slotCategoryId: "side" },
+    ];
+    const renderCard = (props: Partial<CardProps> = {}) =>
+      renderToStaticMarkup(createElement(NewMealSlotsCard, { pickers: slotPickers, initial: added, ...props }));
+    const slotRows = (html: string) => [...html.matchAll(/<li class="(slot-row[^"]*)"[^>]*>(.*?)<\/li>/g)];
+
+    it("is the Slots card of a New Meal", () => {
+      const html = renderForm({ slotsCard: createElement(NewMealSlotsCard, { pickers: slotPickers }) });
+      expect(html).toMatch(/<h2>Slots<\/h2><p class="field-hint">Add slots now, or later from the Planner.<\/p>/);
+    });
+
+    it("says slots can be added now or later, and offers Add slot", () => {
+      const html = renderCard({ initial: [] });
+      expect(text(html)).toContain("Add slots now, or later from the Planner.");
+      expect(text(html)).not.toContain("No slots yet");
+      expect(html).toMatch(/<button type="button"[^>]*>.*?Add slot<\/button>/s);
+    });
+
+    it("shows each added slot's pill, Portions or quantity and food, with × to remove it", () => {
+      const rows = slotRows(renderCard());
+      expect(rows.map((row) => text(row[2]!))).toEqual(["Main Dish 4 portions Chicken curry", "Side Dish 150 g Basmati rice"]);
+      expect(rows[0]![2]).toMatch(/<button type="button"[^>]*aria-label="Remove Main Dish slot"/);
+    });
+
+    it("sends the added slots with the form, in the order shown", () => {
+      const html = renderCard();
+      const sent = (name: string) => [...html.matchAll(new RegExp(`<input type="hidden" name="${name}" value="([^"]*)"`, "g"))].map((m) => m[1]);
+      expect(sent("slotFood")).toEqual(["recipe:curry", "product:rice"]);
+      expect(sent("slotAmount")).toEqual(["4", "150"]);
+      expect(sent("slotCategoryId")).toEqual(["main", "side"]);
+    });
+
+    it("says which slot was refused and why, under it", () => {
+      const rows = slotRows(renderCard({ errors: [{ row: 2, code: "unavailableFood" }] }));
+      expect(rows[0]![2]).not.toContain("form-error");
+      expect(text(rows[1]![2]!)).toContain(
+        "Slot 2 (Basmati rice): That was removed or no longer fits this slot. Pick another.",
+      );
+    });
+
+    // Removed since, say, so its label is gone too.
+    it("names a refused slot by its row alone when its food is no longer offered", () => {
+      const html = renderCard({
+        initial: [{ food: "product:gone", amount: "1", slotCategoryId: "side" }],
+        errors: [{ row: 1, code: "unavailableFood" }],
+      });
+      expect(text(html)).toContain("Slot 1: That was removed or no longer fits this slot. Pick another.");
+    });
+
+    it("counts refused slots in the form's banner", () => {
+      const html = renderForm({ slotErrors: [{ row: 2, code: "unavailableFood" }] });
+      expect(banner(html)).toBe("Fix 1 thing to add this Meal. It's marked in red below.");
+    });
+  });
+
+  it("lists the Meal's slots when editing, or says No slots yet", () => {
+    expect(text(renderEditForm())).toContain("No slots yet");
     const slot: PlannerMealSlot = {
       id: "slot-1",
       slotCategoryId: "main",
