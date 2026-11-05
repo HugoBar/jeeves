@@ -11,19 +11,33 @@ import { t } from "@/strings";
 export function Sheet({
   eyebrow,
   title,
+  className,
   busy = false,
   onClose,
   children,
 }: {
   eyebrow?: string;
   title: string;
+  // Added to "sheet", for a sheet laid out its own way.
+  className?: string;
   busy?: boolean;
   onClose: () => void;
   children?: ReactNode;
 }) {
   const dialog = useRef<HTMLDialogElement>(null);
   const opener = useRef<Element | null>(null);
+  const heading = useRef<HTMLHeadingElement>(null);
   const titleId = useId();
+
+  // A new title is a new screen in the sheet, as when the slot picker moves
+  // on to Change Slot Category: the focus goes to it, since what was tapped
+  // is gone.
+  const shownTitle = useRef(title);
+  useEffect(() => {
+    if (shownTitle.current === title) return;
+    shownTitle.current = title;
+    if (!dialog.current?.contains(document.activeElement)) heading.current?.focus();
+  }, [title]);
 
   useEffect(() => {
     if (dialog.current && !dialog.current.open) {
@@ -40,7 +54,7 @@ export function Sheet({
   return (
     <dialog
       ref={dialog}
-      className="sheet"
+      className={className ? `sheet ${className}` : "sheet"}
       aria-labelledby={titleId}
       onCancel={(event) => {
         if (busy) event.preventDefault();
@@ -51,7 +65,9 @@ export function Sheet({
       <div className="sheet-header">
         <div className="sheet-heading">
           {eyebrow && <span className="sheet-eyebrow">{eyebrow}</span>}
-          <h2 id={titleId}>{title}</h2>
+          <h2 ref={heading} id={titleId} tabIndex={-1}>
+            {title}
+          </h2>
         </div>
         <button type="button" className="sheet-close" aria-label={t("sheet.close")} disabled={busy} onClick={onClose}>
           <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">

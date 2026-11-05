@@ -390,7 +390,7 @@ describe("setMealSlotCategory with food in the slot", () => {
     expect(await slotOf(mealId)).toMatchObject({ slotCategoryId: vegetables, content: "recipe", portions: 2 });
   });
 
-  it("empties a slot whose Recipe has the new Slot Category removed by an override", async () => {
+  it("keeps a Recipe that has the new Slot Category removed by an override", async () => {
     const [grains, vegetables] = await Promise.all([seededCategoryId("grains"), seededCategoryId("vegetables")]);
     const risotto = await aRecipe(
       "Override Risotto",
@@ -404,15 +404,15 @@ describe("setMealSlotCategory with food in the slot", () => {
 
     expect(await slotRow(slotId)).toMatchObject({
       slotCategoryId: vegetables,
-      content: "empty",
-      recipeId: null,
-      portions: null,
+      content: "recipe",
+      recipeId: risotto.id,
+      portions: 2,
     });
   });
 
-  it("empties a slot whose Product does not carry the new Slot Category", async () => {
+  it("keeps a Product that does not carry the new Slot Category", async () => {
     const [grains, fruit] = await Promise.all([seededCategoryId("grains"), seededCategoryId("fruit")]);
-    const bread = await aProduct("Dropped Bread", [grains]);
+    const bread = await aProduct("Kept Bread", [grains]);
     const { slotId } = await anEmptySlot(grains);
     await fillMealSlot(db, slotId, { content: "product", productId: bread.id, quantity: 60 });
 
@@ -420,9 +420,9 @@ describe("setMealSlotCategory with food in the slot", () => {
 
     expect(await slotRow(slotId)).toMatchObject({
       slotCategoryId: fruit,
-      content: "empty",
-      productId: null,
-      quantity: null,
+      content: "product",
+      productId: bread.id,
+      quantity: 60,
     });
   });
 

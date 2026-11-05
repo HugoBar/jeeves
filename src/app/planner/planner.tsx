@@ -20,7 +20,6 @@ import { SidePanel } from "../side-panel";
 import { useViewerNow } from "../viewer-clock";
 import { createMealAction, type NewMealFormState, type NewMealFormValues } from "./actions";
 import {
-  ChevronIcon,
   EditMealPanel,
   MealCard,
   MealPanelActions,
@@ -36,6 +35,7 @@ import {
   type Week,
   UnconfirmedIcon,
 } from "./meal-card";
+import { ChevronIcon } from "./slot-picker";
 
 // "Today" is the date in the viewer's time zone (spec "Platform"). The server
 // cannot know that zone, so it renders only the heading and the browser fills
@@ -107,7 +107,13 @@ export function PlannerView({
         />
       )}
       {editing && (
-        <EditMealPanel key={editing.id} meal={editing} week={weekOf(editing.date)} onClose={() => setPanel(null)} />
+        <EditMealPanel
+          key={editing.id}
+          meal={editing}
+          week={weekOf(editing.date)}
+          pickers={pickers}
+          onClose={() => setPanel(null)}
+        />
       )}
     </div>
   );

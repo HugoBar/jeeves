@@ -41,6 +41,7 @@ I want one place that knows what food is in my Pantry, what I can cook from it, 
 - A Meal is created on a date either from scratch (pick a Meal Type and an hour) or from a Meal Template. A Meal made from scratch can have slots added on its form before it is saved; they are added the same way as on the planner, and the Meal and its slots are saved together or not at all. A day can have several Meals of the same Meal Type. Meals are sorted by hour.
 - A Meal has its own hour and optional name, both editable; its Meal Type never changes. Its card shows the name if set, else the Meal Type.
 - Picking for a slot shows only Recipes/Products carrying its Slot Category. A Meal Slot holds a Recipe (Portions, default = Recipe's Portions), a Product (quantity), or Leftovers (only if the Meal Type allows).
+- A planned slot's Slot Category can be changed to any non-Archived Role or Kind. The food in it stays, even if it doesn't carry the new one; only what fills it from now on must.
 - Slots can be added/removed per Meal. A hand-added slot takes the picked item's Role, else its Kind; if several, the user chooses (first pre-selected).
 - A Meal can be marked Untracked while planning or confirming.
 

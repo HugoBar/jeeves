@@ -1,7 +1,7 @@
 import { createElement, type ComponentProps } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
-import { EditMealPanel, MealFormFields, MealMenuList, NewMealSlotsCard, ReopenSheet, type PlannerMeal, type PlannerMealSlot, type SlotWarnings } from "./meal-card";
+import { EditMealPanel, EditMealPanelView, MealFormFields, MealMenuList, NewMealSlotsCard, ReopenSheet, type PlannerMeal, type PlannerMealSlot, type SlotWarnings } from "./meal-card";
 import { AddMealPanel, AddMealPanelView, PlannerView } from "./planner";
 
 type Props = ComponentProps<typeof PlannerView>;
@@ -615,7 +615,9 @@ describe("the Meal panel", () => {
   const renderAdd = (date: string, week: "this" | "next") =>
     renderToStaticMarkup(createElement(AddMealPanel, { date, week, pickers, onClose: () => {} }));
   const renderEdit = (week: "this" | "next") =>
-    renderToStaticMarkup(createElement(EditMealPanel, { meal: meal({ date: "2026-11-03" }), week, onClose: () => {} }));
+    renderToStaticMarkup(
+      createElement(EditMealPanel, { meal: meal({ date: "2026-11-03" }), week, pickers, onClose: () => {} }),
+    );
   const label = (html: string) => text(/<p class="side-panel-label">(.*?)<\/p>/.exec(html)![1]!);
   const title = (html: string) => text(/<h2 [^>]*>(.*?)<\/h2>/.exec(html)![1]!);
   const buttons = (html: string) => [...html.matchAll(/<button [^>]*>(.*?)<\/button>/g)].map((b) => text(b[1]!));
@@ -653,6 +655,56 @@ describe("the Meal panel", () => {
   it("names its main button for what it does", () => {
     expect(buttons(renderAdd("2026-10-30", "this"))).toContain("Add Meal");
     expect(buttons(renderEdit("this"))).toContain("Save");
+  });
+});
+
+describe("the Meal panel with a slot picked", () => {
+  const main: PlannerMealSlot = {
+    id: "slot-1",
+    slotCategoryId: "main",
+    slotCategoryLabel: "Main Dish",
+    slotCategoryArchived: false,
+    food: { content: "empty" },
+    warnings: null,
+  };
+  const panelPickers = { ...pickers, slotCategories: [{ id: "main", label: "Main Dish", kind: "role" as const }] };
+  const renderView = (picking: ComponentProps<typeof EditMealPanelView>["picking"]) =>
+    renderToStaticMarkup(
+      createElement(EditMealPanelView, {
+        meal: meal({ date: "2026-11-03", slots: [main] }),
+        week: "next",
+        pickers: panelPickers,
+        picking,
+        onPicking: () => {},
+        onClose: () => {},
+      }),
+    );
+
+  it("taps a slot on Edit Meal to pick for it", () => {
+    const html = renderView(null);
+    expect(html).toMatch(/<button type="button" class="slot-row-main"[^>]*>.*?Main Dish/);
+  });
+
+  it("replaces the panel's content with the picker, headed Back to the Meal", () => {
+    const html = renderView({ slotId: "slot-1", screen: { kind: "pick" } });
+    expect(text(/<button [^>]*class="side-panel-back"[^>]*>(.*?)<\/button>/.exec(html)![1]!)).toBe("Back to Weekday Lunch");
+    expect(html).not.toContain("side-panel-label");
+    expect(text(/<p class="side-panel-eyebrow">(.*?)<\/p>/.exec(html)![1]!)).toBe("Weekday Lunch · Tue 3 Nov · 12:30");
+    expect(text(/<h2 [^>]*>(.*?)<\/h2>/.exec(html)![1]!)).toBe("Pick for Main Dish");
+    expect(html).toContain("slot-picker-scope");
+  });
+
+  it("stacks nothing on top, and keeps the unsaved form hidden behind", () => {
+    const html = renderView({ slotId: "slot-1", screen: { kind: "category", fromPick: true } });
+    expect(html).not.toContain("<dialog");
+    expect(text(/<h2 [^>]*>(.*?)<\/h2>/.exec(html)![1]!)).toBe("Change Slot Category");
+    expect(html).toMatch(/<div class="meal-panel-content" hidden="">.*<input [^>]*name="hour"/);
+  });
+
+  it("goes back to the Meal once the slot is gone", () => {
+    const html = renderView({ slotId: "removed", screen: { kind: "pick" } });
+    expect(text(/<h2 [^>]*>(.*?)<\/h2>/.exec(html)![1]!)).toBe("Edit Weekday Lunch");
+    expect(html).not.toMatch(/meal-panel-content" hidden/);
   });
 });
 

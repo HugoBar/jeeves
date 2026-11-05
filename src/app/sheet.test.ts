@@ -34,7 +34,7 @@ describe("a confirmation sheet", () => {
 
   it("is a dialog named by its title", () => {
     const labelledBy = /<dialog[^>]*aria-labelledby="([^"]+)"/.exec(html)?.[1];
-    expect(html).toContain(`<h2 id="${labelledBy}">Remove Fish?</h2>`);
+    expect(html).toContain(`<h2 id="${labelledBy}" tabindex="-1">Remove Fish?</h2>`);
   });
 
   it("shows its wording, a Close button and Cancel", () => {
