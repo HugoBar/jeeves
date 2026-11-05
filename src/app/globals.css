@@ -3355,6 +3355,14 @@ a.back-link {
   flex-wrap: wrap;
 }
 
+/* Under why food with no Food Category can't be added: the way to it. */
+.slot-picker-open-food {
+  display: block;
+  margin-top: 8px;
+  color: inherit;
+  font-weight: 600;
+}
+
 /* Change Slot Category: a row per Role and Kind, the picked one in the
    week's accent. */
 .slot-category-choices {

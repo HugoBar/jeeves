@@ -2,7 +2,7 @@
 
 import { Fragment, useActionState, useState } from "react";
 import { flushSync } from "react-dom";
-import { isUnconfirmed, sortMeals, sortMealsByDay, weekToClose } from "@/core/meals";
+import { isUnconfirmed, sortMeals, sortMealsByDay, weekToClose, type NewMealSlotInput } from "@/core/meals";
 import { plannerWeeks } from "@/core/planner";
 import {
   dayHeadingParts,
@@ -19,6 +19,7 @@ import { FormCard } from "../form-card";
 import { SidePanel } from "../side-panel";
 import { useViewerNow } from "../viewer-clock";
 import { createMealAction, type NewMealFormState, type NewMealFormValues } from "./actions";
+import { AddSlotBody, addSlotTitle, addToMealForm, type AddSlotScreen } from "./add-slot";
 import {
   EditMealPanel,
   MealCard,
@@ -408,12 +409,28 @@ export function AddMealPanel({
   onClose: () => void;
 }) {
   const [step, setStep] = useState<AddMealStep>(pickers.templates.length > 0 ? "start" : "scratch");
-  return <AddMealPanelView date={date} week={week} pickers={pickers} step={step} onStep={setStep} onClose={onClose} />;
+  const [addingSlot, setAddingSlot] = useState<AddingSlot | null>(null);
+  return (
+    <AddMealPanelView
+      date={date}
+      week={week}
+      pickers={pickers}
+      step={step}
+      onStep={setStep}
+      addingSlot={addingSlot}
+      onAddingSlot={setAddingSlot}
+      onClose={onClose}
+    />
+  );
 }
 
 // What the panel shows: Add a Meal, New Meal from scratch, or New Meal from
 // the picked Meal Template.
 export type AddMealStep = "start" | "scratch" | { template: TemplateOption };
+
+// Add a slot, open in place of New Meal: its screen, and what takes the slot
+// on New Meal once it is picked.
+export type AddingSlot = { screen: AddSlotScreen; deliver: (slot: NewMealSlotInput) => void };
 
 export function AddMealPanelView({
   date,
@@ -421,6 +438,8 @@ export function AddMealPanelView({
   pickers,
   step,
   onStep,
+  addingSlot,
+  onAddingSlot,
   onClose,
 }: {
   date: string;
@@ -428,6 +447,8 @@ export function AddMealPanelView({
   pickers: Pickers;
   step: AddMealStep;
   onStep: (step: AddMealStep) => void;
+  addingSlot: AddingSlot | null;
+  onAddingSlot: (addingSlot: AddingSlot | null) => void;
   onClose: () => void;
 }) {
   const template = typeof step === "object" ? step.template : undefined;
@@ -437,14 +458,28 @@ export function AddMealPanelView({
       : template
         ? t("planner.panel.newFromTemplateTitle", { template: template.label })
         : t("planner.panel.newTitle");
+  const back = () => onAddingSlot(null);
   return (
     <SidePanel
-      icon={<MealPanelIcon />}
-      label={mealPanelLabel(date, week, "adding")}
-      title={title}
+      {...(addingSlot
+        ? {
+            back: { label: t("planner.picker.backTo", { meal: title }), onBack: back },
+            title: addSlotTitle(addingSlot.screen),
+            screen: `addSlot-${addingSlot.screen.kind}`,
+          }
+        : { icon: <MealPanelIcon />, label: mealPanelLabel(date, week, "adding"), title })}
       className={mealPanelClass(week)}
       onClose={onClose}
     >
+      {addingSlot && (
+        <AddSlotBody
+          pickers={pickers}
+          screen={addingSlot.screen}
+          onScreen={(screen) => onAddingSlot({ ...addingSlot, screen })}
+          add={addToMealForm(pickers, addingSlot.deliver)}
+          onDone={back}
+        />
+      )}
       {step === "start" ? (
         <AddMealStart
           templates={pickers.templates}
@@ -452,7 +487,17 @@ export function AddMealPanelView({
           onFromScratch={() => onStep("scratch")}
         />
       ) : (
-        <AddMealForm date={date} pickers={pickers} template={template} onDone={onClose} />
+        // The same element either way, so New Meal isn't mounted again and
+        // keeps what was typed while a slot is added.
+        <div className="meal-panel-content" hidden={addingSlot !== null}>
+          <AddMealForm
+            date={date}
+            pickers={pickers}
+            template={template}
+            onAddSlot={(deliver) => onAddingSlot({ screen: { kind: "food" }, deliver })}
+            onDone={onClose}
+          />
+        </div>
       )}
     </SidePanel>
   );
@@ -526,11 +571,13 @@ function AddMealForm({
   date,
   pickers,
   template,
+  onAddSlot,
   onDone,
 }: {
   date: string;
   pickers: Pickers;
   template?: TemplateOption;
+  onAddSlot: (deliver: (slot: NewMealSlotInput) => void) => void;
   onDone: () => void;
 }) {
   const [state, action, pending] = useActionState(
@@ -561,6 +608,7 @@ function AddMealForm({
             initial={state.values.slots}
             errors={state.slotErrors}
             hint={copied ? t("planner.slotsFromTemplate", { template: template.label }) : undefined}
+            onAddSlot={onAddSlot}
           />
         }
       />
