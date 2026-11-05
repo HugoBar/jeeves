@@ -10,6 +10,7 @@ import type { CategoryOption } from "../categories/category-options";
 import { ingredientErrorField, ingredientField, RECIPE_ERROR_FIELDS } from "../field-errors";
 import { FormCard } from "../form-card";
 import { FormBanner, useFieldErrors, type InvalidProps } from "../form-error";
+import { StepIcon, stepPortions } from "../stepper";
 import type { RecipeFormState, RecipeFormValues } from "./actions";
 import { CategoryChips } from "./category-chips";
 
@@ -170,19 +171,18 @@ function PortionsStepper({ defaultValue, invalid }: { defaultValue: string; inva
   const input = useRef<HTMLInputElement>(null);
   const step = (by: number) => {
     if (!input.current) return;
-    const portions = Number.parseInt(input.current.value, 10);
-    input.current.value = String(Number.isNaN(portions) ? 1 : Math.max(1, portions + by));
+    input.current.value = stepPortions(input.current.value, by);
   };
   return (
     <>
       <label htmlFor={id}>{t("recipes.portions")}</label>
       <span className="field-joined recipe-stepper">
         <button type="button" aria-label={t("recipes.portionsLess")} onClick={() => step(-1)}>
-          <StepIcon path="M6 12h12" />
+          <StepIcon step="less" />
         </button>
         <input ref={input} id={id} name="portions" inputMode="numeric" defaultValue={defaultValue} {...invalid} />
         <button type="button" aria-label={t("recipes.portionsMore")} onClick={() => step(1)}>
-          <StepIcon path="M6 12h12M12 6v12" />
+          <StepIcon step="more" />
         </button>
       </span>
     </>
@@ -375,14 +375,6 @@ function ingredientErrorMessage(error: IngredientError): string {
         defaultUnit: t(`unit.${error.defaultUnit}`),
       });
   }
-}
-
-function StepIcon({ path }: { path: string }) {
-  return (
-    <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
-      <path d={path} />
-    </svg>
-  );
 }
 
 function CrossIcon() {

@@ -754,6 +754,8 @@ describe("Add a Meal", () => {
         pickers: withTemplates,
         step,
         onStep: () => {},
+        addingSlot: null,
+        onAddingSlot: () => {},
         onClose: () => {},
         ...props,
       }),
@@ -861,6 +863,14 @@ describe("Add a Meal", () => {
     expect(text(html)).toContain("It can't be changed after the Meal is added.");
     expect(text(html)).toContain("Add slots now, or later from the Planner.");
   });
+
+  it("shows Add a slot in New Meal's place, with a way back to it, keeping New Meal hidden", () => {
+    const html = renderView("scratch", { addingSlot: { screen: { kind: "food" }, deliver: () => {} } });
+    expect(title(html)).toBe("Add a slot");
+    expect(html).toMatch(/<button [^>]*>.*?Back to New Meal<\/button>/s);
+    expect(html).toMatch(/meal-panel-content" hidden/);
+    expect(html).toContain('name="hour"');
+  });
 });
 
 describe("the Meal form", () => {
@@ -944,11 +954,11 @@ describe("the Meal form", () => {
       { food: "product:rice", amount: "150", slotCategoryId: "side" },
     ];
     const renderCard = (props: Partial<CardProps> = {}) =>
-      renderToStaticMarkup(createElement(NewMealSlotsCard, { pickers: slotPickers, initial: added, ...props }));
+      renderToStaticMarkup(createElement(NewMealSlotsCard, { pickers: slotPickers, initial: added, onAddSlot: () => {}, ...props }));
     const slotRows = (html: string) => [...html.matchAll(/<li class="(slot-row[^"]*)"[^>]*>(.*?)<\/li>/g)];
 
     it("is the Slots card of a New Meal", () => {
-      const html = renderForm({ slotsCard: createElement(NewMealSlotsCard, { pickers: slotPickers }) });
+      const html = renderForm({ slotsCard: createElement(NewMealSlotsCard, { pickers: slotPickers, onAddSlot: () => {} }) });
       expect(html).toMatch(/<h2>Slots<\/h2><p class="field-hint">Add slots now, or later from the Planner.<\/p>/);
     });
 

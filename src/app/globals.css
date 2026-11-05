@@ -3240,8 +3240,7 @@ a.back-link {
   text-align: left;
 }
 
-.slot-picker-option-text,
-.slot-picker-picked {
+.slot-picker-option-text {
   display: flex;
   flex-direction: column;
   gap: 2px;
@@ -3300,14 +3299,68 @@ a.back-link {
   padding-top: 4px;
 }
 
+/* The picked food, with Change at its end. */
 .slot-picker-picked {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
   padding: 12px 14px;
   border-radius: 14px;
   background: var(--color-inset);
 }
 
+.slot-picker-picked button {
+  flex: none;
+}
+
+/* Portions between round - and + buttons. */
+.slot-picker-stepper {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.slot-picker-stepper button {
+  flex: none;
+  width: 44px;
+  padding: 0;
+}
+
+/* The number shows bare, as the board has it, until it is refused. */
+.slot-picker-stepper input:not([type="checkbox"], [aria-invalid="true"]) {
+  border-color: transparent;
+  background: transparent;
+}
+
+.slot-picker-stepper input:not([type="checkbox"]) {
+  width: 3em;
+  font-size: 22px;
+  font-weight: 600;
+  text-align: center;
+}
+
+/* A Product's quantity, its Default Unit beside the field. */
+.slot-picker-quantity {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.slot-picker-quantity input:not([type="checkbox"]) {
+  width: 8em;
+}
+
 .slot-picker-foot {
   flex-wrap: wrap;
+}
+
+/* Under why food with no Food Category can't be added: the way to it. */
+.slot-picker-open-food {
+  display: block;
+  margin-top: 8px;
+  color: inherit;
+  font-weight: 600;
 }
 
 /* Change Slot Category: a row per Role and Kind, the picked one in the

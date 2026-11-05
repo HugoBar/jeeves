@@ -11,6 +11,7 @@ import { t } from "@/strings";
 export function Sheet({
   eyebrow,
   title,
+  screen = title,
   className,
   busy = false,
   onClose,
@@ -18,6 +19,8 @@ export function Sheet({
 }: {
   eyebrow?: string;
   title: string;
+  // Which screen it shows, when screens share a title, as Add a slot's do.
+  screen?: string;
   // Added to "sheet", for a sheet laid out its own way.
   className?: string;
   busy?: boolean;
@@ -29,15 +32,15 @@ export function Sheet({
   const heading = useRef<HTMLHeadingElement>(null);
   const titleId = useId();
 
-  // A new title is a new screen in the sheet, as when the slot picker moves
-  // on to Change Slot Category: the focus goes to it, since what was tapped
-  // is gone.
-  const shownTitle = useRef(title);
+  // A new screen in the sheet, as when the slot picker moves on to Change
+  // Slot Category: the focus goes to its title, since what was tapped is
+  // gone.
+  const shownScreen = useRef(screen);
   useEffect(() => {
-    if (shownTitle.current === title) return;
-    shownTitle.current = title;
+    if (shownScreen.current === screen) return;
+    shownScreen.current = screen;
     if (!dialog.current?.contains(document.activeElement)) heading.current?.focus();
-  }, [title]);
+  }, [screen]);
 
   useEffect(() => {
     if (dialog.current && !dialog.current.open) {

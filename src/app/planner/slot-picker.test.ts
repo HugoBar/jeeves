@@ -149,10 +149,19 @@ describe("how much of the picked food", () => {
   it("asks a Recipe's Portions, starting at the Recipe's own", () => {
     const html = render({ screen: { kind: "amount", content: "recipe", id: "curry" } });
     expect(title(html)).toBe("How many Portions?");
-    expect(text(/<div class="slot-picker-picked">(.*?)<\/div>/.exec(html)![1]!)).toBe("Chicken curry Recipe · makes 4");
+    expect(text(/<div class="slot-picker-picked">(.*?)<\/div>/.exec(html)![1]!)).toBe("Chicken curry Recipe · makes 4 Change");
     expect(field(html)).toContain('value="4"');
     expect(html).toMatch(/<input type="hidden" name="food" value="recipe:curry"/);
     expect(text(/<label [^>]*>(.*?)<\/label>/.exec(html)![1]!)).toBe("Portions");
+  });
+
+  it("steps a Recipe's Portions with - and +, saying the Recipe's own is the default", () => {
+    const html = render({ screen: { kind: "amount", content: "recipe", id: "curry" } });
+    const labels = [...html.matchAll(/<button [^>]*aria-label="([^"]*)"/g)].map((button) => button[1]);
+    expect(labels).toEqual(expect.arrayContaining(["One portion less", "One portion more"]));
+    expect(html.indexOf("One portion less")).toBeLessThan(html.indexOf('name="amount"'));
+    expect(html.indexOf('name="amount"')).toBeLessThan(html.indexOf("One portion more"));
+    expect(text(html)).toContain("The Recipe makes 4, so that's the default. Ingredients scale with Portions.");
   });
 
   it("asks a Product's quantity in its Default Unit, starting empty", () => {
@@ -162,13 +171,21 @@ describe("how much of the picked food", () => {
     expect(text(html)).toContain("Quantity pc");
   });
 
+  it("names the Product's Default Unit on the picked food and under the field", () => {
+    const html = render({ screen: { kind: "amount", content: "product", id: "pizza" } });
+    expect(text(/<div class="slot-picker-picked">(.*?)<\/div>/.exec(html)![1]!)).toBe("Frozen pizza Product · Default Unit pc Change");
+    expect(text(html)).toContain("In Frozen pizza's Default Unit.");
+  });
+
   it("starts at what the slot holds when it holds the same food", () => {
     const held = slot({ food: { content: "product", id: "pizza", label: "Frozen pizza", quantity: 2, defaultUnit: "pc", archived: false } });
     expect(field(render({ slot: held, screen: { kind: "amount", content: "product", id: "pizza" } }))).toContain('value="2"');
   });
 
-  it("offers Back and Add to slot", () => {
-    expect(buttons(render({ screen: { kind: "amount", content: "recipe", id: "curry" } }))).toEqual(["Back", "Add to slot"]);
+  it("offers Change on the picked food, then Back and Add to slot", () => {
+    const html = render({ screen: { kind: "amount", content: "recipe", id: "curry" } });
+    expect(buttons(html)).toEqual(["Change", "Back", "Add to slot"]);
+    expect(/<div class="slot-picker-picked">.*?<\/div>/.exec(html)![0]).toMatch(/<button [^>]*>Change<\/button>/);
   });
 });
 
