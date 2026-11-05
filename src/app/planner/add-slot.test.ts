@@ -183,6 +183,18 @@ describe("Add a slot, for food with no Food Category", () => {
     );
   });
 
+  // The planner offers only Food Categories that are not Archived.
+  it("treats food carrying only Archived categories as having none", () => {
+    const archivedOnly = {
+      ...pickers,
+      slotFoods: { ...pickers.slotFoods, products: [{ id: "veal", label: "Veal", defaultUnit: "g" as const, categoryIds: ["red-meat"] }] },
+    };
+    expect(afterFood("product:veal", archivedOnly)).toEqual({ kind: "category", food: "product:veal" });
+    expect(text(render({ pickers: archivedOnly, screen: { kind: "category", food: "product:veal" } }))).toContain(
+      "Veal Product · g · no Food Category",
+    );
+  });
+
   it("offers only Back, so it can't be added", () => {
     expect(buttons(render({ screen: none }))).toEqual(["Change", "Back"]);
   });
