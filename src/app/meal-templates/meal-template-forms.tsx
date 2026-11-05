@@ -1,7 +1,8 @@
 "use client";
 
 import { useActionState, useState } from "react";
-import { moveSlot, type MealTemplateContent } from "@/core/meal-templates";
+import type { MealTemplateContent } from "@/core/meal-templates";
+import { moveSlot, type SlotMove } from "@/core/slot-order";
 import { t } from "@/strings";
 import { groupCategoriesByKind } from "../categories/category-groups";
 import type { CategoryOption } from "../categories/category-options";
@@ -193,7 +194,7 @@ function SlotRows({ state, slotCategories }: { state: MealTemplateFormState; slo
   const add = () =>
     setSlots((current) => [...current, ...toSlots([""]).map((slot) => ({ ...slot, submittedRow: null }))]);
   const remove = (key: string) => setSlots((current) => current.filter((slot) => slot.key !== key));
-  const move = (index: number, offset: -1 | 1) => setSlots((current) => moveSlot(current, index, offset));
+  const move = (index: number, by: SlotMove) => setSlots((current) => moveSlot(current, index, by));
   const { invalid, messages } = useFieldErrors(state.slotErrors, templateSlotErrorField, (error) =>
     t(`mealTemplates.error.${error.code}`, { row: error.row }),
   );

@@ -1,6 +1,6 @@
 "use client";
 
-import { Fragment, useActionState, useEffect, useId, useRef, useState, type ReactNode } from "react";
+import { Fragment, startTransition, useActionState, useEffect, useId, useOptimistic, useRef, useState, type ReactNode } from "react";
 import {
   canChangeMeal,
   canReopen,
@@ -18,6 +18,7 @@ import {
   type NewMealSlotRowError,
 } from "@/core/meals";
 import type { CategoryKind } from "@/core/food-categories";
+import { moveSlot, type SlotMove } from "@/core/slot-order";
 import type { AddedBack } from "@/db/confirmation";
 import { localDate, localHour, type Week } from "@/core/planner";
 import { shortfallUrgency } from "@/core/projected-stock";
@@ -34,6 +35,7 @@ import { AddSlotSheet } from "./add-slot";
 import {
   confirmMealAction,
   editMealAction,
+  moveMealSlotAction,
   removeMealAction,
   reopenMealAction,
   skipMealAction,
@@ -760,32 +762,47 @@ export function NewMealSlotsCard({
   );
   const nextKey = useRef(initial.length);
   const names = MEAL_FORM_SLOT_FIELDS;
+  const { list, focusAfterMove } = useMoveFocus(slots.map((slot) => String(slot.key)));
 
   return (
     <FormCard title={t("planner.slots")} hint={hint}>
       {slots.length > 0 && (
-        <ol className="slot-list">
+        <ol ref={list} className="slot-list">
           {slots.map(({ key, input, error }, index) => {
             const slot = draftSlot(String(key), input, pickers, archivedCategories);
             const empty = slot.food.content === "empty" && !input.food;
             return (
-              <li key={key} className={empty ? "slot-row slot-row-dashed meal-form-slot" : "slot-row meal-form-slot"}>
+              <li
+                key={key}
+                className={`slot-row${empty ? " slot-row-dashed" : ""} meal-form-slot meal-form-slot-removable`}
+              >
                 <div className="slot-row-main">
                   <SlotSummary slot={slot} showAmount chevron={false} />
-                  {/* On the food's line, as the design has it: × takes the top.
+                  {/* On the food's line, as the design has it: ▲ ▼ × take the top.
                       An empty slot has nothing to pick on the form yet. */}
                   {!empty && <ChevronIcon />}
                 </div>
-                <button
-                  type="button"
-                  className="meal-form-slot-remove"
-                  aria-label={t("planner.newMeal.removeSlot", { category: slot.slotCategoryLabel })}
-                  onClick={() => setSlots(slots.filter((slot) => slot.key !== key))}
+                <SlotTools
+                  slotKey={String(key)}
+                  category={slot.slotCategoryLabel}
+                  index={index}
+                  count={slots.length}
+                  onMove={(offset) => {
+                    focusAfterMove(String(key), index + offset);
+                    setSlots(moveSlot(slots, index, offset));
+                  }}
                 >
-                  <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-                    <path d="M6 6l12 12M18 6L6 18" />
-                  </svg>
-                </button>
+                  <button
+                    type="button"
+                    className="meal-form-slot-remove"
+                    aria-label={t("planner.newMeal.removeSlot", { category: slot.slotCategoryLabel })}
+                    onClick={() => setSlots(slots.filter((slot) => slot.key !== key))}
+                  >
+                    <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                      <path d="M6 6l12 12M18 6L6 18" />
+                    </svg>
+                  </button>
+                </SlotTools>
                 <input type="hidden" name={names.food} value={input.food} />
                 <input type="hidden" name={names.amount} value={input.amount} />
                 <input type="hidden" name={names.slotCategoryId} value={input.slotCategoryId} />
@@ -813,6 +830,134 @@ export function NewMealSlotsCard({
         {t("planner.newMeal.addSlot")}
       </button>
     </FormCard>
+  );
+}
+
+// ▲ and ▼ at the top right of a slot on the Meal form, named for its Slot
+// Category, then `children`: New Meal's ×. The first slot's ▲ and the last
+// slot's ▼ are disabled.
+function SlotTools({
+  slotKey,
+  category,
+  index,
+  count,
+  onMove,
+  children,
+}: {
+  slotKey: string;
+  category: string;
+  index: number;
+  count: number;
+  onMove: (offset: SlotMove) => void;
+  children?: ReactNode;
+}) {
+  return (
+    <div className="meal-form-slot-tools">
+      <button
+        type="button"
+        data-move={`${slotKey}:-1`}
+        aria-label={t("planner.moveSlotUp", { category })}
+        disabled={index === 0}
+        onClick={() => onMove(-1)}
+      >
+        <svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+          <path d="M12 5l9 14H3z" />
+        </svg>
+      </button>
+      <button
+        type="button"
+        data-move={`${slotKey}:1`}
+        aria-label={t("planner.moveSlotDown", { category })}
+        disabled={index === count - 1}
+        onClick={() => onMove(1)}
+      >
+        <svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+          <path d="M12 19L3 5h18z" />
+        </svg>
+      </button>
+      {children}
+    </div>
+  );
+}
+
+// Keeps the focus on a moved slot's ▲ or ▼ once its row is in its new place,
+// or on the other one when that is now disabled. `keys` are the slots in the
+// order shown; `focusAfterMove` takes the slot and the place it is going to.
+function useMoveFocus(keys: readonly string[]) {
+  const list = useRef<HTMLOListElement>(null);
+  const pending = useRef<{ key: string; to: number; offset: SlotMove } | null>(null);
+  useEffect(() => {
+    const move = pending.current;
+    if (!move || keys.indexOf(move.key) !== move.to) return;
+    pending.current = null;
+    const button = (offset: SlotMove) =>
+      list.current?.querySelector<HTMLButtonElement>(`[data-move="${CSS.escape(`${move.key}:${offset}`)}"]`);
+    const pressed = button(move.offset);
+    (pressed && !pressed.disabled ? pressed : button(move.offset === -1 ? 1 : -1))?.focus();
+  });
+  const focusAfterMove = (key: string, to: number) => {
+    pending.current = { key, to, offset: to < keys.indexOf(key) ? -1 : 1 };
+  };
+  return { list, focusAfterMove };
+}
+
+// Edit Meal's slots. A tap opens the slot picker when `onPickSlot` is given,
+// and ▲ or ▼ saves the slot's new place straight away when `onMoveSlot` is,
+// showing it there while it saves.
+function EditMealSlotList({
+  slots,
+  onPickSlot,
+  onMoveSlot,
+}: {
+  slots: PlannerMealSlot[];
+  onPickSlot?: (slot: PlannerMealSlot) => void;
+  onMoveSlot?: (slot: PlannerMealSlot, offset: SlotMove) => Promise<void>;
+}) {
+  const [shown, move] = useOptimistic(slots, (current, { index, offset }: { index: number; offset: SlotMove }) =>
+    moveSlot(current, index, offset),
+  );
+  const { list, focusAfterMove } = useMoveFocus(shown.map((slot) => slot.id));
+  return (
+    <ol ref={list} className="slot-list">
+      {shown.map((slot, index) => {
+        const empty = slot.food.content === "empty";
+        const dashed = empty || slot.slotCategoryArchived;
+        // On the food's line, as on New Meal. An empty slot has none, so its
+        // chevron stays by "Not chosen yet", clear of ▲ ▼.
+        const chevron = onPickSlot !== undefined && !slot.slotCategoryArchived;
+        const summary = <SlotSummary slot={slot} showAmount chevron={chevron && empty} />;
+        return (
+          <li
+            key={slot.id}
+            className={`slot-row${dashed ? " slot-row-dashed" : ""}${onMoveSlot ? " meal-form-slot" : ""}`}
+          >
+            {onPickSlot ? (
+              <button type="button" className="slot-row-main" onClick={() => onPickSlot(slot)}>
+                {summary}
+                {chevron && !empty && <ChevronIcon />}
+              </button>
+            ) : (
+              <div className="slot-row-main">{summary}</div>
+            )}
+            {onMoveSlot && (
+              <SlotTools
+                slotKey={slot.id}
+                category={slot.slotCategoryLabel}
+                index={index}
+                count={shown.length}
+                onMove={(offset) => {
+                  focusAfterMove(slot.id, index + offset);
+                  startTransition(async () => {
+                    move({ index, offset });
+                    await onMoveSlot(slot, offset);
+                  });
+                }}
+              />
+            )}
+          </li>
+        );
+      })}
+    </ol>
   );
 }
 
@@ -973,6 +1118,7 @@ export function MealFormFields({
   slotsCard,
   editing,
   onPickSlot,
+  onMoveSlot,
 }: {
   errors: MealFieldError[];
   slotErrors?: NewMealSlotRowError[];
@@ -983,6 +1129,8 @@ export function MealFormFields({
   editing?: Pick<PlannerMeal, "mealTypeLabel" | "slots">;
   // Opens the slot picker for a slot of the Meal being edited.
   onPickSlot?: (slot: PlannerMealSlot) => void;
+  // Saves a slot of the Meal being edited one place up (-1) or down (1).
+  onMoveSlot?: (slot: PlannerMealSlot, offset: SlotMove) => Promise<void>;
 }) {
   const [picked, setPicked] = useState(values.mealTypeId ?? "");
   const { invalid, messages } = useMealErrors(errors);
@@ -1057,24 +1205,7 @@ export function MealFormFields({
       {editing ? (
         <FormCard title={t("planner.slots")}>
           {editing.slots.length > 0 ? (
-            <ol className="slot-list">
-              {editing.slots.map((slot) => (
-                <li
-                  key={slot.id}
-                  className={slot.food.content === "empty" || slot.slotCategoryArchived ? "slot-row slot-row-dashed" : "slot-row"}
-                >
-                  {onPickSlot ? (
-                    <button type="button" className="slot-row-main" onClick={() => onPickSlot(slot)}>
-                      <SlotSummary slot={slot} showAmount chevron={!slot.slotCategoryArchived} />
-                    </button>
-                  ) : (
-                    <div className="slot-row-main">
-                      <SlotSummary slot={slot} showAmount chevron={false} />
-                    </div>
-                  )}
-                </li>
-              ))}
-            </ol>
+            <EditMealSlotList slots={editing.slots} onPickSlot={onPickSlot} onMoveSlot={onMoveSlot} />
           ) : (
             <p className="meal-form-no-slots">{t("planner.noSlots")}</p>
           )}
@@ -1170,6 +1301,7 @@ function EditMealForm({
         mealTypes={[]}
         editing={meal}
         onPickSlot={onPickSlot}
+        onMoveSlot={(slot, offset) => moveMealSlotAction(slot.id, offset)}
       />
       <MealPanelActions submitLabel={t("planner.save")} pending={pending} onCancel={onDone} />
     </form>

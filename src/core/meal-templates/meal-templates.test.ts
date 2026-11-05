@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { moveSlot, parseTemplateSlots, parseMealTemplateFields, sortMealTemplates } from "./index";
+import { parseTemplateSlots, parseMealTemplateFields, sortMealTemplates } from "./index";
 
 // The Meal Types a template can have in these tests.
 const pickable = new Set(["lunch-id"]);
@@ -123,21 +123,3 @@ describe("parseTemplateSlots rejects", () => {
   });
 });
 
-describe("moveSlot", () => {
-  const slots = ["Starter", "Main Dish", "Dessert"];
-
-  it("moves a slot up one place", () => {
-    expect(moveSlot(slots, 1, -1)).toEqual(["Main Dish", "Starter", "Dessert"]);
-  });
-
-  it("moves a slot down one place", () => {
-    expect(moveSlot(slots, 1, 1)).toEqual(["Starter", "Dessert", "Main Dish"]);
-  });
-
-  it.each([
-    [0, -1],
-    [2, 1],
-  ] as const)("leaves the order alone when slot %i cannot move by %i", (index, offset) => {
-    expect(moveSlot(slots, index, offset)).toEqual(slots);
-  });
-});

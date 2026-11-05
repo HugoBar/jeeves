@@ -3648,8 +3648,8 @@ a.back-link {
   text-align: center;
 }
 
-/* A slot added on New Meal: × to remove it at its top right, and why it was
-   refused under it. */
+/* A slot on the Meal form: ▲ ▼ to move it at its top right, then × to remove
+   it on New Meal, and why it was refused under it. */
 /* Not wrapping: in a column, the error's full-width basis would wrap it into
    a second column. */
 .slot-list > .meal-form-slot {
@@ -3662,23 +3662,45 @@ a.back-link {
   padding-right: 52px;
 }
 
-/* The chevron sits at the right of the food's line, under the ×. */
+/* The pill's line leaves room for ▲ ▼, and × on New Meal. */
+.meal-form-slot .slot-row-top {
+  padding-right: 36px;
+}
+
+.meal-form-slot-removable .slot-row-top {
+  padding-right: 80px;
+}
+
+/* The chevron sits at the right of the food's line, under ▲ ▼, and × on New Meal. */
 .meal-form-slot .slot-row-main > .slot-row-chevron {
   position: absolute;
   right: 14px;
   bottom: 14px;
 }
 
-.meal-form-slot-remove {
-  --button-bg: transparent;
-  --button-line: transparent;
-  --button-ink: var(--color-icon-muted);
+.meal-form-slot-tools {
   position: absolute;
   top: 0;
   right: 0;
+  display: flex;
+}
+
+.meal-form-slot-tools > button {
+  --button-bg: transparent;
+  --button-line: transparent;
+  --button-ink: var(--color-ink-soft);
   width: 44px;
   min-height: 44px;
   padding: 0;
+}
+
+.meal-form-slot-tools > button:disabled {
+  --button-bg: transparent;
+  --button-ink: var(--color-line-disabled);
+}
+
+.meal-form-slot-tools > .meal-form-slot-remove {
+  --button-ink: var(--color-icon-muted);
 }
 
 .meal-form-slot > .form-error {

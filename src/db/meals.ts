@@ -1,5 +1,5 @@
 import "server-only";
-import { and, asc, eq, gt, gte, inArray, lt, lte, max, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gt, gte, inArray, lt, lte, max, sql } from "drizzle-orm";
 import {
   type MealChanges,
   type MealFormSlot,
@@ -8,6 +8,7 @@ import {
   type MealStatus,
   type NewMealFields,
 } from "@/core/meals";
+import type { SlotMove } from "@/core/slot-order";
 import type { DefaultUnit } from "@/core/units";
 import type { FoodCategory } from "./food-categories";
 import type { Db } from "./index";
@@ -234,6 +235,40 @@ export async function removeMealSlot(db: Db, slotId: string): Promise<void> {
     for (const slot of after) {
       await tx.update(mealSlots).set({ position: slot.position - 1 }).where(eq(mealSlots.id, slot.id));
     }
+  });
+}
+
+// The slot swapped with the one just above it (`move` -1) or below it (1),
+// renumbering the two (data-model T5). The unique (meal, position) index is
+// checked row by row, so the slot steps aside to -1 first. False, moving
+// nothing, if the slot is gone, already first or last, or its Meal is
+// Confirmed or Skipped.
+export async function moveMealSlot(db: Db, slotId: string, move: SlotMove): Promise<boolean> {
+  return db.transaction(async (tx) => {
+    const [slot] = await tx
+      .select({ mealId: mealSlots.mealId, position: mealSlots.position })
+      .from(mealSlots)
+      .innerJoin(meals, eq(mealSlots.mealId, meals.id))
+      .where(and(eq(mealSlots.id, slotId), eq(meals.status, "planned")))
+      // Holds the Meal, so another move on it or its Confirmation waits.
+      .for("update", { of: meals });
+    if (!slot) return false;
+    const [neighbour] = await tx
+      .select({ id: mealSlots.id, position: mealSlots.position })
+      .from(mealSlots)
+      .where(
+        and(
+          eq(mealSlots.mealId, slot.mealId),
+          move < 0 ? lt(mealSlots.position, slot.position) : gt(mealSlots.position, slot.position),
+        ),
+      )
+      .orderBy(move < 0 ? desc(mealSlots.position) : asc(mealSlots.position))
+      .limit(1);
+    if (!neighbour) return false;
+    await tx.update(mealSlots).set({ position: -1 }).where(eq(mealSlots.id, slotId));
+    await tx.update(mealSlots).set({ position: slot.position }).where(eq(mealSlots.id, neighbour.id));
+    await tx.update(mealSlots).set({ position: neighbour.position }).where(eq(mealSlots.id, slotId));
+    return true;
   });
 }
 

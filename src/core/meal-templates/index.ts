@@ -63,16 +63,6 @@ export function parseTemplateSlots(slotCategoryIds: string[], pickable: Readonly
   return errors.length ? { ok: false, errors } : { ok: true, slotCategoryIds };
 }
 
-// The slots with the one at `index` moved `offset` places (-1 up, 1 down). A
-// slot already at the top or bottom stays put.
-export function moveSlot<T>(slots: readonly T[], index: number, offset: -1 | 1): T[] {
-  const target = index + offset;
-  if (target < 0 || target >= slots.length) return [...slots];
-  const moved = [...slots];
-  [moved[index], moved[target]] = [moved[target]!, moved[index]!];
-  return moved;
-}
-
 // Earliest hour first; "HH:MM" text sorts as time does. Ties go alphabetically
 // by name, ignoring case.
 export function sortMealTemplates<T extends { name: string; hour: string }>(templates: readonly T[]): T[] {
