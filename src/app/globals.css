@@ -2871,6 +2871,15 @@ a.back-link {
   flex: 1 1 auto;
 }
 
+/* On desktop a slot is added from the Meal menu, so + Slot goes, and a foot
+   left with nothing in it goes too. */
+@media (min-width: 768px) {
+  .meal-card-add,
+  .meal-card-foot:not(:has(> :not(.meal-card-add))) {
+    display: none;
+  }
+}
+
 .meal-card-confirm.button-warning {
   font-size: var(--text-body);
 }
