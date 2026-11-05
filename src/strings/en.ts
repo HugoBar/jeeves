@@ -131,6 +131,8 @@ export const en = {
   "planner.slotsFromTemplate": "Copied from {template}, all empty.",
   "planner.newMeal.addSlot": "Add slot",
   "planner.newMeal.removeSlot": "Remove {category} slot",
+  "planner.moveSlotUp": "Move {category} up",
+  "planner.moveSlotDown": "Move {category} down",
   "planner.error.slot": "Slot {row} ({food}): {reason}",
   "planner.error.slotNoFood": "Slot {row}: {reason}",
   "planner.trackingAndRepeat": "Tracking and repeat",

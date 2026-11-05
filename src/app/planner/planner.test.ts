@@ -25,6 +25,13 @@ const render = (props: Partial<Props> = {}) =>
 const text = (markup: string) =>
   markup.replace(/<[^>]+>/g, " ").replace(/&#x27;/g, "'").replace(/\s+/g, " ").trim();
 
+// Each ▲ or ▼ on a Meal form's slots, in order, by its name.
+const moveButtons = (html: string) =>
+  [...html.matchAll(/<button type="button"[^>]*aria-label="(Move [^"]*)"[^>]*>/g)].map((m) => ({
+    label: m[1],
+    disabled: /\sdisabled=""/.test(m[0]),
+  }));
+
 const meal = (overrides: Partial<PlannerMeal> = {}): PlannerMeal => ({
   id: "meal-1",
   date: today,
@@ -685,6 +692,30 @@ describe("the Meal panel with a slot picked", () => {
     expect(html).toMatch(/<button type="button" class="slot-row-main"[^>]*>.*?Main Dish/);
   });
 
+  it("offers ▲ and ▼ on each slot on Edit Meal, with the first's ▲ and the last's ▼ disabled", () => {
+    const side = { ...main, id: "slot-2", slotCategoryId: "side", slotCategoryLabel: "Side Dish" };
+    const html = renderToStaticMarkup(
+      createElement(EditMealPanelView, {
+        meal: meal({ slots: [main, side] }),
+        week: "this",
+        pickers: panelPickers,
+        picking: null,
+        onPicking: () => {},
+        onClose: () => {},
+      }),
+    );
+    expect(moveButtons(html)).toEqual([
+      { label: "Move Main Dish up", disabled: true },
+      { label: "Move Main Dish down", disabled: false },
+      { label: "Move Side Dish up", disabled: false },
+      { label: "Move Side Dish down", disabled: true },
+    ]);
+  });
+
+  it("disables both on a Meal's only slot", () => {
+    expect(moveButtons(renderView(null)).map((button) => button.disabled)).toEqual([true, true]);
+  });
+
   it("replaces the panel's content with the picker, headed Back to the Meal", () => {
     const html = renderView({ slotId: "slot-1", screen: { kind: "pick" } });
     expect(text(/<button [^>]*class="side-panel-back"[^>]*>(.*?)<\/button>/.exec(html)![1]!)).toBe("Back to Weekday Lunch");
@@ -973,6 +1004,15 @@ describe("the Meal form", () => {
       const rows = slotRows(renderCard());
       expect(rows.map((row) => text(row[2]!))).toEqual(["Main Dish 4 portions Chicken curry", "Side Dish 150 g Basmati rice"]);
       expect(rows[0]![2]).toMatch(/<button type="button"[^>]*aria-label="Remove Main Dish slot"/);
+    });
+
+    it("offers ▲ and ▼ on each added slot, named for it, with the first's ▲ and the last's ▼ disabled", () => {
+      expect(moveButtons(renderCard())).toEqual([
+        { label: "Move Main Dish up", disabled: true },
+        { label: "Move Main Dish down", disabled: false },
+        { label: "Move Side Dish up", disabled: false },
+        { label: "Move Side Dish down", disabled: true },
+      ]);
     });
 
     it("shows a chevron on each added slot, as the Planner's slots have", () => {
