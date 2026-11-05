@@ -43,6 +43,15 @@ export function SidePanel({
     };
   }, [opener]);
 
+  // A new title is a new screen in the panel, as when Add a Meal moves on to
+  // New Meal: the focus goes to it, since what was tapped is gone.
+  const shownTitle = useRef(title);
+  useEffect(() => {
+    if (shownTitle.current === title) return;
+    shownTitle.current = title;
+    heading.current?.focus();
+  }, [title]);
+
   // Escape closes it wherever the focus is, as the page beside it stays
   // usable. On the window, so a menu or sheet that takes Escape first and
   // marks it handled keeps the panel open.
