@@ -1,7 +1,6 @@
 import "server-only";
 import { and, asc, eq, gt, gte, inArray, lt, lte, max, sql } from "drizzle-orm";
 import {
-  slotKeepsFood,
   type MealChanges,
   type MealFormSlot,
   type MealSlotContent,
@@ -10,7 +9,7 @@ import {
   type NewMealFields,
 } from "@/core/meals";
 import type { DefaultUnit } from "@/core/units";
-import { activeCategoryIdsByProduct, type FoodCategory } from "./food-categories";
+import type { FoodCategory } from "./food-categories";
 import type { Db } from "./index";
 import type { MealType } from "./meal-types";
 import { listActiveProducts } from "./products";
@@ -239,29 +238,10 @@ export async function removeMealSlot(db: Db, slotId: string): Promise<void> {
 }
 
 // The Slot Category must already be checked by core's parseMealSlotCategory.
-// A Recipe or Product that does not carry the new one is taken out, emptying
-// the slot; Leftovers stay.
+// What the slot holds stays, even food that does not carry the new one: only
+// what fills it from now on must.
 export async function setMealSlotCategory(db: Db, slotId: string, slotCategoryId: string): Promise<void> {
-  await db.transaction(async (tx) => {
-    const [slot] = await tx
-      .select({ content: mealSlots.content, recipeId: mealSlots.recipeId, productId: mealSlots.productId })
-      .from(mealSlots)
-      .where(eq(mealSlots.id, slotId));
-    if (!slot) return;
-    const keeps = slotKeepsFood(slot.content, await foodCategoryIds(tx, slot), slotCategoryId);
-    await tx
-      .update(mealSlots)
-      .set(keeps ? { slotCategoryId } : { slotCategoryId, content: "empty", ...NO_FOOD })
-      .where(eq(mealSlots.id, slotId));
-  });
-}
-
-// The non-Archived Food Categories of a slot's Recipe (final, after
-// overrides) or Product; none for anything else.
-async function foodCategoryIds(db: Db, slot: { recipeId: string | null; productId: string | null }): Promise<string[]> {
-  if (slot.recipeId) return (await finalCategoryIdsByRecipe(db, [slot.recipeId])).get(slot.recipeId)!;
-  if (slot.productId) return (await activeCategoryIdsByProduct(db, [slot.productId])).get(slot.productId)!;
-  return [];
+  await db.update(mealSlots).set({ slotCategoryId }).where(eq(mealSlots.id, slotId));
 }
 
 // What checking a change to a slot needs: its Slot Category, its Meal's

@@ -257,19 +257,6 @@ export function slotCategoryChoices<T extends { id: string; kind: CategoryKind }
   return roles.length > 0 ? roles : carried;
 }
 
-// Whether a slot keeps what it holds when its Slot Category changes: a Recipe
-// or Product only if it carries the new one. Leftovers have no Food
-// Categories, so they always stay. `foodCategoryIds` is the Recipe's final or
-// the Product's Food Categories.
-export function slotKeepsFood(
-  content: MealSlotContent,
-  foodCategoryIds: readonly string[],
-  slotCategoryId: string,
-): boolean {
-  if (content === "recipe" || content === "product") return foodCategoryIds.includes(slotCategoryId);
-  return true;
-}
-
 export type MealChangesResult = { ok: true; changes: MealChanges } | { ok: false; errors: "invalidHour"[] };
 
 export function parseMealChanges(input: { hour: string; name: string; untracked: boolean }): MealChangesResult {

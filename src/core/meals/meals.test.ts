@@ -20,7 +20,6 @@ import {
   confirmOrSkipAsksFirst,
   slotCategoryChoices,
   slotFoodValue,
-  slotKeepsFood,
   sortMeals,
   sortMealsByDay,
 } from "./index";
@@ -389,24 +388,6 @@ describe("parseNewMealSlots", () => {
         errors: [{ row: 1, code: "unavailableSlotCategory" }],
       });
     });
-  });
-});
-
-describe("slotKeepsFood", () => {
-  it("keeps a Recipe or Product carrying the new Slot Category", () => {
-    expect(slotKeepsFood("recipe", ["grains", "vegetables"], "vegetables")).toBe(true);
-    expect(slotKeepsFood("product", ["fruit"], "fruit")).toBe(true);
-  });
-
-  it("drops a Recipe or Product not carrying it", () => {
-    expect(slotKeepsFood("recipe", ["grains"], "fruit")).toBe(false);
-    expect(slotKeepsFood("product", [], "fruit")).toBe(false);
-  });
-
-  // Leftovers have no Food Categories, so no Slot Category rules them out.
-  it("keeps Leftovers and an empty slot whatever the Slot Category", () => {
-    expect(slotKeepsFood("leftovers", [], "fruit")).toBe(true);
-    expect(slotKeepsFood("empty", [], "fruit")).toBe(true);
   });
 });
 
