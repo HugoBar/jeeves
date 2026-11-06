@@ -10,7 +10,7 @@ import {
 } from "./confirmation";
 import { listActiveCategories } from "./food-categories";
 import { listActiveMealTypes } from "./meal-types";
-import { createMeal, deleteMeal, getMeal, updateMeal } from "./meals";
+import { createMeal, deleteMeal, fillMealSlot, getMeal, updateMeal } from "./meals";
 import { createProduct, getProduct, removeProduct } from "./products";
 import { loadStockProjection } from "./projected-stock";
 import { createRecipe, removeRecipe } from "./recipes";
@@ -100,8 +100,8 @@ describe("confirmMeal", () => {
     ]);
   });
 
-  // A slot keeps them, and they were still eaten.
-  it("deducts Archived Recipes and Products a slot keeps", async () => {
+  // A Meal whose day has passed keeps them, and they were still eaten.
+  it("deducts Archived Recipes and Products a past Meal's slot keeps", async () => {
     const lentils = await aProduct("Lentils", 500, { defaultUnit: "g", density: null });
     const recipe = await createRecipe(db, {
       name: "Dal",
@@ -112,13 +112,59 @@ describe("confirmMeal", () => {
       ingredients: [{ productId: lentils.id, amount: 200, unit: "g", minor: false }],
       categoryOverrides: [],
     });
-    const meal = await aMeal(TODAY, [{ content: "recipe", recipeId: recipe.id, portions: 2 }]);
+    const meal = await aMeal("2026-10-27", [{ content: "recipe", recipeId: recipe.id, portions: 2 }]);
     await removeRecipe(db, recipe.id);
     await removeProduct(db, lentils.id);
 
     await confirmMeal(db, meal.id, { untracked: false, today: TODAY });
 
     expect(await getProduct(db, lentils.id)).toMatchObject({ stock: 300 });
+  });
+
+  // A stale page may still show the Confirm button.
+  it("refuses a Meal today with an Archived Recipe or Product, either outcome, writing nothing", async () => {
+    const oats = await aProduct("Porridge oats", 500, { defaultUnit: "g", density: null });
+    const recipe = await createRecipe(db, {
+      name: "Porridge",
+      portions: 1,
+      steps: "Cook",
+      prepTimeMinutes: 10,
+      sourceUrl: null,
+      ingredients: [{ productId: oats.id, amount: 80, unit: "g", minor: false }],
+      categoryOverrides: [],
+    });
+    const honey = await aProduct("Acacia honey", 300, { defaultUnit: "g", density: null });
+    const withRecipe = await aMeal(TODAY, [{ content: "recipe", recipeId: recipe.id, portions: 1 }]);
+    const withProduct = await aMeal(TODAY, [{ content: "product", productId: honey.id, quantity: 20 }]);
+    await removeRecipe(db, recipe.id);
+    await removeProduct(db, honey.id);
+
+    for (const untracked of [false, true]) {
+      expect(await confirmMeal(db, withRecipe.id, { untracked, today: TODAY })).toEqual({
+        ok: false,
+        error: "archivedFood",
+      });
+      expect(await confirmMeal(db, withProduct.id, { untracked, today: TODAY })).toEqual({
+        ok: false,
+        error: "archivedFood",
+      });
+    }
+    expect(await getMeal(db, withRecipe.id)).toMatchObject({ status: "planned", untracked: false });
+    expect(await getProduct(db, oats.id)).toMatchObject({ stock: 500 });
+    expect(await getProduct(db, honey.id)).toMatchObject({ stock: 300 });
+    expect(await skipMeal(db, withProduct.id, TODAY)).toBe(true);
+  });
+
+  it("Confirms a Meal today once its Archived Product is changed", async () => {
+    const tea = await aProduct("Green tea", 100, { defaultUnit: "g", density: null });
+    const coffee = await aProduct("Ground coffee", 100, { defaultUnit: "g", density: null });
+    const meal = await aMeal(TODAY, [{ content: "product", productId: tea.id, quantity: 5 }]);
+    await removeProduct(db, tea.id);
+    const [slot] = (await getMeal(db, meal.id))!.slots;
+    await fillMealSlot(db, slot!.id, { content: "product", productId: coffee.id, quantity: 5 });
+
+    expect(await confirmMeal(db, meal.id, { untracked: false, today: TODAY })).toEqual({ ok: true });
+    expect(await getProduct(db, coffee.id)).toMatchObject({ stock: 95 });
   });
 
   it("writes nothing when Confirming as Untracked, leaving the Meal Confirmed and Untracked", async () => {

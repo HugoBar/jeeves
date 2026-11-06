@@ -7,21 +7,24 @@ import {
   staysSuspectAfterReopen,
   stockTakes,
 } from "@/core/confirmation";
-import { canReopen, canConfirmOrSkip } from "@/core/meals";
+import { blockedByArchivedFood, canReopen, canConfirmOrSkip } from "@/core/meals";
 import type { UnconvertibleIngredient } from "@/core/projected-stock";
 import { deduct, reverse } from "@/core/stock";
 import type { ConversionError, DefaultUnit, Unit } from "@/core/units";
 import type { Db } from "./index";
 import { loadMealSlots, type ProjectedProductWithName } from "./projected-stock";
-import { meals, products, stockMovements } from "./schema";
+import { mealSlots, meals, products, recipes, stockMovements } from "./schema";
 import { applyMovement } from "./stock-movements";
 
 // "notConfirmable": the Meal is gone, already Confirmed or Skipped, or after
-// `today`. "unconvertible": an Ingredient, as written in its Recipe, cannot
-// be converted to its Product's Default Unit.
+// `today`. "archivedFood": it is dated `today` and a slot holds an Archived
+// Recipe or Product, which must be changed first. "unconvertible": an
+// Ingredient, as written in its Recipe, cannot be converted to its Product's
+// Default Unit.
 export type ConfirmMealResult =
   | { ok: true }
   | { ok: false; error: "notConfirmable" }
+  | { ok: false; error: "archivedFood" }
   | {
       ok: false;
       error: "unconvertible";
@@ -106,6 +109,8 @@ export async function confirmMeal(
       .where(eq(meals.id, id))
       .for("update");
     if (!meal || !canConfirmOrSkip(meal, today)) return { ok: false, error: "notConfirmable" };
+    // Either outcome: the slot must be changed first.
+    if (blockedByArchivedFood(meal, await slotFoodsArchived(tx, id), today)) return { ok: false, error: "archivedFood" };
 
     const marksUntracked = untracked || meal.untracked;
     if (!marksUntracked) {
@@ -119,6 +124,19 @@ export async function confirmMeal(
     await tx.update(meals).set({ status: "confirmed", untracked: marksUntracked }).where(eq(meals.id, id));
     return { ok: true };
   });
+}
+
+// Whether the Recipe or Product each of the Meal's slots holds is Archived,
+// as the planner's isArchivedFood reads it from the page. Leftovers and an
+// empty slot hold neither, so never are.
+async function slotFoodsArchived(db: Db, mealId: string): Promise<boolean[]> {
+  const rows = await db
+    .select({ recipeArchivedAt: recipes.archivedAt, productArchivedAt: products.archivedAt })
+    .from(mealSlots)
+    .leftJoin(recipes, eq(mealSlots.recipeId, recipes.id))
+    .leftJoin(products, eq(mealSlots.productId, products.id))
+    .where(eq(mealSlots.mealId, mealId));
+  return rows.map((row) => row.recipeArchivedAt !== null || row.productArchivedAt !== null);
 }
 
 // "Confirm all as planned" (#1): Confirms each Meal in turn, as planned and

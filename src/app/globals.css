@@ -3506,6 +3506,8 @@ body:has(.needs-confirmation-locked) :is(.top-menu, .bottom-menu, a.app-badge) {
   font-size: var(--text-item);
 }
 
+/* "Product archived - pick another" under the food. */
+.confirm-slot-note,
 .confirm-slot-hint {
   color: var(--color-ink-soft);
   font-size: var(--text-meta);

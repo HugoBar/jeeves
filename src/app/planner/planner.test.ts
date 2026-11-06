@@ -570,6 +570,38 @@ describe("a slot on a Meal card", () => {
     });
   });
 
+  describe("with an Archived Recipe or Product", () => {
+    const product = { food: { content: "product" as const, id: "spinach", label: "Spinach", quantity: 250, defaultUnit: "g" as const, archived: true } };
+    const recipe = { food: { content: "recipe" as const, id: "salmon", label: "Grilled salmon", portions: 2, archived: true } };
+
+    it.each([
+      ["today", today],
+      ["on a later day", "2026-10-31"],
+    ])("asks to pick another Product in a Meal %s, still opening the picker on a tap", (_case, date) => {
+      const { className, html } = row(product, { date });
+      expect(className).toContain("slot-row-dashed");
+      expect(text(part(html, "slot-row-food")!)).toBe("Spinach");
+      expect(text(part(html, "slot-row-archived-note")!)).toBe("Product archived - pick another");
+      expect(/<button [^>]*class="slot-row-main"[^>]*>/.exec(html)?.[0]).toContain('aria-expanded="false"');
+    });
+
+    it("asks to pick another Recipe in a Meal today", () => {
+      expect(text(part(row(recipe).html, "slot-row-archived-note")!)).toBe("Recipe archived - pick another");
+    });
+
+    it("keeps it, tagged Archived, in a Meal whose day has passed", () => {
+      const { className, html } = row(product, { date: "2026-10-28" });
+      expect(className).not.toContain("slot-row-dashed");
+      expect(text(part(html, "slot-row-food")!)).toBe("Spinach Archived");
+      expect(html).not.toContain("slot-row-archived-note");
+    });
+
+    it("asks for another category first when that is Archived too", () => {
+      const { html } = row({ ...recipe, slotCategoryLabel: "Red Meat", slotCategoryArchived: true });
+      expect(text(part(html, "slot-row-archived-note")!)).toBe("Category archived - pick another");
+    });
+  });
+
   it("opens the slot picker on a tap, on a Planned Meal", () => {
     const button = /<button [^>]*class="slot-row-main"[^>]*>/.exec(row().html)?.[0];
     expect(button).toContain('aria-expanded="false"');

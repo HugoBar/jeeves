@@ -61,6 +61,7 @@ I want one place that knows what food is in my Pantry, what I can cook from it, 
 ### Confirmation
 - Confirming a Meal deducts, per slot: Recipe Ingredients × (slot Portions ÷ Recipe Portions), converted to Default Units; Product quantity; Leftovers nothing. Untracked Meals deduct nothing.
 - Before confirming, slots can be edited. Outcomes: Confirmed, Confirmed + Untracked, Skipped.
+- In a Meal dated today or later, a slot with an Archived Recipe or Product shows "Recipe archived - pick another" (or "Product archived - pick another"). The Meal can't be Confirmed, as planned or Untracked, until the slot is changed; it can still be Skipped. A Meal whose day has passed keeps the Archived Recipe or Product and can be Confirmed with it.
 - A Confirmed or Skipped Meal can be Reopened: opposite Stock Movements, linked to the Meal, add back exactly what its Confirmation removed.
 
 ### Unconfirmed Meals

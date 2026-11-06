@@ -292,6 +292,29 @@ export function canConfirmOrSkip(meal: { status: MealStatus; date: string }, tod
   return isDate(today) && canChangeMeal(meal) && meal.date <= today;
 }
 
+// A Planned Meal dated today or later can't keep an Archived Recipe or
+// Product: its slot asks for another (spec "Confirmation"). A Meal
+// whose day has passed keeps it, as does a Confirmed or Skipped one.
+// `foodArchived` is whether the slot's Recipe or Product is Archived.
+export function asksForAnotherFood(
+  meal: { status: MealStatus; date: string },
+  foodArchived: boolean,
+  today: string,
+): boolean {
+  return foodArchived && canChangeMeal(meal) && meal.date >= today;
+}
+
+// Both Confirm outcomes are refused while a slot asks for another food;
+// Skip is not. `foodsArchived` says, for each slot, whether its Recipe or
+// Product is Archived.
+export function blockedByArchivedFood(
+  meal: { status: MealStatus; date: string },
+  foodsArchived: readonly boolean[],
+  today: string,
+): boolean {
+  return foodsArchived.some((archived) => asksForAnotherFood(meal, archived, today));
+}
+
 // A Meal later today may not have happened yet, so Confirming or Skipping it
 // asks first. `now` is the viewer's date and "HH:MM" time; "HH:MM" text sorts
 // as time does.

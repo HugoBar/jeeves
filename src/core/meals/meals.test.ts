@@ -9,6 +9,8 @@ import {
   weekToClose,
   mustResolve,
   canConfirmOrSkip,
+  asksForAnotherFood,
+  blockedByArchivedFood,
   parseMealChanges,
   parseMealSlotCategory,
   parseNewMeal,
@@ -437,6 +439,44 @@ describe("sortMeals", () => {
     ];
 
     expect(sortMealsByDay(meals).map((meal) => meal.id)).toEqual(["monday-dinner", "tuesday-breakfast"]);
+  });
+});
+
+describe("asksForAnotherFood", () => {
+  it("asks for another Archived Recipe or Product in a Meal today or later", () => {
+    expect(asksForAnotherFood({ status: "planned", date: "2026-10-28" }, true, "2026-10-28")).toBe(true);
+    expect(asksForAnotherFood({ status: "planned", date: "2026-11-02" }, true, "2026-10-28")).toBe(true);
+  });
+
+  it("keeps it in a Meal whose day has passed", () => {
+    expect(asksForAnotherFood({ status: "planned", date: "2026-10-27" }, true, "2026-10-28")).toBe(false);
+  });
+
+  // Their slots can no longer change.
+  it("keeps it in a Confirmed or Skipped Meal", () => {
+    expect(asksForAnotherFood({ status: "confirmed", date: "2026-10-28" }, true, "2026-10-28")).toBe(false);
+    expect(asksForAnotherFood({ status: "skipped", date: "2026-10-28" }, true, "2026-10-28")).toBe(false);
+  });
+
+  it("asks nothing of food that is not Archived", () => {
+    expect(asksForAnotherFood({ status: "planned", date: "2026-10-28" }, false, "2026-10-28")).toBe(false);
+  });
+});
+
+describe("blockedByArchivedFood", () => {
+  const meal = { status: "planned" as const, date: "2026-10-28" };
+
+  it("blocks Confirming while one slot asks for another food", () => {
+    expect(blockedByArchivedFood(meal, [false, true], "2026-10-28")).toBe(true);
+  });
+
+  it("allows it once every slot holds food that is not Archived", () => {
+    expect(blockedByArchivedFood(meal, [false, false], "2026-10-28")).toBe(false);
+    expect(blockedByArchivedFood(meal, [], "2026-10-28")).toBe(false);
+  });
+
+  it("allows it on a Meal whose day has passed", () => {
+    expect(blockedByArchivedFood({ ...meal, date: "2026-10-27" }, [true], "2026-10-28")).toBe(false);
   });
 });
 
