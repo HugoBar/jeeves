@@ -424,7 +424,7 @@ function nothingAddedBack(meal: PlannerMeal): StringKey {
 
 // "✓ Confirmed", "↗ Confirmed · Untracked", "↗ Untracked", "◷ Unconfirmed",
 // "◷ Unconfirmed · Untracked" or "⊘ Skipped": an icon and text, never a pill.
-function MealCardStatusLine({ status }: { status: MealCardStatus }) {
+export function MealCardStatusLine({ status }: { status: MealCardStatus }) {
   return (
     <p className={`meal-status meal-status-${status}`}>
       <StatusIcon status={status} />
@@ -467,7 +467,7 @@ const STATUS_ICONS: Record<MealCardStatus, ReactNode> = {
   ),
 };
 
-type ConfirmOrSkipError = ConfirmMealError | SkipMealError;
+export type ConfirmOrSkipError = ConfirmMealError | SkipMealError;
 
 // Confirm, or "Confirm or skip" once the Meal is Unconfirmed, for a Meal dated
 // today or earlier. It opens the Confirm sheet, which asks first when the
@@ -864,7 +864,7 @@ function SlotSummary({ slot, showAmount, chevron }: { slot: PlannerMealSlot; sho
 }
 
 // "2 portions", "250 g", "Deducts nothing" or "Not chosen yet" beside the pill.
-function slotAmount(food: PlannerSlotFood): string {
+export function slotAmount(food: PlannerSlotFood): string {
   switch (food.content) {
     case "recipe":
       return formatPortions(food.portions);
@@ -879,7 +879,7 @@ function slotAmount(food: PlannerSlotFood): string {
 
 // What a slot holds, under its pill. A Recipe or Product removed since stays,
 // tagged Archived.
-function SlotFoodName({ food }: { food: PlannerSlotFood }) {
+export function SlotFoodName({ food }: { food: PlannerSlotFood }) {
   switch (food.content) {
     case "empty":
       return null;

@@ -23,6 +23,8 @@ pnpm db:migrate
 pnpm dev               # http://localhost:3000
 ```
 
+`pnpm dev` and `pnpm dev:empty` start the development database first when `DATABASE_URL` is local and nothing answers there, opening Docker Desktop if it isn't running yet. A database that already answers is left alone.
+
 ### Run tests and checks
 
 ```sh
