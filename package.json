@@ -7,8 +7,8 @@
     "node": ">=22.12"
   },
   "scripts": {
-    "dev": "next dev",
-    "dev:empty": "node --env-file-if-exists=.env scripts/dev-empty.mjs",
+    "dev": "node --env-file-if-exists=.env scripts/db-up.mjs && next dev",
+    "dev:empty": "node --env-file-if-exists=.env scripts/db-up.mjs && node --env-file-if-exists=.env scripts/dev-empty.mjs",
     "build": "next build",
     "start": "next start",
     "lint": "eslint .",
