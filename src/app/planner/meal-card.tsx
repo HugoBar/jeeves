@@ -2,6 +2,8 @@
 
 import { startTransition, useActionState, useEffect, useId, useOptimistic, useRef, useState, useTransition, type ReactNode } from "react";
 import {
+  asksForAnotherFood,
+  blockedByArchivedFood,
   canChangeMeal,
   canReopen,
   canConfirmOrSkip,
@@ -512,8 +514,10 @@ const CONFIRM_OUTCOMES: { outcome: ConfirmOutcome; icon: MealCardStatus }[] = [
 // picker over the sheet, and what happened: Eaten as planned, "Eaten, but not
 // from the Pantry" (Confirmed as Untracked) or Skipped. Skipped hides the
 // slots. `notYet` is a Meal later today: the sheet asks first, and its button
-// says "anyway". A refusal shows in red, with nothing written. Cancel changes
-// nothing. `today` is the viewer's date.
+// says "anyway". While an Archived Recipe or Product must be changed, both
+// Confirm outcomes are off and say why; Skipped still works. A refusal shows
+// in red, with nothing written. Cancel changes nothing. `today` is the
+// viewer's date.
 export function ConfirmMealSheet({
   meal,
   today,
@@ -536,6 +540,8 @@ export function ConfirmMealSheet({
   const outcomeName = useId();
   const skipping = outcome === "skipped";
   const editingSlot = meal.slots.find((slot) => slot.id === editingSlotId);
+  const archivedFoods = meal.slots.filter((slot) => asksForAnotherFood(meal, isArchivedFood(slot.food), today));
+  const blocked = !skipping && blockedByArchivedFood(meal, meal.slots.map((slot) => isArchivedFood(slot.food)), today);
 
   const submit = () =>
     startTransition(async () => {
@@ -560,7 +566,13 @@ export function ConfirmMealSheet({
             <p className="confirm-slots-label">{t("planner.confirmSheet.slotsLabel")}</p>
             <ul className="confirm-slot-list">
               {meal.slots.map((slot) => (
-                <ConfirmSlotRow key={slot.id} slot={slot} disabled={pending} onEdit={() => setEditingSlotId(slot.id)} />
+                <ConfirmSlotRow
+                  key={slot.id}
+                  slot={slot}
+                  asksForFood={archivedFoods.includes(slot)}
+                  disabled={pending}
+                  onEdit={() => setEditingSlotId(slot.id)}
+                />
               ))}
             </ul>
           </div>
@@ -590,10 +602,16 @@ export function ConfirmMealSheet({
           ))}
         </fieldset>
         <TakesFromStock meal={meal} outcome={outcome} />
-        {notYet && !refused && (
+        {notYet && !refused && !blocked && (
           <div className="banner">
             <AlertIcon />
             <p>{t(skipping ? "planner.skipToday" : "planner.confirmToday")}</p>
+          </div>
+        )}
+        {blocked && !refused && (
+          <div className="banner">
+            <AlertIcon />
+            <p>{archivedFoodsBanner(archivedFoods)}</p>
           </div>
         )}
         {/* Why, and that nothing was taken, in one message. */}
@@ -606,7 +624,7 @@ export function ConfirmMealSheet({
           <button type="button" onClick={onClose} disabled={pending}>
             {t("planner.cancel")}
           </button>
-          <button type="button" className="button-primary" disabled={pending || refused !== null} onClick={submit}>
+          <button type="button" className="button-primary" disabled={pending || refused !== null || blocked} onClick={submit}>
             {t(confirmSheetButton(outcome, notYet))}
           </button>
         </div>
@@ -636,9 +654,26 @@ function confirmSheetButton(outcome: ConfirmOutcome, notYet: boolean): StringKey
   return outcome === "untracked" ? "planner.confirmUntracked" : "planner.confirm";
 }
 
+// Why Confirm is off: the one Archived Recipe or Product to change, or each.
+function archivedFoodsBanner(slots: readonly PlannerMealSlot[]): string {
+  if (slots.length > 1) return t("planner.confirmSheet.archivedFoods");
+  return t(slots[0]!.food.content === "recipe" ? "planner.confirmSheet.archivedRecipe" : "planner.confirmSheet.archivedProduct");
+}
+
 // A slot on the Confirm sheet: its pill and food, its amount, and Edit. An
-// empty one says it deducts nothing.
-function ConfirmSlotRow({ slot, disabled, onEdit }: { slot: PlannerMealSlot; disabled: boolean; onEdit: () => void }) {
+// empty one says it deducts nothing; one that `asksForFood` asks to pick
+// another in place of its Archived Recipe or Product.
+function ConfirmSlotRow({
+  slot,
+  asksForFood,
+  disabled,
+  onEdit,
+}: {
+  slot: PlannerMealSlot;
+  asksForFood: boolean;
+  disabled: boolean;
+  onEdit: () => void;
+}) {
   const empty = slot.food.content === "empty";
   const showsAmount = slot.food.content === "recipe" || slot.food.content === "product";
   return (
@@ -651,7 +686,10 @@ function ConfirmSlotRow({ slot, disabled, onEdit }: { slot: PlannerMealSlot; dis
             <span className="confirm-slot-hint">{t("planner.confirmSheet.emptyHint")}</span>
           </>
         ) : (
-          <SlotFoodName food={slot.food} />
+          <>
+            <SlotFoodName food={slot.food} tagsArchived={!asksForFood} />
+            {asksForFood && <span className="confirm-slot-note">{archivedFoodNote(slot.food)}</span>}
+          </>
         )}
       </span>
       {showsAmount && <span className="confirm-slot-amount">{slotAmount(slot.food)}</span>}
@@ -791,6 +829,8 @@ function SlotWarningStrips({ warnings, mealDate, today }: { warnings: SlotWarnin
 // slot picker; a Confirmed or Skipped Meal's slots show as they were. An
 // Archived Slot Category is struck through and asks for another, which opens
 // the picker on Change Slot Category, since no food can be picked for it.
+// An Archived Recipe or Product in a Meal today or later asks for another,
+// and a tap still opens the picker on its food.
 function SlotRow({
   slot,
   meal,
@@ -808,8 +848,12 @@ function SlotRow({
   const archived = slot.slotCategoryArchived;
   const asksForCategory = changeable && archived;
   const tappable = changeable && !archived;
-  const summary = <SlotSummary slot={slot} showAmount={!asksForCategory} chevron={tappable} />;
-  const dashed = slot.food.content === "empty" || archived;
+  // The category is asked for first: no food can be picked until it changes.
+  const asksForFood = !archived && asksForAnotherFood(meal, isArchivedFood(slot.food), today);
+  const summary = (
+    <SlotSummary slot={slot} showAmount={!asksForCategory} chevron={tappable} tagsArchived={!asksForFood} />
+  );
+  const dashed = slot.food.content === "empty" || archived || asksForFood;
   return (
     <li className={dashed ? "slot-row slot-row-dashed" : "slot-row"}>
       {tappable ? (
@@ -818,6 +862,11 @@ function SlotRow({
         </button>
       ) : (
         <div className="slot-row-main">{summary}</div>
+      )}
+      {asksForFood && (
+        <div className="slot-row-archived">
+          <p className="slot-row-archived-note">{archivedFoodNote(slot.food)}</p>
+        </div>
       )}
       {asksForCategory && (
         <div className="slot-row-archived">
@@ -841,8 +890,18 @@ function SlotRow({
 }
 
 // A slot's Slot Category pill, with its Portions or quantity and a chevron
-// beside it when shown, over its food.
-function SlotSummary({ slot, showAmount, chevron }: { slot: PlannerMealSlot; showAmount: boolean; chevron: boolean }) {
+// beside it when shown, over its food, tagged Archived if `tagsArchived`.
+function SlotSummary({
+  slot,
+  showAmount,
+  chevron,
+  tagsArchived = true,
+}: {
+  slot: PlannerMealSlot;
+  showAmount: boolean;
+  chevron: boolean;
+  tagsArchived?: boolean;
+}) {
   return (
     <>
       <span className="slot-row-top">
@@ -854,9 +913,19 @@ function SlotSummary({ slot, showAmount, chevron }: { slot: PlannerMealSlot; sho
           </span>
         )}
       </span>
-      <SlotFoodName food={slot.food} />
+      <SlotFoodName food={slot.food} tagsArchived={tagsArchived} />
     </>
   );
+}
+
+// Whether a slot holds a Recipe or Product that was Archived since.
+function isArchivedFood(food: PlannerSlotFood): boolean {
+  return (food.content === "recipe" || food.content === "product") && food.archived;
+}
+
+// "Recipe archived - pick another" or "Product archived - pick another".
+function archivedFoodNote(food: PlannerSlotFood): string {
+  return t(food.content === "recipe" ? "planner.recipeArchived" : "planner.productArchived");
 }
 
 // "2 portions", "250 g", "Deducts nothing" or "Not chosen yet" beside the pill.
@@ -874,8 +943,8 @@ export function slotAmount(food: PlannerSlotFood): string {
 }
 
 // What a slot holds, under its pill. A Recipe or Product removed since stays,
-// tagged Archived.
-export function SlotFoodName({ food }: { food: PlannerSlotFood }) {
+// tagged Archived unless `tagsArchived` is false, where a note says so instead.
+export function SlotFoodName({ food, tagsArchived = true }: { food: PlannerSlotFood; tagsArchived?: boolean }) {
   switch (food.content) {
     case "empty":
       return null;
@@ -886,7 +955,7 @@ export function SlotFoodName({ food }: { food: PlannerSlotFood }) {
       return (
         <span className="slot-row-food">
           {food.label}
-          {food.archived && <span className="planner-tag">{t("planner.foodArchived")}</span>}
+          {food.archived && tagsArchived && <span className="planner-tag">{t("planner.foodArchived")}</span>}
         </span>
       );
   }

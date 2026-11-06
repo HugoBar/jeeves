@@ -205,3 +205,68 @@ describe("the Confirm sheet's other buttons", () => {
     expect(dialogs[1]!.querySelector("h2")!.textContent).toBe("Pick for Main Dish");
   });
 });
+
+describe("a Meal with an Archived Recipe or Product", () => {
+  const archivedSlots: PlannerMealSlot[] = [
+    { ...slots[0]!, food: { content: "product", id: "honey", label: "Honey", quantity: 20, defaultUnit: "g", archived: true } },
+  ];
+  const blocked = (overrides: Partial<PlannerMeal> = {}) => meal({ slots: archivedSlots, ...overrides });
+
+  it("asks to pick another on its slot and turns off both Confirm outcomes, saying why", () => {
+    open(false, blocked());
+    expect(sheet().querySelector(".confirm-slot-note")!.textContent).toBe("Product archived - pick another");
+    expect(banners()).toEqual(["Change the archived Product with Edit to confirm this Meal, or skip it."]);
+    expect(mainButton().disabled).toBe(true);
+    pick("Eaten, but not from the Pantry");
+    expect(mainButton().disabled).toBe(true);
+  });
+
+  it("still Skips", async () => {
+    open(false, blocked());
+    pick("Skipped");
+    expect(banners()).toEqual([]);
+    expect(mainButton().disabled).toBe(false);
+    await press(mainButton());
+    expect(skip).toHaveBeenCalledWith("meal-1", expect.any(String));
+  });
+
+  it("Confirms once the slot is changed and the page refreshes", async () => {
+    open(false, blocked());
+    open(false, meal());
+    expect(mainButton().disabled).toBe(false);
+    await press(mainButton());
+    expect(confirm).toHaveBeenCalledWith("meal-1", false, expect.any(String));
+  });
+
+  it("Confirms as it is on a Meal whose day has passed", () => {
+    open(false, blocked({ date: "2026-10-28" }));
+    expect(sheet().querySelector(".confirm-slot-note")).toBeNull();
+    expect(mainButton().disabled).toBe(false);
+  });
+
+  it("says why when the server refuses it from a stale page", async () => {
+    confirm.mockResolvedValue({ ok: false, error: "archivedFood" });
+    open();
+    await press(mainButton());
+    expect([...sheet().querySelectorAll(".banner-error")].map((banner) => banner.textContent)).toEqual([
+      "Can't confirm: a Recipe or Product in this Meal was archived. Pick another for it first. Nothing has left Stock.",
+    ]);
+  });
+});
+
+describe("a Meal later today with an Archived Recipe or Product", () => {
+  const blocked = meal({
+    slots: [{ ...slots[0]!, food: { content: "product", id: "honey", label: "Honey", quantity: 20, defaultUnit: "g", archived: true } }],
+  });
+
+  it("only says why it can't be confirmed, not to confirm it anyway", () => {
+    open(true, blocked);
+    expect(banners()).toEqual(["Change the archived Product with Edit to confirm this Meal, or skip it."]);
+  });
+
+  it("still asks first before Skipping it", () => {
+    open(true, blocked);
+    pick("Skipped");
+    expect(banners()).toEqual(["This Meal hasn't happened yet. Skip it anyway?"]);
+  });
+});
