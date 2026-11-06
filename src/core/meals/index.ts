@@ -381,3 +381,11 @@ export function mustResolve<T extends { status: MealStatus; date: string }>(
   const monday = mondayOf(openDay(now));
   return meals.filter((meal) => isUnconfirmed(meal, monday));
 }
+
+// The week the resolution screen closes: the one before the viewer's, Monday
+// to Sunday, as "Last week" (#1). Until 03:00 on Monday it is the week before
+// that Sunday's. `now` is the viewer's date and "HH:MM" time.
+export function lastWeek(now: { date: string; hour: string }): { first: string; last: string } {
+  const monday = mondayOf(openDay(now));
+  return { first: addDays(monday, -7), last: addDays(monday, -1) };
+}

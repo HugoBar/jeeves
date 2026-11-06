@@ -2722,7 +2722,44 @@ a.back-link {
   margin: 0;
 }
 
-.needs-confirmation-head > p {
+/* Close last week: which week, in amber, above the heading. */
+.needs-confirmation-eyebrow {
+  margin: 0 0 4px;
+  color: var(--color-warning-ink);
+  font-size: var(--text-label);
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+/* Close last week: an Untracked Meal's note on its card. */
+.needs-confirmation-untracked {
+  margin: 0;
+  color: var(--color-ink-soft);
+  font-size: var(--text-meta);
+}
+
+/* Close last week: that the screen stays, at its foot. */
+.needs-confirmation-stays {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 0;
+  color: var(--color-ink-muted);
+  font-size: var(--text-meta);
+}
+
+.needs-confirmation-stays > svg {
+  flex: none;
+  margin-top: 3px;
+}
+
+/* Close last week can't be left, so no menu or badge offers a way out. */
+body:has(.needs-confirmation-locked) :is(.top-menu, .bottom-menu, a.app-badge) {
+  display: none;
+}
+
+.needs-confirmation-head > h1 + p {
   margin: 4px 0 0;
   color: var(--color-ink-soft);
 }

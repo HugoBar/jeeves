@@ -151,3 +151,48 @@ describe("the Needs confirmation page", () => {
     expect(buttonIn(container, "Confirm all 1 as planned")).toBeUndefined();
   });
 });
+
+// Thursday 29 Oct is in the week of 26 Oct, so Meals from 19-25 Oct must be
+// resolved first.
+describe("the Close last week screen", () => {
+  const tuesday = meal("tuesday", "2026-10-20", "Tacos");
+  const sunday = meal("sunday", "2026-10-25", "Dinner at Ana's", { untracked: true, slots: [] });
+
+  it("names last week and how many Meals it still has", () => {
+    render([sunday, tuesday]);
+    expect(text(".needs-confirmation-eyebrow")).toEqual(["Last week · 19–25 Oct"]);
+    expect(text("h1")).toEqual(["Close last week"]);
+    expect(text(".needs-confirmation-head > h1 + p")).toEqual([
+      "Last week still has 2 Unconfirmed Meals. Confirm or skip them to carry on.",
+    ]);
+    expect(container.querySelector("a.back-link")).toBeNull();
+  });
+
+  it("says Untracked Meals stay Untracked, on Confirm all and on their card", () => {
+    render([sunday, tuesday]);
+    expect(buttonIn(container, "Confirm all 2 as planned")).toBeDefined();
+    expect(text(".needs-confirmation-all p")).toEqual(["Untracked Meals stay Untracked: nothing leaves Stock for them."]);
+    const [tacos, ana] = cards();
+    expect(ana!.textContent).toContain("Unconfirmed · Untracked");
+    expect(text(".needs-confirmation-untracked")).toEqual(["Untracked: confirming takes nothing from Stock."]);
+    expect(tacos!.querySelector(".needs-confirmation-untracked")).toBeNull();
+    expect([...ana!.querySelectorAll(".meal-card-foot button")].map((button) => button.textContent)).toEqual([
+      "Confirm as planned",
+      "Edit",
+      "Skip",
+    ]);
+  });
+
+  it("says it stays until last week is closed", () => {
+    render([tuesday]);
+    expect(text(".needs-confirmation-stays")).toEqual(["This screen stays until last week is closed."]);
+  });
+
+  it("keeps the Needs confirmation page's own wording", () => {
+    render([meal("wednesday", "2026-10-28", "Paella", { untracked: true })]);
+    expect(text(".needs-confirmation-all p")).toEqual(["Takes their food from Stock, as planned."]);
+    expect(container.querySelector(".needs-confirmation-untracked")).toBeNull();
+    expect(container.querySelector(".needs-confirmation-stays")).toBeNull();
+    expect(container.querySelector(".needs-confirmation-eyebrow")).toBeNull();
+  });
+});
