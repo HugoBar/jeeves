@@ -21,6 +21,10 @@ vi.mock("../planner/actions", () => ({
   setMealSlotCategoryAction: vi.fn(),
 }));
 const confirmAll = vi.mocked(confirmMealsAsPlannedAction);
+
+// Where the page sends the viewer.
+const replace = vi.fn();
+vi.mock("next/navigation", () => ({ useRouter: () => ({ replace }) }));
 const skip = vi.mocked(skipMealAction);
 
 // Thursday 29 Oct 2026, mid-morning, for the viewer.
@@ -69,6 +73,7 @@ const render = (meals: PlannerMeal[]) =>
 
 beforeEach(() => {
   confirmAll.mockReset().mockResolvedValue([]);
+  replace.mockReset();
   skip.mockReset().mockResolvedValue(null);
   container = document.createElement("div");
   document.body.append(container);
@@ -186,6 +191,13 @@ describe("the Close last week screen", () => {
   it("says it stays until last week is closed", () => {
     render([tuesday]);
     expect(text(".needs-confirmation-stays")).toEqual(["This screen stays until last week is closed."]);
+  });
+
+  it("goes to the Planner once last week is closed", () => {
+    render([tuesday]);
+    expect(replace).not.toHaveBeenCalled();
+    render([{ ...tuesday, status: "confirmed" }, meal("wednesday", "2026-10-28", "Paella")]);
+    expect(replace).toHaveBeenCalledWith("/planner");
   });
 
   it("keeps the Needs confirmation page's own wording", () => {

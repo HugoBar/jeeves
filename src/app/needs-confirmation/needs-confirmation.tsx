@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
+import { useEffect, useRef, useState, useTransition } from "react";
 import { lastWeek, mealCardStatus, mustResolve, needingConfirmation, sortMealsByDay } from "@/core/meals";
 import { formatMealDate, formatWeekRange, t } from "@/strings";
 import { FoodCategoryPill } from "../food-category-pill";
@@ -28,19 +29,26 @@ type ConfirmAllResult = { confirmed: number; refused: RefusedMeal[] };
 // each Meal with Confirm as planned, Edit and Skip, and "Confirm all N as
 // planned" on top. It can be left for later, except once a week has ended
 // with Unconfirmed Meals: then it shows only those and stays until they are
-// cleared, as every other page sends the viewer here. "Now" is the viewer's
-// (spec "Platform"), so the server renders nothing and the browser fills the
-// list in after hydration.
+// cleared, as every other page sends the viewer here, and then goes on to
+// the Planner. "Now" is the viewer's (spec "Platform"), so the server renders
+// nothing and the browser fills the list in after hydration.
 export function NeedsConfirmation({ meals, ...pickers }: { meals: PlannerMeal[] } & Pickers) {
   const now = useViewerNow();
   // Kept after Confirm all refuses some, so the page says what it did.
   const [result, setResult] = useState<ConfirmAllResult | null>(null);
   // While Confirm all runs, each card's buttons wait, so no Meal is sent twice.
   const [confirmingAll, startConfirmAll] = useTransition();
+  const overdue = now ? mustResolve(meals, now) : [];
+  const resolving = overdue.length > 0;
+  const router = useRouter();
+  // Whether this page was closing last week, to leave once it is closed.
+  const wasResolving = useRef(false);
+  useEffect(() => {
+    if (wasResolving.current && !resolving) router.replace("/planner");
+    wasResolving.current = resolving;
+  }, [resolving, router]);
   if (!now) return null;
 
-  const overdue = mustResolve(meals, now);
-  const resolving = overdue.length > 0;
   const listed = sortMealsByDay(resolving ? overdue : needingConfirmation(meals, now));
   // Refusals for Meals still listed: one settled since drops out, and once
   // none are left the page goes back to the plain list.
