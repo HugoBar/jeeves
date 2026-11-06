@@ -2,7 +2,7 @@
 
 import { Fragment, useActionState, useState } from "react";
 import { flushSync } from "react-dom";
-import { isUnconfirmed, sortMeals, sortMealsByDay, weekToClose, type NewMealSlotInput } from "@/core/meals";
+import { isUnconfirmed, sortMeals, type NewMealSlotInput } from "@/core/meals";
 import { plannerWeeks } from "@/core/planner";
 import {
   dayHeadingParts,
@@ -20,12 +20,12 @@ import { SidePanel } from "../side-panel";
 import { useViewerNow } from "../viewer-clock";
 import { createMealAction, type NewMealFormState, type NewMealFormValues } from "./actions";
 import { AddSlotBody, addSlotTitle, addToMealForm, type AddSlotScreen } from "./add-slot";
+import { CloseWeekBanner } from "./close-week-banner";
 import {
   EditMealPanel,
   MealCard,
   MealPanelActions,
   MealPanelIcon,
-  mealOnLabel,
   MealFormFields,
   mealPanelClass,
   NewMealSlotsCard,
@@ -81,10 +81,10 @@ export function PlannerView({
     <div className={week === "next" ? "planner-week planner-week-next" : "planner-week"}>
       <div className="planner-head">
         <h1>{t("planner.title")}</h1>
+        <CloseWeekBanner meals={meals} today={today} />
         <WeekTabs week={week} onWeekChange={onWeekChange} />
         <WeekBar week={week} days={days} today={today} foldedDays={foldedDays} onUnfold={() => setEarlierOpen(true)} />
       </div>
-      <CloseWeekBanner meals={weekToClose(meals, today)} />
       <PlannerWeek
         week={week}
         days={days}
@@ -200,31 +200,6 @@ function WeekTabs({ week, onWeekChange }: { week: Week; onWeekChange: (week: Wee
         </button>
       ))}
     </div>
-  );
-}
-
-// From Saturday, this week's Unconfirmed Meals, so the week can be closed
-// before the next starts (#1). Their cards below can Confirm or Skip them.
-function CloseWeekBanner({ meals }: { meals: PlannerMeal[] }) {
-  if (meals.length === 0) return null;
-  return (
-    <aside className="banner" role="status">
-      <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-        <path d="M12 9v4M12 17h.01" />
-        <path d="M10.3 3.9L2.4 18a2 2 0 0 0 1.7 3h15.8a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z" />
-      </svg>
-      <div>
-        <h2>{t("unconfirmed.closeWeek")}</h2>
-        <p>{t("unconfirmed.closeWeekBody")}</p>
-        <ul>
-          {sortMealsByDay(meals).map((meal) => (
-            <li key={meal.id}>
-              {mealOnLabel(meal)}
-            </li>
-          ))}
-        </ul>
-      </div>
-    </aside>
   );
 }
 

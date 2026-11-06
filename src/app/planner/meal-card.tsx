@@ -39,7 +39,7 @@ import { FormCard } from "../form-card";
 import { AlertIcon, FormBanner, FormError, LockIcon, useFieldErrors } from "../form-error";
 import { ConfirmSheet, Sheet } from "../sheet";
 import { SidePanel } from "../side-panel";
-import { viewerToday } from "../viewer-clock";
+import { viewerMoment, viewerToday } from "../viewer-clock";
 import { AddSlotSheet } from "./add-slot";
 import {
   confirmMealAction,
@@ -163,11 +163,6 @@ export type { Week };
 // it mounted with. Counting submits gives the fields a new key each time, so
 // they remount with what was sent and the reset keeps it.
 export type Submitted<State> = State & { submits: number };
-
-// A Meal named with its date, as lists across days show it: "Mon 26 Oct · Lunch".
-export function mealOnLabel(meal: Pick<PlannerMeal, "date" | "name" | "mealTypeLabel">): string {
-  return t("unconfirmed.mealOn", { day: formatMealDate(meal.date), name: meal.name ?? meal.mealTypeLabel });
-}
 
 // A Meal on its day. Its slots are changed in place; `onEdit` opens Edit Meal
 // in the side panel. A Confirmed or Skipped Meal is read-only: it can only be
@@ -491,7 +486,7 @@ function ConfirmOrSkipMeal({
         type="button"
         className={`${unconfirmed ? "button-warning" : "button-primary"} meal-card-confirm`}
         onClick={() => {
-          const now = new Date();
+          const now = viewerMoment();
           setOpen({ notYet: confirmOrSkipAsksFirst(meal, { date: localDate(now), hour: localHour(now) }) });
         }}
       >
