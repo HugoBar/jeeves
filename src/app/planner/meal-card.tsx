@@ -39,7 +39,7 @@ import { FormCard } from "../form-card";
 import { AlertIcon, FormBanner, FormError, LockIcon, useFieldErrors } from "../form-error";
 import { ConfirmSheet, Sheet } from "../sheet";
 import { SidePanel } from "../side-panel";
-import { viewerToday } from "../viewer-clock";
+import { viewerMoment, viewerToday } from "../viewer-clock";
 import { AddSlotSheet } from "./add-slot";
 import {
   confirmMealAction,
@@ -491,7 +491,7 @@ function ConfirmOrSkipMeal({
         type="button"
         className={`${unconfirmed ? "button-warning" : "button-primary"} meal-card-confirm`}
         onClick={() => {
-          const now = new Date();
+          const now = viewerMoment();
           setOpen({ notYet: confirmOrSkipAsksFirst(meal, { date: localDate(now), hour: localHour(now) }) });
         }}
       >
