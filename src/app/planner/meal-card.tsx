@@ -748,6 +748,7 @@ function mealSheetEyebrow(meal: PlannerMeal, today: string): string {
 export function confirmOrSkipErrorMessage(error: ConfirmOrSkipError): string {
   if (error.error === "notConfirmable") return t("planner.error.notConfirmable");
   if (error.error === "notSkippable") return t("planner.error.notSkippable");
+  if (error.error === "archivedFood") return t("planner.error.archivedFood");
   return t(`planner.error.${error.code}`, {
     product: error.product.name,
     quantity: formatQuantity(error.amount, error.unit),

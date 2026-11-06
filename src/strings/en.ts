@@ -237,6 +237,7 @@ export const en = {
   "planner.error.invalidQuantity": "Enter a quantity above 0.",
   "planner.error.notConfirmable": "This Meal can no longer be Confirmed. Reload the planner and try again.",
   "planner.error.notSkippable": "This Meal can no longer be Skipped. Reload the planner and try again.",
+  "planner.error.archivedFood": "Can't confirm: a Recipe or Product in this Meal was archived. Pick another for it first.",
   "planner.error.noDensity":
     "Can't confirm: {product} has no Density, so {quantity} can't be converted to {defaultUnit}. Add its Density or change the Ingredient's unit.",
   "planner.error.countMismatch":
