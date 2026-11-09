@@ -46,6 +46,7 @@ import { AddSlotSheet } from "./add-slot";
 import {
   confirmMealAction,
   editMealAction,
+  fillEmptySlotsAction,
   moveMealSlotAction,
   removeMealAction,
   reopenMealAction,
@@ -62,6 +63,7 @@ import {
   startScreen,
   type SlotPickerScreen,
 } from "./slot-picker";
+import { freshSlotIds, SlotSuggestionBox, usePlannerSuggestions } from "./suggestions";
 
 // A Meal with what its card shows. Its Meal Type may be Archived: the Meal
 // keeps it.
@@ -186,6 +188,14 @@ export function MealCard({
   const changeable = canChangeMeal(meal);
   const status = mealCardStatus(meal, today);
   const unconfirmed = isUnconfirmed(meal, today);
+  const { bySlot, filled, onFilled } = usePlannerSuggestions();
+  const fresh = freshSlotIds(meal, filled);
+  // "Use all" once two or more slots have a Suggestion that can go straight
+  // in. It is sent every slot with one, so its result can say which were
+  // left empty for want of a quantity.
+  const suggested = changeable ? meal.slots.filter((slot) => bySlot.has(slot.id)).map((slot) => slot.id) : [];
+  const usable = suggested.filter((slotId) => bySlot.get(slotId)![0]!.fill !== null).length;
+  const [usingAll, startUsingAll] = useTransition();
 
   const tint = unconfirmed ? " meal-card-unconfirmed" : meal.status === "skipped" ? " meal-card-skipped" : "";
   return (
@@ -219,9 +229,24 @@ export function MealCard({
               today={today}
               changeable={changeable}
               pickers={pickers}
+              fresh={fresh.has(slot.id)}
             />
           ))}
         </ol>
+      )}
+      {usable > 1 && (
+        <button
+          type="button"
+          className="meal-card-use-all"
+          disabled={usingAll}
+          onClick={() =>
+            startUsingAll(async () => {
+              onFilled(await fillEmptySlotsAction(suggested, today), false);
+            })
+          }
+        >
+          {t("planner.suggestion.useAll", { count: usable })}
+        </button>
       )}
       {changeable && (
         <div className="meal-card-foot">
@@ -837,14 +862,21 @@ function SlotRow({
   today,
   changeable,
   pickers,
+  fresh,
 }: {
   slot: PlannerMealSlot;
   meal: PlannerMeal;
   today: string;
   changeable: boolean;
   pickers: SlotPickers;
+  // Just filled by "Fill empty slots", so it shows highlighted.
+  fresh: boolean;
 }) {
-  const [open, setOpen] = useState(false);
+  // The picker's first screen while it is open.
+  const [picking, setPicking] = useState<SlotPickerScreen | null>(null);
+  const open = picking !== null;
+  const toggle = () => setPicking(open ? null : startScreen(slot));
+  const suggestions = usePlannerSuggestions().bySlot.get(slot.id);
   const archived = slot.slotCategoryArchived;
   const asksForCategory = changeable && archived;
   const tappable = changeable && !archived;
@@ -854,10 +886,11 @@ function SlotRow({
     <SlotSummary slot={slot} showAmount={!asksForCategory} chevron={tappable} tagsArchived={!asksForFood} />
   );
   const dashed = slot.food.content === "empty" || archived || asksForFood;
+  const className = `slot-row${dashed ? " slot-row-dashed" : ""}${fresh ? " slot-row-fresh" : ""}`;
   return (
-    <li className={dashed ? "slot-row slot-row-dashed" : "slot-row"}>
+    <li className={className}>
       {tappable ? (
-        <button type="button" className="slot-row-main" aria-expanded={open} onClick={() => setOpen(!open)}>
+        <button type="button" className="slot-row-main" aria-expanded={open} onClick={toggle}>
           {summary}
         </button>
       ) : (
@@ -871,17 +904,25 @@ function SlotRow({
       {asksForCategory && (
         <div className="slot-row-archived">
           <p className="slot-row-archived-note">{t("planner.slotArchived")}</p>
-          <button type="button" aria-expanded={open} onClick={() => setOpen(!open)}>
+          <button type="button" aria-expanded={open} onClick={toggle}>
             {t("planner.pickAnotherCategory")}
           </button>
         </div>
       )}
-      {open && (
+      {tappable && slot.food.content === "empty" && suggestions && (
+        <SlotSuggestionBox
+          slot={slot}
+          suggestions={suggestions}
+          onAskQuantity={({ content, id }) => setPicking({ kind: "amount", content, id })}
+        />
+      )}
+      {picking && (
         <SlotPickerSheet
           meal={meal}
           slot={slot}
           pickers={pickers}
-          onClose={() => setOpen(false)}
+          start={picking}
+          onClose={() => setPicking(null)}
         />
       )}
       {slot.warnings && <SlotWarningStrips warnings={slot.warnings} mealDate={meal.date} today={today} />}

@@ -4371,3 +4371,203 @@ body:has(.needs-confirmation-locked) :is(.top-menu, .bottom-menu, a.app-badge) {
     transition: transform 0.15s;
   }
 }
+
+/* Suggestions (#13). Under an empty slot: its Suggestion with Use, on the
+   week's soft tint, and its alternatives, each one tap from filling it. */
+.slot-suggestion {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 0 14px 12px;
+}
+
+.slot-suggestion-main {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 8px 8px 12px;
+  border-radius: 12px;
+  background: var(--week-soft, var(--color-accent-soft));
+}
+
+.slot-suggestion-text {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.slot-suggestion-label {
+  color: var(--week-ink, var(--color-accent-ink));
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.slot-suggestion-name {
+  color: var(--color-ink-soft);
+  font-size: var(--text-item);
+  font-weight: 500;
+}
+
+.slot-suggestion-use {
+  --button-bg: var(--week-accent, var(--color-accent));
+  --button-line: transparent;
+  --button-ink: var(--color-on-accent);
+  flex: none;
+}
+
+.slot-suggestion-alternatives {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  color: var(--color-ink-muted);
+  font-size: var(--text-meta);
+}
+
+.slot-suggestion-alternative {
+  padding: 0 12px;
+  border-radius: 10px;
+  color: var(--color-ink-soft);
+  font-size: var(--text-body);
+  font-weight: 500;
+}
+
+/* "Use all 3 Suggestions", outlined in the week's accent. */
+.meal-card-use-all {
+  --button-line: var(--week-accent, var(--color-accent));
+  --button-ink: var(--week-ink, var(--color-accent-ink));
+  width: 100%;
+}
+
+/* A slot just filled by "Fill empty slots", until its Meal is edited. */
+.slot-list > .slot-row-fresh {
+  border: 1px solid var(--color-open-row-border);
+  background: var(--color-open-row);
+}
+
+/* The slot picker's Suggested list: the Suggestion on the soft tint. */
+.slot-picker-option-tag {
+  margin-left: 8px;
+  color: var(--color-icon-muted);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.slot-picker-suggested li:first-child .slot-picker-option {
+  --button-bg: var(--week-soft, var(--color-accent-soft));
+  padding: 10px 12px;
+  border-radius: 14px;
+}
+
+.slot-picker-suggested li:first-child .slot-picker-option-tag {
+  color: var(--week-ink, var(--color-accent-ink));
+}
+
+/* On phone "Fill empty slots" sits beside the title; from 768px at the end
+   of the title row, beside the week's dates. */
+.planner-title {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.planner-fill {
+  flex: none;
+  padding: 0 14px;
+  font-size: var(--text-body);
+}
+
+.planner-fill svg {
+  color: var(--week-accent, var(--color-accent));
+}
+
+.planner-fill:disabled svg {
+  color: inherit;
+}
+
+/* What the last fill did, with Undo, above the bottom menu on phone and in
+   the corner on desktop. */
+.fill-toast {
+  position: fixed;
+  right: var(--space);
+  bottom: calc(80px + env(safe-area-inset-bottom));
+  left: var(--space);
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 12px 12px 16px;
+  border-radius: 16px;
+  background: var(--color-ink);
+  color: var(--color-surface);
+  box-shadow: 0 12px 32px var(--color-dialog-shadow);
+}
+
+.fill-toast-icon {
+  flex: none;
+  color: var(--color-toast-green);
+}
+
+.fill-toast-text {
+  flex: 1;
+  font-size: var(--text-item);
+  font-weight: 500;
+}
+
+.fill-toast-undo,
+.fill-toast-close {
+  --button-bg: transparent;
+  --button-line: transparent;
+  flex: none;
+  padding: 0 12px;
+}
+
+.fill-toast-undo {
+  --button-ink: var(--color-toast-green);
+  font-weight: 700;
+}
+
+.fill-toast-close {
+  --button-ink: var(--color-control-off);
+  width: 44px;
+  padding: 0;
+}
+
+.fill-toast-undo:hover:not(:disabled),
+.fill-toast-close:hover {
+  background: color-mix(in srgb, var(--color-surface) 12%, transparent);
+}
+
+@media (min-width: 768px) {
+  .planner-title {
+    display: contents;
+  }
+
+  .planner-fill {
+    order: 10;
+    min-height: 40px;
+    margin-left: auto;
+  }
+
+  .slot-suggestion {
+    padding: 0 8px 8px;
+  }
+
+  .slot-suggestion-main {
+    padding: 6px 6px 6px 8px;
+  }
+
+  .fill-toast {
+    right: auto;
+    bottom: 24px;
+    left: 24px;
+    width: 440px;
+  }
+}
