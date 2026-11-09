@@ -24,12 +24,12 @@ describe("the More page", () => {
 });
 
 describe("menus", () => {
-  it("shows Planner, Stock, Recipes and More on desktop", () => {
-    expect(labels(topMenu)).toEqual(["Planner", "Stock", "Recipes", "More"]);
+  it("shows Planner, Stock, Recipes, Shopping List and More on desktop", () => {
+    expect(labels(topMenu)).toEqual(["Planner", "Stock", "Recipes", "Shopping List", "More"]);
   });
 
-  it("shows Planner, Stock and More on phone", () => {
-    expect(labels(bottomMenu)).toEqual(["Planner", "Stock", "More"]);
+  it("shows Planner, Stock, Shopping and More on phone", () => {
+    expect(labels(bottomMenu)).toEqual(["Planner", "Stock", "Shopping", "More"]);
   });
 });
 
@@ -48,6 +48,11 @@ describe("activeMenuHref", () => {
   it("marks the item for its page and the pages under it", () => {
     expect(activeMenuHref(topMenu, "/planner")).toBe("/planner");
     expect(activeMenuHref(topMenu, "/products/42/edit")).toBe("/products");
+  });
+
+  it("marks Shopping on the Shopping List, in both menus", () => {
+    expect(activeMenuHref(topMenu, "/shopping-list")).toBe("/shopping-list");
+    expect(activeMenuHref(bottomMenu, "/shopping-list")).toBe("/shopping-list");
   });
 
   it("marks More on the More page", () => {

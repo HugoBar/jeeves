@@ -13,6 +13,8 @@ export const en = {
   "nav.categories": "Food Categories",
   "nav.mealTypes": "Meal Types",
   "nav.mealTemplates": "Meal Templates",
+  "nav.shoppingList": "Shopping List",
+  "nav.shopping": "Shopping",
   "nav.more": "More",
   "nav.toConfirm": "to confirm",
   "more.recipes": "What you cook, with Ingredients and steps",
