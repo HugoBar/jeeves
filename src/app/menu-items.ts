@@ -16,11 +16,18 @@ const stock: BottomMenuItem = {
   icon: "M4 10h16v9a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2zM3 6h18v4H3z",
 };
 const recipes: MenuItem = { href: "/recipes", label: "nav.recipes" };
+// One page, named in full on desktop and shorter in the phone's bottom menu.
+const shoppingList: MenuItem = { href: "/shopping-list", label: "nav.shoppingList" };
+const shopping: BottomMenuItem = {
+  ...shoppingList,
+  label: "nav.shopping",
+  icon: "M5 3h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2zM8 12l3 3 5-6",
+};
 const more: BottomMenuItem = { href: "/more", label: "nav.more", icon: "M4 6h16M4 12h16M4 18h16" };
 
 // Home is reached from the Jeeves logo, so it is in neither menu.
-export const topMenu: MenuItem[] = [planner, stock, recipes, more];
-export const bottomMenu: BottomMenuItem[] = [planner, stock, more];
+export const topMenu: MenuItem[] = [planner, stock, recipes, shoppingList, more];
+export const bottomMenu: BottomMenuItem[] = [planner, stock, shopping, more];
 
 export const moreLinks: MoreLink[] = [
   { ...recipes, description: "more.recipes" },
