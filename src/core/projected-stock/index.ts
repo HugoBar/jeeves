@@ -80,26 +80,58 @@ export interface UnconvertibleIngredient {
 }
 
 // What one slot takes from Stock, by Product, in Default Units, unrounded,
-// and the Ingredients whose need cannot be worked out. A Recipe scales by the
-// slot's Portions over its own. Confirmation deducts the same needs.
+// and the Ingredients whose need cannot be worked out. Confirmation deducts
+// the same needs.
 export function slotNeeds(
   slot: ProjectedSlot,
   products: ReadonlyMap<string, ConvertibleProduct>,
 ): { needs: Map<string, number>; unconvertible: UnconvertibleIngredient[] } {
+  if (slot.content === "product") return { needs: new Map([[slot.productId, slot.quantity]]), unconvertible: [] };
+  if (slot.content === "recipe") return recipeNeeds(slot.recipe, slot.portions, products);
+  return { needs: new Map(), unconvertible: [] };
+}
+
+// What a Recipe made for `portions` takes from Stock, by Product, in Default
+// Units, unrounded: its Ingredients scaled by `portions` over its own. An
+// Ingredient that cannot be converted is listed instead, and its Product's
+// need left out: part of it is unknown, so none of it is counted.
+export function recipeNeeds(
+  recipe: ProjectedRecipe,
+  portions: number,
+  products: ReadonlyMap<string, ConvertibleProduct>,
+): { needs: Map<string, number>; unconvertible: UnconvertibleIngredient[] } {
   const needs = new Map<string, number>();
   const unconvertible: UnconvertibleIngredient[] = [];
-  if (slot.content === "product") needs.set(slot.productId, slot.quantity);
-  if (slot.content === "recipe") {
-    const scale = slot.portions / slot.recipe.portions;
-    for (const { productId, amount, unit } of slot.recipe.ingredients) {
-      const converted = convertToDefaultUnit(amount, unit, products.get(productId)!);
-      if (converted.ok) needs.set(productId, (needs.get(productId) ?? 0) + converted.amount * scale);
-      else unconvertible.push({ productId, amount, unit, error: converted.error });
-    }
+  const scale = portions / recipe.portions;
+  for (const { productId, amount, unit } of recipe.ingredients) {
+    const converted = convertToDefaultUnit(amount, unit, products.get(productId)!);
+    if (converted.ok) needs.set(productId, (needs.get(productId) ?? 0) + converted.amount * scale);
+    else unconvertible.push({ productId, amount, unit, error: converted.error });
   }
-  // Part of what such a Product needs is unknown, so none of it is counted.
   for (const { productId } of unconvertible) needs.delete(productId);
   return { needs, unconvertible };
+}
+
+// Every slot of a Planned or Unconfirmed, non-Untracked Meal, in the order
+// they take from Stock (spec "Projected Stock"): Meals as servedBefore orders
+// them, and a Meal's slots in their order. Each comes with what it needs and
+// `stock`, each Product's running Stock just before it takes that: current
+// Stock less what every slot before it took, never below 0. `stock` is read
+// before the walk goes on, as it changes after each slot.
+function* stockWalk(
+  meals: readonly ProjectedMeal[],
+  products: ReadonlyMap<string, ProjectedProduct>,
+): Generator<{ slot: ProjectedSlot; stock: ReadonlyMap<string, number> } & ReturnType<typeof slotNeeds>> {
+  const stock = new Map([...products].map(([id, product]) => [id, product.stock]));
+  const projected = meals.filter((meal) => meal.status === "planned" && !meal.untracked);
+  for (const meal of projected.toSorted(servedBefore)) {
+    for (const slot of meal.slots) {
+      const { needs, unconvertible } = slotNeeds(slot, products);
+      yield { slot, stock, needs, unconvertible };
+      // A Meal eating more than is left leaves none, never less.
+      for (const [productId, need] of needs) stock.set(productId, Math.max(0, stock.get(productId)! - need));
+    }
+  }
 }
 
 // Each slot's Shortfalls, by slot id, from every Planned or Unconfirmed,
@@ -114,24 +146,32 @@ export function projectStock(
   meals: readonly ProjectedMeal[],
   products: ReadonlyMap<string, ProjectedProduct>,
 ): Map<string, SlotProjection> {
-  const stock = new Map([...products].map(([id, product]) => [id, product.stock]));
   const bySlot = new Map<string, SlotProjection>();
-  const projected = meals.filter((meal) => meal.status === "planned" && !meal.untracked);
-  for (const meal of projected.toSorted(servedBefore)) {
-    for (const slot of meal.slots) {
-      const { needs, unconvertible } = slotNeeds(slot, products);
-      const shortfalls: Shortfall[] = [];
-      for (const [productId, need] of needs) {
-        const onHand = stock.get(productId)!;
-        const short = roundForColumn(need - onHand, AMOUNT_COLUMN);
-        if (short > 0) shortfalls.push({ productId, amount: short });
-        stock.set(productId, Math.max(0, onHand - need));
-      }
-      const unprojectable = [...new Set(unconvertible.map((ingredient) => ingredient.productId))];
-      bySlot.set(slot.id, { shortfalls, unprojectable });
+  for (const { slot, stock, needs, unconvertible } of stockWalk(meals, products)) {
+    const shortfalls: Shortfall[] = [];
+    for (const [productId, need] of needs) {
+      const short = roundForColumn(need - stock.get(productId)!, AMOUNT_COLUMN);
+      if (short > 0) shortfalls.push({ productId, amount: short });
     }
+    const unprojectable = [...new Set(unconvertible.map((ingredient) => ingredient.productId))];
+    bySlot.set(slot.id, { shortfalls, unprojectable });
   }
   return bySlot;
+}
+
+// Each Product's Projected Stock at one slot: its Stock just before that slot
+// takes from it, after every slot served before (spec "Projected Stock"),
+// by Product id, for every Product in `products`. Null when the slot is not
+// in a Planned or Unconfirmed, non-Untracked Meal: it projects no Stock.
+export function projectedStockAt(
+  meals: readonly ProjectedMeal[],
+  products: ReadonlyMap<string, ProjectedProduct>,
+  slotId: string,
+): Map<string, number> | null {
+  for (const { slot, stock } of stockWalk(meals, products)) {
+    if (slot.id === slotId) return new Map(stock);
+  }
+  return null;
 }
 
 // How a slot's warnings show: "urgent" (red) when its Meal is 1 day away or

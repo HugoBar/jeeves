@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { projectStock, shortfallUrgency, type ProjectedMeal, type ProjectedProduct, type ProjectedRecipe } from "./index";
+import { projectedStockAt, projectStock, shortfallUrgency, type ProjectedMeal, type ProjectedProduct, type ProjectedRecipe } from "./index";
 
 // Products by id: rice in grams with 500 g in Stock, milk in millilitres
 // (1.03 g/ml) with 1000 ml, eggs in pieces with 6.
@@ -262,6 +262,65 @@ describe("projectStock serves Meals in order", () => {
     const newer = takesRice("newer", { createdAt: new Date("2026-11-02T10:00:00Z") });
     const older = takesRice("older", { createdAt: new Date("2026-11-01T10:00:00Z") });
     expect(shortSlots([newer, older])).toEqual(["newer-slot"]);
+  });
+});
+
+describe("projectedStockAt", () => {
+  it("is each Product's Stock after the Meals served before the slot's, never below 0", () => {
+    const stock = projectedStockAt(
+      [
+        aMeal("monday", [aProductSlot("monday-slot", "rice", 800), aProductSlot("monday-eggs", "eggs", 2)], {
+          date: "2026-11-09",
+        }),
+        aMeal("tuesday", [{ id: "tuesday-slot", content: "empty" }], { date: "2026-11-10" }),
+        aMeal("wednesday", [aProductSlot("wednesday-slot", "milk", 300)], { date: "2026-11-11" }),
+      ],
+      products,
+      "tuesday-slot",
+    );
+    expect(stock).toEqual(
+      new Map([
+        ["rice", 0],
+        ["milk", 1000],
+        ["eggs", 4],
+      ]),
+    );
+  });
+
+  it("counts the earlier slots of the same Meal, not the slot itself or later ones", () => {
+    const stock = projectedStockAt(
+      [
+        aMeal("lunch", [
+          aProductSlot("first", "rice", 100),
+          { id: "target", content: "empty" },
+          aProductSlot("last", "rice", 200),
+        ]),
+      ],
+      products,
+      "target",
+    );
+    expect(stock!.get("rice")).toBe(400);
+  });
+
+  it("leaves out Untracked Meals served before it", () => {
+    const stock = projectedStockAt(
+      [
+        aMeal("eaten-out", [aProductSlot("eaten-out-slot", "rice", 300)], { date: "2026-11-09", untracked: true }),
+        aMeal("tuesday", [{ id: "tuesday-slot", content: "empty" }]),
+      ],
+      products,
+      "tuesday-slot",
+    );
+    expect(stock!.get("rice")).toBe(500);
+  });
+
+  // Their slots never project Stock.
+  it("is null for a slot of an Untracked, Confirmed or Skipped Meal, or one not given", () => {
+    const slot = () => [{ id: "slot", content: "empty" as const }];
+    expect(projectedStockAt([aMeal("m", slot(), { untracked: true })], products, "slot")).toBeNull();
+    expect(projectedStockAt([aMeal("m", slot(), { status: "confirmed" })], products, "slot")).toBeNull();
+    expect(projectedStockAt([aMeal("m", slot(), { status: "skipped" })], products, "slot")).toBeNull();
+    expect(projectedStockAt([aMeal("m", slot())], products, "other")).toBeNull();
   });
 });
 
