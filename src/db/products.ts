@@ -1,6 +1,6 @@
 import "server-only";
 import { and, eq, isNull, ne, sql } from "drizzle-orm";
-import type { ProductFields } from "@/core/products";
+import type { PackSize, ProductFields } from "@/core/products";
 import type { DefaultUnit } from "@/core/units";
 import { deleteOrArchive, removeIfStill, removeOutcome, type RemoveOutcome } from "./archive";
 import { activeCategoryIdsByProduct, replaceActiveCategoryLinks, type CategoryLinkTable } from "./food-categories";
@@ -26,10 +26,7 @@ function toProduct(row: ProductRow, categoryIds: string[]): Product {
     name: row.name,
     defaultUnit: row.defaultUnit,
     density: row.density,
-    packSize:
-      row.packSizeName === null || row.packSizeAmount === null
-        ? null
-        : { name: row.packSizeName, amount: row.packSizeAmount },
+    packSize: toPackSize(row),
     categoryIds,
     stock: row.stock,
     stockSuspect: row.stockSuspect,
@@ -37,6 +34,12 @@ function toProduct(row: ProductRow, categoryIds: string[]): Product {
 }
 
 // The Pack Size is stored as two columns, both set or both null.
+export function toPackSize(row: Pick<ProductRow, "packSizeName" | "packSizeAmount">): PackSize | null {
+  return row.packSizeName === null || row.packSizeAmount === null
+    ? null
+    : { name: row.packSizeName, amount: row.packSizeAmount };
+}
+
 function toColumns({ name, density, packSize }: ProductFields) {
   return {
     name,
