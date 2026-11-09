@@ -75,7 +75,9 @@ See [#1](https://github.com/HugoBar/jeeves/issues/1). Daily 03:00 in-app badge +
   - A Recipe is taken at its stated Portions. Each Product it needs counts min(1, Projected Stock / need), and the fraction is their average. Minor Ingredients are left out by default. A Product whose Ingredient can't be converted counts 0, as its need is unknown. A Recipe needing nothing is fully covered.
   - A Product's quantity is only chosen once picked, so it counts as fully covered when any of it is in Projected Stock, else not at all.
 - All weights, the 7-day window and the number of alternatives (2) are named constants in `core`. The balance of variety and Stock, and whether Minor Ingredients count, become settings in [#155](https://github.com/HugoBar/jeeves/issues/155).
-- "Fill empty slots" fills the week day by day, highest Meal Priority first within a day; each fill accounts for previous fills.
+- Using a Suggestion puts in a Recipe at its stated Portions, and a Product at the quantity it last had in a Meal Slot. A Product never in a Meal Slot asks for its quantity first.
+- "Fill empty slots" fills the week shown day by day, highest Meal Priority first within a day; each fill accounts for previous fills. On this week it fills today and later only. A slot whose Suggestion is a Product never in a Meal Slot stays empty, and the result says so. It never overwrites a slot that holds something, and Undo empties only the slots still holding what it put in.
+- "Use all N Suggestions" fills one Meal's empty slots the same way.
 
 ### Shopping List
 - One current list, no history. Items come from Shortfalls over a chosen date range (default: the planned week) or are added by hand. Removable.

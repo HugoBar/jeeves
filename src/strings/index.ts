@@ -56,6 +56,15 @@ export function formatSlotCount(count: number): string {
   return count === 1 ? t("planner.slotCountOne") : t("planner.slotCount", { count });
 }
 
+// What "Fill empty slots" did: "Filled 6 empty slots with Suggestions",
+// with "· 1 left empty: no quantity yet" for Product Suggestions never in a
+// Meal Slot.
+export function formatFillOutcome(filled: number, noQuantity: number): string {
+  const done =
+    filled === 0 ? t("planner.fill.nothing") : filled === 1 ? t("planner.fill.doneOne") : t("planner.fill.done", { count: filled });
+  return noQuantity === 0 ? done : `${done} · ${t("planner.fill.noQuantity", { count: noQuantity })}`;
+}
+
 // A Recipe's Portions in running text: "1 portion", "1,800 portions".
 export function formatPortions(portions: number): string {
   return portions === 1

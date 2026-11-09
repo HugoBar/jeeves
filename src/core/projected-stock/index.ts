@@ -61,7 +61,10 @@ export interface SlotProjection {
 // The order Meals are served in, competing for Stock: by day, then Meal
 // Priority (1 first), then hour, then the Meal created first (spec
 // "Projected Stock"). "YYYY-MM-DD" and "HH:MM" text sort as time does.
-function servedBefore(a: ProjectedMeal, b: ProjectedMeal): number {
+export function servedBefore(
+  a: Omit<ProjectedMeal, "slots">,
+  b: Omit<ProjectedMeal, "slots">,
+): number {
   return (
     a.date.localeCompare(b.date) ||
     a.priority - b.priority ||

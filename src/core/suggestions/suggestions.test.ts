@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 import type { ProjectedProduct } from "@/core/projected-stock";
 import {
+  fillEmptySlots,
   suggestForSlot,
+  type FillInput,
   type SuggestionCandidate,
   type SuggestionCategory,
   type SuggestionInput,
@@ -371,5 +373,80 @@ describe("suggestForSlot", () => {
       weights: { sameItem: 2, sharedKind: 1, coverage: 2 },
     });
     expect(suggestions[0]!.score).toBeCloseTo(-3 * (7 / 8));
+  });
+});
+
+describe("fillEmptySlots", () => {
+  // Fills the slots given among `meals`, with the shared Food Categories and
+  // no Stock unless told.
+  const fill = (
+    meals: SuggestionMeal[],
+    slotIds: string[],
+    candidates: SuggestionCandidate[],
+    rest: Partial<Omit<FillInput, "meals" | "slotIds" | "candidates">> = {},
+  ) =>
+    fillEmptySlots({
+      meals,
+      slotIds,
+      candidates,
+      categories,
+      products: noStock(...PRODUCT_IDS),
+      today: TODAY,
+      quantities: new Map(),
+      ...rest,
+    });
+
+  it("fills day by day, each fill counted for the next", () => {
+    const tuesday = aMeal("tue", "2026-11-10", [emptySlot("tue-main", "main")]);
+    const monday = aMeal("mon", "2026-11-09", [emptySlot("mon-main", "main")]);
+    // Monday goes first, so it takes the steak; Tuesday then avoids it and
+    // the stew that shares its Red Meat.
+    expect(fill([tuesday, monday], ["tue-main", "mon-main"], [steak, stew, salmon]).fills).toEqual([
+      { slotId: "mon-main", fill: { content: "recipe", recipeId: "steak", portions: 2 } },
+      { slotId: "tue-main", fill: { content: "recipe", recipeId: "salmon", portions: 2 } },
+    ]);
+  });
+
+  it("fills the highest Meal Priority first within a day", () => {
+    const breakfast = aMeal("breakfast", TODAY, [emptySlot("breakfast-main", "main")], { hour: "08:00", priority: 2 });
+    const lunch = aMeal("lunch", TODAY, [emptySlot("lunch-main", "main")], { hour: "12:30" });
+    expect(fill([breakfast, lunch], ["breakfast-main", "lunch-main"], [steak, salmon]).fills).toEqual([
+      { slotId: "lunch-main", fill: { content: "recipe", recipeId: "steak", portions: 2 } },
+      { slotId: "breakfast-main", fill: { content: "recipe", recipeId: "salmon", portions: 2 } },
+    ]);
+  });
+
+  it("counts what an earlier fill takes from Projected Stock", () => {
+    // Grains slots aren't compared with Main Dish ones for variety, so only
+    // Stock links them: the steak takes all 400 g of beef first.
+    const beefRice = aRecipe("beef-rice", "beef", ["grains"]);
+    const meal = aMeal("dinner", TODAY, [emptySlot("main-slot", "main"), emptySlot("grains-slot", "grains")]);
+    const products = new Map([...noStock(...PRODUCT_IDS), ["beef", { defaultUnit: "g" as const, density: null, stock: 400 }]]);
+    expect(fill([meal], ["main-slot", "grains-slot"], [salmon, steak, risotto, beefRice], { products }).fills).toEqual([
+      { slotId: "main-slot", fill: { content: "recipe", recipeId: "steak", portions: 2 } },
+      { slotId: "grains-slot", fill: { content: "recipe", recipeId: "risotto", portions: 2 } },
+    ]);
+  });
+
+  describe("a Product", () => {
+    const meal = aMeal("dinner", TODAY, [emptySlot("fruit-slot", "fruit")]);
+
+    it("goes in at the quantity it last had in a Meal Slot", () => {
+      expect(fill([meal], ["fruit-slot"], [apple, pear], { quantities: new Map([["apple", 3]]) })).toEqual({
+        fills: [{ slotId: "fruit-slot", fill: { content: "product", productId: "apple", quantity: 3 } }],
+        noQuantity: [],
+      });
+    });
+
+    it("never in a Meal Slot leaves its slot empty", () => {
+      expect(fill([meal], ["fruit-slot"], [apple, pear])).toEqual({ fills: [], noQuantity: ["fruit-slot"] });
+    });
+  });
+
+  it("never fills a slot that already holds something", () => {
+    const meal = aMeal("dinner", TODAY, [filledSlot("held", "main", salmon), emptySlot("empty", "main")]);
+    expect(fill([meal], ["held", "empty"], [steak]).fills).toEqual([
+      { slotId: "empty", fill: { content: "recipe", recipeId: "steak", portions: 2 } },
+    ]);
   });
 });

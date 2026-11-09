@@ -18,6 +18,7 @@ import {
   setMealSlotCategoryAction,
 } from "./actions";
 import type { PlannerMeal, PlannerMealSlot, SlotCategoryOption, SlotFoods, SlotPickers } from "./meal-card";
+import { usePlannerSuggestions } from "./suggestions";
 
 // What the slot picker shows: the food to pick from, how much of the picked
 // Recipe or Product, or Change Slot Category. Change Slot Category opened
@@ -59,14 +60,17 @@ export function SlotPickerSheet({
   meal,
   slot,
   pickers,
+  start,
   onClose,
 }: {
   meal: PlannerMeal;
   slot: PlannerMealSlot;
   pickers: SlotPickers;
+  // Where it opens; startScreen(slot) unless given.
+  start?: SlotPickerScreen;
   onClose: () => void;
 }) {
-  const [screen, setScreen] = useState(() => startScreen(slot));
+  const [screen, setScreen] = useState(() => start ?? startScreen(slot));
   return (
     <SlotPickerSheetView meal={meal} slot={slot} pickers={pickers} screen={screen} onScreen={setScreen} onClose={onClose} />
   );
@@ -210,6 +214,11 @@ function PickFood({
   const [state, action, pending] = useSlotAction(fillMealSlotAction, slot.id, onDone);
   const { allMessages } = useSlotErrors(state.error);
   const foods = foodOptions(pickers, slot.slotCategoryId);
+  // Suggestions first, as the slot's own Suggestion box lists them.
+  const suggestions = usePlannerSuggestions().bySlot.get(slot.id) ?? [];
+  const suggested = suggestions.flatMap(({ content, id }) =>
+    foods.filter((food) => food.value === slotFoodValue(content, id)),
+  );
   const category = slot.slotCategoryLabel;
   const kind = pickers.slotCategories.find((option) => option.id === slot.slotCategoryId)?.kind ?? "role";
   const leftovers = meal.allowsLeftovers && (
@@ -241,6 +250,15 @@ function PickFood({
       <form action={action} className="slot-picker-food">
         {foods.length > 0 ? (
           <>
+            {suggested.length > 0 && (
+              <FoodList
+                heading={t("planner.picker.suggested")}
+                foods={suggested}
+                tag={(index) => t(index === 0 ? "planner.suggestion" : "planner.picker.alternative")}
+                disabled={pending}
+                onPick={(food) => onScreen({ kind: "amount", content: food.content, id: food.id })}
+              />
+            )}
             {leftovers}
             <FoodList
               heading={t("planner.picker.all", { category })}
@@ -276,27 +294,32 @@ function PickFood({
 }
 
 // The food to pick from under `heading`, each a row with its name over its
-// line.
+// line, and beside its name `tag` of its place in the list when given.
 export function FoodList({
   heading,
   foods,
+  tag,
   disabled,
   onPick,
 }: {
   heading: string;
   foods: FoodOption[];
+  tag?: (index: number) => string;
   disabled: boolean;
   onPick: (food: FoodOption) => void;
 }) {
   return (
-    <section className="slot-picker-section">
+    <section className={tag ? "slot-picker-section slot-picker-suggested" : "slot-picker-section"}>
       <h3 className="eyebrow">{heading}</h3>
       <ul className="slot-picker-list">
-        {foods.map((food) => (
+        {foods.map((food, index) => (
           <li key={food.value}>
             <button type="button" className="slot-picker-option" disabled={disabled} onClick={() => onPick(food)}>
               <span className="slot-picker-option-text">
-                <span className="slot-picker-option-name">{food.label}</span>
+                <span className="slot-picker-option-name">
+                  {food.label}
+                  {tag && <span className="slot-picker-option-tag">{tag(index)}</span>}
+                </span>
                 <span className="slot-picker-option-line">{food.line}</span>
               </span>
             </button>

@@ -23,6 +23,8 @@ import {
   type NewMealSlotRowError,
   type NewMealSlotsResult,
 } from "@/core/meals";
+import { isDate, plannerRange } from "@/core/planner";
+import { fillEmptySlots, type SlotFill } from "@/core/suggestions";
 import { getDb, type Db } from "@/db";
 import {
   confirmMeal,
@@ -47,6 +49,7 @@ import {
   setMealSlotCategory,
   updateMeal,
 } from "@/db/meals";
+import { fillEmptyMealSlots, loadSuggestionContext, undoFill } from "@/db/suggestions";
 import { foodCategoryLabel } from "@/strings";
 
 // `values` refills the form after a rejected submit, which React resets. The
@@ -220,6 +223,33 @@ export async function fillMealSlotAction(
   await fillMealSlot(db, slotId, parsed.fill);
   refresh();
   return { error: null };
+}
+
+// What "Fill empty slots" or "Use all N Suggestions" did: the slots filled,
+// with what went in each, and how many were left empty because their
+// Suggestion is a Product never in a Meal Slot, so it has no quantity yet.
+export type FillOutcome = { filled: SlotFill[]; noQuantity: number };
+
+// Each of `slotIds` that is still empty, in a Planned or Unconfirmed Meal,
+// gets its Suggestion, worked out again from what is stored now, each fill
+// counted by the slots after it (spec "Suggestions"). `today` is the viewer's
+// date when they asked. A slot filled meanwhile keeps what it holds.
+export async function fillEmptySlotsAction(slotIds: string[], today: string): Promise<FillOutcome> {
+  if (!isDate(today)) throw new Error("Not a date");
+  const db = getDb();
+  const { from, to } = plannerRange(today);
+  const context = await loadSuggestionContext(db, from, to);
+  const { fills, noQuantity } = fillEmptySlots({ ...context, slotIds, today });
+  const filled = await fillEmptyMealSlots(db, fills);
+  refresh();
+  return { filled, noQuantity: noQuantity.length };
+}
+
+// Undo of "Fill empty slots": each slot it filled is emptied again, unless it
+// was changed since or its Meal was Confirmed or Skipped.
+export async function undoFillAction(filled: SlotFill[]): Promise<void> {
+  await undoFill(getDb(), filled);
+  refresh();
 }
 
 // A slot added by hand is filled with a non-Archived Recipe or Product and

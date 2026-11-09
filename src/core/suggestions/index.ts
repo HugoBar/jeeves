@@ -1,9 +1,11 @@
 import type { CategoryKind } from "@/core/food-categories";
+import type { MealSlotFill } from "@/core/meals";
 import { addDays, daysBetween, mondayOf } from "@/core/planner";
 import { AMOUNT_COLUMN, roundForColumn } from "@/core/amounts";
 import {
   projectedStockAt,
   recipeNeeds,
+  servedBefore,
   type ProjectedMeal,
   type ProjectedProduct,
   type ProjectedSlot,
@@ -159,6 +161,82 @@ export function suggestForSlot({
     // Stable, so ties keep the candidates' order.
     .toSorted((a, b) => b.score - a.score)
     .slice(0, 1 + ALTERNATIVES);
+}
+
+// What filling a slot with a Suggestion puts in it.
+export type FoodFill = Extract<MealSlotFill, { content: "recipe" | "product" }>;
+
+// A slot and what a fill puts in it.
+export interface SlotFill {
+  slotId: string;
+  fill: FoodFill;
+}
+
+export interface FillInput extends Omit<SuggestionInput, "slotId"> {
+  // The empty slots to fill, in any order.
+  slotIds: readonly string[];
+  // The quantity each Product last had in a Meal Slot, by Product id.
+  quantities: ReadonlyMap<string, number>;
+}
+
+export interface FillResult {
+  // What goes in each slot, in the order they were filled.
+  fills: SlotFill[];
+  // The slots left empty because their Suggestion is a Product that was
+  // never in a Meal Slot, so it has no quantity to put in.
+  noQuantity: string[];
+}
+
+// What a Suggestion puts in a slot (spec "Suggestions"): a Recipe at its
+// stated Portions, a Product at the quantity it last had in a Meal Slot.
+// Null for a Product that was never in one: its quantity must be asked for.
+export function suggestionFill(
+  candidate: SuggestionCandidate,
+  quantities: ReadonlyMap<string, number>,
+): FoodFill | null {
+  if (candidate.content === "recipe") {
+    return { content: "recipe", recipeId: candidate.id, portions: candidate.recipe.portions };
+  }
+  const quantity = quantities.get(candidate.id);
+  return quantity === undefined ? null : { content: "product", productId: candidate.id, quantity };
+}
+
+// "Fill empty slots" (spec "Suggestions"): each slot in `slotIds` gets its
+// Suggestion, day by day, highest Meal Priority first within a day, then by
+// hour, then the Meal created first, and a Meal's slots in their order. Each
+// fill is counted, for variety and Projected Stock, by the slots after it.
+// A slot that gets no Suggestion stays empty.
+export function fillEmptySlots({ slotIds, quantities, ...input }: FillInput): FillResult {
+  const wanted = new Set(slotIds);
+  const order = input.meals
+    .toSorted(servedBefore)
+    .flatMap((meal) => meal.slots.filter((slot) => wanted.has(slot.id)).map((slot) => slot.id));
+  let meals = input.meals;
+  const result: FillResult = { fills: [], noQuantity: [] };
+  for (const slotId of order) {
+    const [best] = suggestForSlot({ ...input, meals, slotId });
+    if (!best) continue;
+    const candidate = input.candidates.find((found) => found.content === best.content && found.id === best.id)!;
+    const fill = suggestionFill(candidate, quantities);
+    if (!fill) {
+      result.noQuantity.push(slotId);
+      continue;
+    }
+    result.fills.push({ slotId, fill });
+    meals = meals.map((meal) => ({
+      ...meal,
+      slots: meal.slots.map((slot) => (slot.id === slotId ? filledWith(slot, candidate, fill) : slot)),
+    }));
+  }
+  return result;
+}
+
+// `slot` holding `candidate`, as `fill` puts it in.
+function filledWith(slot: SuggestionSlot, candidate: SuggestionCandidate, fill: FoodFill): SuggestionSlot {
+  const base = { id: slot.id, slotCategoryId: slot.slotCategoryId, food: { id: candidate.id, categoryIds: candidate.categoryIds } };
+  if (fill.content === "product") return { ...base, ...fill };
+  if (candidate.content !== "recipe") throw new Error("A Recipe fill needs a Recipe");
+  return { ...base, content: "recipe", portions: fill.portions, recipe: candidate.recipe };
 }
 
 // The filled slots variety compares the slot against (spec "Suggestions"):

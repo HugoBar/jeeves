@@ -1,12 +1,14 @@
 "use client";
 
-import { Fragment, useActionState, useState } from "react";
+import { Fragment, useActionState, useCallback, useEffect, useMemo, useState, useTransition } from "react";
 import { flushSync } from "react-dom";
 import { isUnconfirmed, sortMeals, type NewMealSlotInput } from "@/core/meals";
 import { plannerWeeks } from "@/core/planner";
+import type { SuggestionContext } from "@/db/suggestions";
 import {
   dayHeadingParts,
   formatDayHeading,
+  formatFillOutcome,
   formatLongDayHeading,
   formatMealCount,
   formatSlotCount,
@@ -18,7 +20,14 @@ import { FoodCategoryPill } from "../food-category-pill";
 import { FormCard } from "../form-card";
 import { SidePanel } from "../side-panel";
 import { useViewerNow } from "../viewer-clock";
-import { createMealAction, type NewMealFormState, type NewMealFormValues } from "./actions";
+import {
+  createMealAction,
+  fillEmptySlotsAction,
+  undoFillAction,
+  type FillOutcome,
+  type NewMealFormState,
+  type NewMealFormValues,
+} from "./actions";
 import { AddSlotBody, addSlotTitle, addToMealForm, type AddSlotScreen } from "./add-slot";
 import { CloseWeekBanner } from "./close-week-banner";
 import {
@@ -37,11 +46,16 @@ import {
   UnconfirmedIcon,
 } from "./meal-card";
 import { ChevronIcon } from "./slot-picker";
+import { recordFills, SuggestionsProvider, suggestionsBySlot, type FilledMeal } from "./suggestions";
 
 // "Today" is the date in the viewer's time zone (spec "Platform"). The server
 // cannot know that zone, so it renders only the heading and the browser fills
 // the planner in after hydration.
-export function Planner({ meals, ...pickers }: { meals: PlannerMeal[] } & Pickers) {
+export function Planner({
+  meals,
+  suggestions,
+  ...pickers
+}: { meals: PlannerMeal[]; suggestions: SuggestionContext } & Pickers) {
   const now = useViewerNow();
   const [week, setWeek] = useState<Week>("this");
   if (!now)
@@ -50,7 +64,16 @@ export function Planner({ meals, ...pickers }: { meals: PlannerMeal[] } & Picker
         <h1>{t("planner.title")}</h1>
       </div>
     );
-  return <PlannerView today={now.date} week={week} meals={meals} pickers={pickers} onWeekChange={setWeek} />;
+  return (
+    <PlannerView
+      today={now.date}
+      week={week}
+      meals={meals}
+      pickers={pickers}
+      suggestions={suggestions}
+      onWeekChange={setWeek}
+    />
+  );
 }
 
 // The Planner on `today`, showing one of its two weeks.
@@ -59,12 +82,15 @@ export function PlannerView({
   week,
   meals,
   pickers,
+  suggestions,
   onWeekChange,
 }: {
   today: string;
   week: Week;
   meals: PlannerMeal[];
   pickers: Pickers;
+  // What Suggestions are worked out from; none without it.
+  suggestions?: SuggestionContext;
   onWeekChange: (week: Week) => void;
 }) {
   const weeks = plannerWeeks(today);
@@ -77,45 +103,169 @@ export function PlannerView({
   const weekOf = (date: string): Week => (weeks.nextWeek.includes(date) ? "next" : "this");
   // Gone once it is deleted, which closes its panel.
   const editing = panel?.kind === "edit" ? meals.find((meal) => meal.id === panel.mealId) : undefined;
+  const bySlot = useMemo(
+    () => (suggestions ? suggestionsBySlot(suggestions, meals, today, pickers.slotFoods) : new Map()),
+    [suggestions, meals, today, pickers.slotFoods],
+  );
+  // The Meals fills put food in, shown highlighted until the Planner is left
+  // or the Meal is edited.
+  const [filled, setFilled] = useState<ReadonlyMap<string, FilledMeal>>(new Map());
+  const [outcome, setOutcome] = useState<{ outcome: FillOutcome; undoable: boolean } | null>(null);
+  // The same function every render, so the toast's timer isn't restarted.
+  const closeToast = useCallback(() => setOutcome(null), []);
+  // "Fill empty slots" plans ahead: on This week, days that have passed are
+  // left alone (spec "Suggestions").
+  const fillable = meals
+    .filter((meal) => meal.status === "planned" && meal.date >= today && days.includes(meal.date))
+    .flatMap((meal) => meal.slots.filter((slot) => bySlot.has(slot.id)).map((slot) => slot.id));
+  const onFilled = (next: FillOutcome, undoable: boolean) => {
+    setFilled((before) => recordFills(before, meals, next.filled));
+    setOutcome({ outcome: next, undoable });
+  };
+  // Undo empties the slots again, which edits their Meals: none shows.
+  const dropFilled = (fills: FillOutcome["filled"]) =>
+    setFilled((before) => {
+      const next = new Map(before);
+      for (const meal of meals) if (meal.slots.some((slot) => fills.some((fill) => fill.slotId === slot.id))) next.delete(meal.id);
+      return next;
+    });
   return (
-    <div className={week === "next" ? "planner-week planner-week-next" : "planner-week"}>
-      <div className="planner-head">
-        <h1>{t("planner.title")}</h1>
-        <CloseWeekBanner meals={meals} today={today} />
-        <WeekTabs week={week} onWeekChange={onWeekChange} />
-        <WeekBar week={week} days={days} today={today} foldedDays={foldedDays} onUnfold={() => setEarlierOpen(true)} />
+    <SuggestionsProvider value={{ bySlot, filled, onFilled }}>
+      <div className={week === "next" ? "planner-week planner-week-next" : "planner-week"}>
+        <div className="planner-head">
+          <div className="planner-title">
+            <h1>{t("planner.title")}</h1>
+            <FillButton slotIds={fillable} today={today} onFilled={(next) => onFilled(next, true)} />
+          </div>
+          <CloseWeekBanner meals={meals} today={today} />
+          <WeekTabs week={week} onWeekChange={onWeekChange} />
+          <WeekBar week={week} days={days} today={today} foldedDays={foldedDays} onUnfold={() => setEarlierOpen(true)} />
+        </div>
+        <PlannerWeek
+          week={week}
+          days={days}
+          today={today}
+          meals={meals}
+          pickers={pickers}
+          earlier={earlier}
+          foldedDays={foldedDays}
+          onEarlierToggle={() => setEarlierOpen(!earlierOpen)}
+          addingOn={panel?.kind === "add" ? panel.date : null}
+          onAdd={(date) => setPanel(panel?.kind === "add" && panel.date === date ? null : { kind: "add", date })}
+          onEdit={(mealId) => setPanel({ kind: "edit", mealId })}
+        />
+        {panel?.kind === "add" && (
+          <AddMealPanel
+            key={panel.date}
+            date={panel.date}
+            week={weekOf(panel.date)}
+            pickers={pickers}
+            onClose={() => setPanel(null)}
+          />
+        )}
+        {editing && (
+          <EditMealPanel
+            key={editing.id}
+            meal={editing}
+            week={weekOf(editing.date)}
+            pickers={pickers}
+            onClose={() => setPanel(null)}
+          />
+        )}
+        {outcome && (
+          <FillToast
+            key={outcome.outcome.filled.map((fill) => fill.slotId).join()}
+            outcome={outcome.outcome}
+            undoable={outcome.undoable}
+            onUndone={() => dropFilled(outcome.outcome.filled)}
+            onClose={closeToast}
+          />
+        )}
       </div>
-      <PlannerWeek
-        week={week}
-        days={days}
-        today={today}
-        meals={meals}
-        pickers={pickers}
-        earlier={earlier}
-        foldedDays={foldedDays}
-        onEarlierToggle={() => setEarlierOpen(!earlierOpen)}
-        addingOn={panel?.kind === "add" ? panel.date : null}
-        onAdd={(date) => setPanel(panel?.kind === "add" && panel.date === date ? null : { kind: "add", date })}
-        onEdit={(mealId) => setPanel({ kind: "edit", mealId })}
-      />
-      {panel?.kind === "add" && (
-        <AddMealPanel
-          key={panel.date}
-          date={panel.date}
-          week={weekOf(panel.date)}
-          pickers={pickers}
-          onClose={() => setPanel(null)}
-        />
+    </SuggestionsProvider>
+  );
+}
+
+// "Fill empty slots": each of `slotIds` gets its Suggestion, day by day,
+// highest Meal Priority first within a day. Off when none has one.
+function FillButton({
+  slotIds,
+  today,
+  onFilled,
+}: {
+  slotIds: string[];
+  today: string;
+  onFilled: (outcome: FillOutcome) => void;
+}) {
+  const [pending, startTransition] = useTransition();
+  return (
+    <button
+      type="button"
+      className="planner-fill"
+      disabled={pending || slotIds.length === 0}
+      onClick={() =>
+        startTransition(async () => {
+          onFilled(await fillEmptySlotsAction(slotIds, today));
+        })
+      }
+    >
+      <svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M4 6h12M4 12h12M4 18h7M18 14v7M14.5 17.5h7" />
+      </svg>
+      {t("planner.fill")}
+    </button>
+  );
+}
+
+// How long the Fill toast stays before it goes on its own.
+const FILL_TOAST_MS = 10_000;
+
+// What the last fill or "Use all" did. A fill's has Undo, which empties again
+// the slots it filled that weren't changed since. It goes after a while, on
+// Undo or on ×.
+function FillToast({
+  outcome,
+  undoable,
+  onUndone,
+  onClose,
+}: {
+  outcome: FillOutcome;
+  undoable: boolean;
+  onUndone: () => void;
+  onClose: () => void;
+}) {
+  const [pending, startTransition] = useTransition();
+  useEffect(() => {
+    const timer = setTimeout(onClose, FILL_TOAST_MS);
+    return () => clearTimeout(timer);
+  }, [onClose]);
+  return (
+    <div className="fill-toast" role="status">
+      <svg aria-hidden="true" className="fill-toast-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M20 6L9 17l-5-5" />
+      </svg>
+      <span className="fill-toast-text">{formatFillOutcome(outcome.filled.length, outcome.noQuantity)}</span>
+      {undoable && outcome.filled.length > 0 && (
+        <button
+          type="button"
+          className="fill-toast-undo"
+          disabled={pending}
+          onClick={() =>
+            startTransition(async () => {
+              await undoFillAction(outcome.filled);
+              onUndone();
+              onClose();
+            })
+          }
+        >
+          {t("planner.fill.undo")}
+        </button>
       )}
-      {editing && (
-        <EditMealPanel
-          key={editing.id}
-          meal={editing}
-          week={weekOf(editing.date)}
-          pickers={pickers}
-          onClose={() => setPanel(null)}
-        />
-      )}
+      <button type="button" className="fill-toast-close" aria-label={t("planner.fill.dismiss")} onClick={onClose}>
+        <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round">
+          <path d="M6 6l12 12M18 6L6 18" />
+        </svg>
+      </button>
     </div>
   );
 }
