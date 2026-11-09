@@ -42,7 +42,7 @@ Started 2026-10-20 with `/grill-with-docs`. Resume by re-running it and pointing
   - **T4 Portions**: whole numbers everywhere (`integer` on `recipes` and `meal_slots`); an exception to Q2. Eating half a Portion still uses one.
   - **T5 Ordering**: integer `position`, renumbered on reorder (ingredients, layout slots, meal slots).
   - **T6 Confirmation movements**: one Stock Movement per Product per Confirmation, summed over slots, with `meal_id`.
-  - **T7 Shopping List quantity**: stored at generation time; `quantity?` (manual items may have none), `source` shortfall|manual, `ticked`, one row per Product.
+  - **T7 Shopping List quantity**: stored at generation time; `quantity?` (manual items may have none), `source` shortfall|manual, `ticked`. At most one unticked row per Product, so Generate has one item to make or resize; ticked rows for that Product can sit beside it (changed in [#159](https://github.com/HugoBar/jeeves/issues/159) for the Generate rule in [#14](https://github.com/HugoBar/jeeves/issues/14)).
   - **T8 Enums**: Postgres enums for units, movement type, Meal status, slot content, Role/Kind.
   - Deletes: RESTRICT by default (blocked while referenced); CASCADE from a Recipe/Meal/Template/Series to its own ingredients or slots, from a Recipe to its own `recipe_category_overrides`, and from a Product to its own `product_food_categories` links; `meals.series_id` SET NULL.
 
@@ -54,7 +54,7 @@ Every table: `id uuid`, `created_at timestamptz`. `?` = nullable.
 - `products(name, default_unit, density?, pack_size_name?, pack_size_amount?, stock, stock_suspect, archived_at?)`
 - `product_food_categories(product_id, category_id)`
 - `stock_movements(product_id, type, delta, resulting_quantity, meal_id?, clamped)`
-- `shopping_list_items(product_id unique, quantity?, source, ticked)`
+- `shopping_list_items(product_id, quantity?, source, ticked)`, product_id unique among unticked rows
 - `recipes(name, portions, steps, prep_time_minutes, source_url?, archived_at?)`
 - `ingredients(recipe_id, product_id, amount, unit, minor, position)`
 - `recipe_category_overrides(recipe_id, category_id, mode)`

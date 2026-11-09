@@ -127,6 +127,13 @@
       "when": 1793278445642,
       "tag": "0017_stock_movements_clamped",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1794262997775,
+      "tag": "0018_shopping_list_items",
+      "breakpoints": true
     }
   ]
 }

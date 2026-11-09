@@ -6,6 +6,7 @@ import { AMOUNT_COLUMN, DENSITY_COLUMN } from "@/core/amounts";
 import type { MealTypeSeedKey } from "@/core/meal-types";
 import { MEAL_SLOT_CONTENTS, MEAL_STATUSES } from "@/core/meals";
 import { CATEGORY_OVERRIDE_MODES } from "@/core/recipes";
+import { SHOPPING_LIST_SOURCES } from "@/core/shopping-list";
 import { STOCK_MOVEMENT_TYPES } from "@/core/stock";
 import { DEFAULT_UNITS, RECIPE_UNITS } from "@/core/units";
 import {
@@ -319,5 +320,34 @@ export const mealSlots = pgTable(
     index("meal_slots_slot_category_id").on(table.slotCategoryId),
     index("meal_slots_recipe_id").on(table.recipeId),
     index("meal_slots_product_id").on(table.productId),
+  ],
+);
+
+export const shoppingListSource = pgEnum("shopping_list_source", SHOPPING_LIST_SOURCES);
+
+// The one current Shopping List, with no history (data-model T7). A Product
+// has at most one unticked item, so Generate has one item to make or resize;
+// it can also have ticked ones beside it. `quantity` is in the Product's Default Unit, worked out
+// when the item is made; an item added by hand may have none. Ticked means
+// bought, and never changes Stock. A Product on the list cannot be deleted,
+// so removing it Archives it.
+export const shoppingListItems = pgTable(
+  "shopping_list_items",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    productId: uuid("product_id")
+      .notNull()
+      .references(() => products.id, { onDelete: "restrict" }),
+    quantity: amount("quantity"),
+    source: shoppingListSource("source").notNull(),
+    ticked: boolean("ticked").notNull().default(false),
+  },
+  (table) => [
+    uniqueIndex("shopping_list_items_unticked_product_id")
+      .on(table.productId)
+      .where(sql`not ${table.ticked}`),
+    index("shopping_list_items_product_id").on(table.productId),
+    check("shopping_list_items_quantity_above_zero", sql`${table.quantity} > 0`),
   ],
 );
