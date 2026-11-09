@@ -68,10 +68,13 @@ I want one place that knows what food is in my Pantry, what I can cook from it, 
 See [#1](https://github.com/HugoBar/jeeves/issues/1). Daily 03:00 in-app badge + "Needs confirmation" list; Saturday "Close this week" banner; from 03:00 Monday, a non-dismissable resolution screen for any earlier week's Unconfirmed Meals. Unconfirmed Meals count as eaten for projections and as history for variety.
 
 ### Suggestions
-- One Suggestion plus 2 alternatives per empty Meal Slot. Candidates: non-Archived Recipes and Products carrying the Slot Category.
-- **Variety**: compare against Meal Slots with the same Slot Category in non-Skipped Meals from 7 days before the slot to the Sunday of the week being planned. Penalise the exact same item; if the Slot Category is a Role, also penalise each shared Kind. Nearer slots weigh more (linear decay).
-- **Stock coverage**: bonus by fraction of the candidate's needs met by Projected Stock, weighted by days until the Meal (1.0 today → 0.2 at +6 days). Switched off for Untracked Meals.
-- All weights and N are constants in `core`, tuned later.
+- One Suggestion plus 2 alternatives per empty Meal Slot of a Planned or Unconfirmed Meal. Candidates: non-Archived Recipes and Products carrying the Slot Category. A slot whose Slot Category is Archived gets none. Archived Food Categories on Recipes and Products are ignored.
+- Each candidate's score starts at 0, gains a Stock coverage bonus and loses a variety penalty. Highest first; ties keep the candidates' order.
+- **Variety**: compare against Meal Slots with the same Slot Category in non-Skipped Meals from 7 days before the slot to the Sunday of the week being planned, the slot's own Meal included. Each such slot takes off 1 if it holds the exact same item and, if the Slot Category is a Role, 0.5 for each Kind it shares. That is scaled by how near it is: 1 on the same day, 7/8 a day apart, down to 1/8 at 7 days.
+- **Stock coverage**: adds up to 2, scaled by the fraction of the candidate's needs met by Projected Stock at the slot, and by days until the Meal: 1.0 today (or a day that has passed), falling in a straight line to 0.2 at +6 days and after. Switched off for Untracked Meals.
+  - A Recipe is taken at its stated Portions. Each Product it needs counts min(1, Projected Stock / need), and the fraction is their average. Minor Ingredients are left out by default. A Product whose Ingredient can't be converted counts 0, as its need is unknown. A Recipe needing nothing is fully covered.
+  - A Product's quantity is only chosen once picked, so it counts as fully covered when any of it is in Projected Stock, else not at all.
+- All weights, the 7-day window and the number of alternatives (2) are named constants in `core`. The balance of variety and Stock, and whether Minor Ingredients count, become settings in [#155](https://github.com/HugoBar/jeeves/issues/155).
 - "Fill empty slots" fills the week day by day, highest Meal Priority first within a day; each fill accounts for previous fills.
 
 ### Shopping List

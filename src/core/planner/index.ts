@@ -20,6 +20,11 @@ export function addDays(date: string, days: number): string {
   return fromTime(toTime(date) + days * DAY_MS);
 }
 
+// How many days `to` is after `from`, negative when it is before.
+export function daysBetween(from: string, to: string): number {
+  return Math.round((toTime(to) - toTime(from)) / DAY_MS);
+}
+
 // The Monday of the week holding `date` (weeks run Monday to Sunday).
 export function mondayOf(date: string): string {
   const weekday = new Date(toTime(date)).getUTCDay(); // 0 = Sunday
