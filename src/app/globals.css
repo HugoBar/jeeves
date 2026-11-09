@@ -4571,3 +4571,116 @@ body:has(.needs-confirmation-locked) :is(.top-menu, .bottom-menu, a.app-badge) {
     width: 440px;
   }
 }
+
+/* The Shopping List: From Shortfalls above the list on phone, right of it
+   from 768px. */
+.shopping-title {
+  margin: 0 0 14px;
+}
+
+.shopping-columns {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.shopping-generate {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.shopping-generate p {
+  margin: 0;
+  color: var(--color-ink-muted);
+  font-size: var(--text-meta);
+}
+
+/* The dates Generate works over, which opens Choose dates. */
+.shopping-dates {
+  --button-bg: var(--color-inset);
+  --button-line: var(--color-line-field);
+  justify-content: space-between;
+  min-height: 48px;
+  border-radius: 14px;
+  font-weight: 700;
+}
+
+.shopping-dates svg {
+  flex: none;
+  color: var(--color-ink-muted);
+}
+
+.shopping-generate .button-primary {
+  min-height: 48px;
+}
+
+.shopping-items {
+  display: flex;
+  flex-direction: column;
+}
+
+.shopping-empty {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 28px 0;
+  text-align: center;
+}
+
+.shopping-empty strong {
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.shopping-empty p {
+  margin: 0;
+  color: var(--color-ink-muted);
+  font-size: var(--text-meta);
+}
+
+/* Adding by hand, under the list. */
+.shopping-add {
+  display: flex;
+  gap: 10px;
+  padding-top: 14px;
+  border-top: 1px solid var(--color-line-soft);
+}
+
+.shopping-add input:not([type="checkbox"]) {
+  flex: 1;
+  border-style: dashed;
+  border-color: var(--color-line-strong);
+  border-radius: 999px;
+}
+
+.shopping-add-button {
+  flex: none;
+  width: 44px;
+  padding: 0;
+  font-size: 18px;
+}
+
+@media (min-width: 768px) {
+  .shopping-title {
+    margin-bottom: var(--space);
+    font-size: 30px;
+  }
+
+  .shopping-columns {
+    display: grid;
+    grid-template-columns: minmax(0, 1.8fr) minmax(0, 1fr);
+    align-items: start;
+    gap: 20px;
+  }
+
+  .shopping-generate {
+    grid-column: 2;
+    grid-row: 1;
+  }
+
+  .shopping-items {
+    grid-column: 1;
+    grid-row: 1;
+  }
+}
