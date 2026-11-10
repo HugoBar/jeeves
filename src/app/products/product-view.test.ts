@@ -60,6 +60,31 @@ describe("the Product page's heading", () => {
     expect(render()).toMatch(/<a [^>]*href="\/products"[^>]*>.*Stock<\/a>/);
   });
 
+  describe("opened from the Shopping List", () => {
+    const html = renderToStaticMarkup(
+      createElement(ProductView, {
+        product: rice,
+        categories,
+        movements: [movement("restock", 500, 1800)],
+        rows: 10,
+        hasOlder: true,
+        removeOutcome: "deleted",
+        actions,
+        from: "shopping-list",
+      }),
+    );
+
+    it("links back to the Shopping List", () => {
+      expect(html).toMatch(/<a [^>]*href="\/shopping-list"[^>]*>.*Shopping List<\/a>/);
+      expect(html).not.toMatch(/href="\/products"/);
+    });
+
+    it("keeps where it was opened from on Edit and on older history", () => {
+      expect(html).toContain('href="/products/1/edit?from=shopping-list"');
+      expect(html).toContain('href="/products/1?from=shopping-list&amp;rows=20"');
+    });
+  });
+
   it("shows the Product's name and Food Category pills in the order pickers list them", () => {
     const html = render();
     expect(html).toContain("<h1>Basmati rice</h1>");

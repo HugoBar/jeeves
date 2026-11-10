@@ -65,6 +65,20 @@ export function formatFillOutcome(filled: number, noQuantity: number): string {
   return noQuantity === 0 ? done : `${done} · ${t("planner.fill.noQuantity", { count: noQuantity })}`;
 }
 
+// How many items the Shopping List holds: "1 item", "5 items".
+export function formatShoppingCount(count: number): string {
+  return count === 1 ? t("shopping.countOne") : t("shopping.count", { count });
+}
+
+// Whole packs of a Pack Size: "1 bag", "2 cartons", "3 boxes". The name is
+// typed by the user: a capital starting it is dropped, as in a sentence, but
+// "XL bag" keeps its letters.
+export function formatPacks(count: number, name: string): string {
+  const lower = name.replace(/^\p{Lu}(?!\p{Lu})/u, (capital) => capital.toLowerCase());
+  const plural = count === 1 ? lower : /(s|x|z|ch|sh)$/i.test(lower) ? `${lower}es` : `${lower}s`;
+  return t("shopping.packs", { count: quantityFormat.format(count), name: plural });
+}
+
 // A Recipe's Portions in running text: "1 portion", "1,800 portions".
 export function formatPortions(portions: number): string {
   return portions === 1

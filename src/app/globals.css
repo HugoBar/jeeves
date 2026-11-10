@@ -4639,6 +4639,55 @@ body:has(.needs-confirmation-locked) :is(.top-menu, .bottom-menu, a.app-badge) {
   font-size: var(--text-meta);
 }
 
+/* "5 items", over the list. */
+.shopping-count {
+  margin: 0 0 4px;
+  font-size: var(--text-body);
+  font-weight: 700;
+}
+
+/* The list's rows sit straight in the card. */
+.shopping-list {
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: none;
+}
+
+.shopping-item {
+  min-height: 68px;
+  padding: 10px 0;
+}
+
+.shopping-item-name {
+  color: inherit;
+  text-decoration: none;
+}
+
+.shopping-item-name:hover {
+  text-decoration: underline;
+}
+
+/* "1 bag" stands out from "(100 g needed)". */
+.shopping-amount {
+  color: var(--color-ink-muted);
+  font-size: var(--text-meta);
+}
+
+.shopping-amount strong {
+  color: var(--color-ink);
+  font-weight: 600;
+}
+
+.shopping-item-remove {
+  --button-bg: transparent;
+  --button-line: transparent;
+  --button-ink: var(--color-ink-muted);
+  flex: none;
+  width: 44px;
+  padding: 0;
+}
+
 /* Adding by hand, under the list. */
 .shopping-add {
   display: flex;

@@ -1,7 +1,7 @@
 import { beforeAll, describe, expect, it } from "vitest";
 import { createProduct } from "./products";
 import { shoppingListItems } from "./schema";
-import { listShoppingList } from "./shopping-list";
+import { listShoppingList, removeShoppingListItem } from "./shopping-list";
 import { createTestDb } from "./test-database";
 
 let db: Awaited<ReturnType<typeof createTestDb>>;
@@ -70,5 +70,23 @@ describe("listShoppingList", () => {
         { quantity: 150, ticked: false },
       ]),
     );
+  });
+});
+
+describe("removeShoppingListItem", () => {
+  it("takes the item off the list and leaves the others", async () => {
+    const flour = await aProduct("Flour");
+    const sugar = await aProduct("Sugar");
+    await db.insert(shoppingListItems).values([
+      { productId: flour.id, quantity: 500, source: "shortfall" },
+      { productId: sugar.id, quantity: 200, source: "shortfall" },
+    ]);
+    const onList = async () =>
+      (await listShoppingList(db)).filter((item) => [flour.id, sugar.id].includes(item.product.id));
+    const [flourItem] = await onList();
+
+    await removeShoppingListItem(db, flourItem!.id);
+
+    expect((await onList()).map((item) => item.product.name)).toEqual(["Sugar"]);
   });
 });

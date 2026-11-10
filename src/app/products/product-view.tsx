@@ -10,13 +10,15 @@ import { FoodCategoryPill } from "../food-category-pill";
 import { BackLink } from "../list-row";
 import { LocalDate } from "../local-date";
 import { RemoveCard } from "../remove-card";
+import { originLink, productHref, type ProductOrigin } from "./origin";
 import { StockActions, type StockActionRunners } from "./stock-action-sheet";
 
 // A Product: its Stock, the Restock, Discard and Correction sheet, its Details,
 // its Stock Movement history and Remove. Pills follow the order of
 // `categories`, which also holds their labels. `movements` run newest first:
 // the `rows` asked for, and `hasOlder` says if there are more. `removeOutcome`
-// is what Remove would do.
+// is what Remove would do. `from` is the page it was opened from, which its
+// back link returns to.
 export function ProductView({
   product,
   categories,
@@ -25,6 +27,7 @@ export function ProductView({
   hasOlder,
   removeOutcome,
   actions,
+  from = "stock",
 }: {
   product: Product;
   categories: CategoryOption[];
@@ -33,14 +36,16 @@ export function ProductView({
   hasOlder: boolean;
   removeOutcome: RemoveOutcome;
   actions: StockActionRunners & { remove: () => Promise<void> };
+  from?: ProductOrigin;
 }) {
+  const back = originLink(from);
   const productCategories = categories.filter((category) => product.categoryIds.includes(category.id));
   return (
     <section className="page-wide">
-      <BackLink href="/products">{t("stock.title")}</BackLink>
+      <BackLink href={back.href}>{back.label}</BackLink>
       <div className="product-heading">
         <h1>{product.name}</h1>
-        <Link href={`/products/${product.id}/edit`} className="button">
+        <Link href={productHref(product.id, from, { edit: true })} className="button">
           <span className="phone-only">{t("products.edit")}</span>
           <span className="desktop-only">{t("products.editProduct")}</span>
         </Link>
@@ -57,6 +62,7 @@ export function ProductView({
           <StockCard product={product} lastMovement={movements[0]} actions={actions} />
           <StockHistory
             productId={product.id}
+            from={from}
             unit={product.defaultUnit}
             movements={movements}
             rows={rows}
@@ -161,12 +167,14 @@ function Detail({ label, help, value }: { label: string; help: string; value: st
 // to the ones on screen, so a Stock Movement made meanwhile leaves no gap.
 function StockHistory({
   productId,
+  from,
   unit,
   movements,
   rows,
   hasOlder,
 }: {
   productId: string;
+  from: ProductOrigin;
   unit: DefaultUnit;
   movements: StockMovement[];
   rows: number;
@@ -204,7 +212,7 @@ function StockHistory({
           </ul>
           {hasOlder && (
             <Link
-              href={`/products/${productId}?rows=${rows + STOCK_HISTORY_PAGE_SIZE}`}
+              href={productHref(productId, from, { rows: rows + STOCK_HISTORY_PAGE_SIZE })}
               className="stock-history-older"
               replace
               scroll={false}
