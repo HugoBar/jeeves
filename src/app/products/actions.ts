@@ -14,6 +14,7 @@ import { getDb } from "@/db";
 import type { RemoveOutcome } from "@/db/archive";
 import { createProduct, getProduct, isProductNameTaken, removeProductIfStill, updateProduct } from "@/db/products";
 import { listIngredientUses } from "@/db/recipes";
+import { originLink, parseProductOrigin, productHref, type ProductOrigin } from "./origin";
 
 export type ProductFormValues = ProductFieldsInput & { defaultUnit?: string };
 
@@ -38,8 +39,10 @@ export async function createProductAction(
   redirect("/products");
 }
 
+// `from` is the page the Product page was opened from, kept on the way back.
 export async function editProductAction(
   id: string,
+  from: ProductOrigin,
   _state: ProductFormState,
   formData: FormData,
 ): Promise<ProductFormState> {
@@ -55,13 +58,14 @@ export async function editProductAction(
   }
   const result = await updateProduct(db, id, parsed.fields);
   if (!result.ok) return { errors: [result.error], values };
-  redirect(`/products/${id}`);
+  redirect(productHref(id, parseProductOrigin(from)));
 }
 
 // `expected` is what the page said Remove would do. If that no longer holds,
-// nothing is removed and the page refreshes to say what it would do now.
-export async function removeProductAction(id: string, expected: RemoveOutcome): Promise<void> {
-  if (await removeProductIfStill(getDb(), id, expected)) redirect("/products");
+// nothing is removed and the page refreshes to say what it would do now. Once
+// removed, it goes back to the page the Product page was opened from.
+export async function removeProductAction(id: string, expected: RemoveOutcome, from: ProductOrigin): Promise<void> {
+  if (await removeProductIfStill(getDb(), id, expected)) redirect(originLink(parseProductOrigin(from)).href);
   refresh();
 }
 
