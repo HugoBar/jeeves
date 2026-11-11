@@ -5,7 +5,7 @@ import { useState, useTransition } from "react";
 import { plannerWeeks } from "@/core/planner";
 import { packsCovering } from "@/core/shopping-list";
 import type { ShoppingListItem } from "@/db/shopping-list";
-import { formatPacks, formatQuantity, formatShoppingCount, formatWeekRange, t } from "@/strings";
+import { formatPacks, formatQuantity, formatShoppingCount, formatDateRange, t } from "@/strings";
 import { productHref } from "../products/origin";
 import { ConfirmSheet } from "../sheet";
 import { useViewerNow } from "../viewer-clock";
@@ -134,7 +134,7 @@ function FromShortfalls({ today }: { today: string | null }) {
   let dates = t("shopping.plannedWeek");
   if (today) {
     const { thisWeek } = plannerWeeks(today);
-    dates = t("shopping.plannedWeekDates", { dates: formatWeekRange(thisWeek[0]!, thisWeek.at(-1)!) });
+    dates = t("shopping.plannedWeekDates", { dates: formatDateRange(thisWeek[0]!, thisWeek.at(-1)!) });
   }
   return (
     <div className="card shopping-generate">

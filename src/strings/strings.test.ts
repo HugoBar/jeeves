@@ -8,7 +8,7 @@ import {
   formatMovementMeal,
   formatPackSize,
   formatPackSizeNote,
-  formatWeekRange,
+  formatDateRange,
   mealPanelLabel,
   mealTypeLabel,
   t,
@@ -99,13 +99,17 @@ describe("formatPackSizeNote", () => {
   });
 });
 
-describe("formatWeekRange", () => {
+describe("formatDateRange", () => {
   it("names the month once when the week stays in it", () => {
-    expect(formatWeekRange("2026-10-19", "2026-10-25")).toBe("19–25 Oct");
+    expect(formatDateRange("2026-10-19", "2026-10-25")).toBe("19–25 Oct");
   });
 
   it("names both months when the week runs into the next", () => {
-    expect(formatWeekRange("2026-10-26", "2026-11-01")).toBe("26 Oct–1 Nov");
+    expect(formatDateRange("2026-10-26", "2026-11-01")).toBe("26 Oct–1 Nov");
+  });
+
+  it("names a single day once", () => {
+    expect(formatDateRange("2026-11-20", "2026-11-20")).toBe("20 Nov");
   });
 });
 

@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState, useTransition } from "react";
 import { lastWeek, mealCardStatus, mustResolve, needingConfirmation, sortMealsByDay } from "@/core/meals";
-import { formatMealDate, formatWeekRange, t } from "@/strings";
+import { formatMealDate, formatDateRange, t } from "@/strings";
 import { FoodCategoryPill } from "../food-category-pill";
 import { FormBanner } from "../form-error";
 import { BackLink } from "../list-row";
@@ -62,7 +62,7 @@ export function NeedsConfirmation({ meals, ...pickers }: { meals: PlannerMeal[] 
       <header className="needs-confirmation-head">
         {resolving && (
           <p className="needs-confirmation-eyebrow">
-            {t("unconfirmed.resolveEyebrow", { range: formatWeekRange(week.first, week.last) })}
+            {t("unconfirmed.resolveEyebrow", { range: formatDateRange(week.first, week.last) })}
           </p>
         )}
         <h1>{t(resolving ? "unconfirmed.resolveTitle" : "unconfirmed.title")}</h1>
