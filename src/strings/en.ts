@@ -382,6 +382,8 @@ export const en = {
   "shopping.remove": "Remove {name}",
   "shopping.removeTitle": "Remove {name}?",
   "shopping.removeTickedBody": "It's ticked as bought. Removing it means Restock won't add it to Stock.",
+  "shopping.tick": "Bought {name}",
+  "shopping.tickAll": "Tick all",
   "stock.title": "Stock",
   "stock.empty": "No Products yet",
   "stock.emptyHint": "Add a Product to start tracking what is in your Pantry.",

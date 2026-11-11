@@ -4,7 +4,13 @@ import { refresh } from "next/cache";
 import { isDate } from "@/core/planner";
 import { isGenerateRange, type DateRange } from "@/core/shopping-list";
 import { getDb } from "@/db";
-import { addProductByHand, generateShoppingList, removeShoppingListItem } from "@/db/shopping-list";
+import {
+  addProductByHand,
+  generateShoppingList,
+  removeShoppingListItem,
+  setAllShoppingListItemsTicked,
+  setShoppingListItemTicked,
+} from "@/db/shopping-list";
 
 // Generate from the Shortfalls of the Meals in `range`, which lies in the
 // Planner's two weeks. `today` is the viewer's date, which decides those
@@ -28,3 +34,16 @@ export async function addProductByHandAction(productId: string): Promise<string 
   refresh();
   return result.ok ? result.itemId : null;
 }
+
+// Ticks an item as bought, or unticks it; Stock doesn't change.
+export async function setShoppingListItemTickedAction(id: string, ticked: boolean): Promise<void> {
+  await setShoppingListItemTicked(getDb(), id, ticked);
+  refresh();
+}
+
+// Ticks every item, or unticks every item; Stock doesn't change.
+export async function setAllShoppingListItemsTickedAction(ticked: boolean): Promise<void> {
+  await setAllShoppingListItemsTicked(getDb(), ticked);
+  refresh();
+}
+

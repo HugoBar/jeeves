@@ -10,7 +10,12 @@ import { ShoppingListView } from "./shopping-list";
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 // The server actions, so what the list sends can be read back.
-vi.mock("./actions", () => ({ removeShoppingListItemAction: vi.fn(), generateShoppingListAction: vi.fn() }));
+vi.mock("./actions", () => ({
+  removeShoppingListItemAction: vi.fn(),
+  generateShoppingListAction: vi.fn(),
+  setShoppingListItemTickedAction: vi.fn(),
+  setAllShoppingListItemsTickedAction: vi.fn(),
+}));
 const remove = vi.mocked(removeShoppingListItemAction);
 
 const item = (name: string, ticked: boolean): ShoppingListItem => ({
