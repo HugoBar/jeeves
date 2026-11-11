@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { packsCovering, planAddByHand, planGenerate } from "./index";
+import { chosenRange, currentChoice, generatePresets, isGenerateRange, packsCovering, planAddByHand, planGenerate } from "./index";
 
 // Spinach, 250 g short (spec "Shopping List").
 const short = new Map([["spinach", 250]]);
@@ -95,5 +95,65 @@ describe("planAddByHand", () => {
 
   it("leaves the unticked item of a Product without a Pack Size as it is", () => {
     expect(planAddByHand(null, [item("a", 150)])).toEqual({ kind: "keep", id: "a" });
+  });
+});
+
+// Wednesday 11 Nov 2026: the Planner covers 9-22 Nov.
+describe("generatePresets", () => {
+  it("offers the planned week, the next week and both", () => {
+    expect(generatePresets("2026-11-11")).toEqual({
+      planned: { from: "2026-11-09", to: "2026-11-15" },
+      next: { from: "2026-11-16", to: "2026-11-22" },
+      both: { from: "2026-11-09", to: "2026-11-22" },
+    });
+  });
+});
+
+describe("isGenerateRange", () => {
+  it("takes any dates in the Planner's two weeks, From on or before To", () => {
+    expect(isGenerateRange("2026-11-11", { from: "2026-11-09", to: "2026-11-22" })).toBe(true);
+    expect(isGenerateRange("2026-11-11", { from: "2026-11-12", to: "2026-11-17" })).toBe(true);
+    expect(isGenerateRange("2026-11-11", { from: "2026-11-20", to: "2026-11-20" })).toBe(true);
+  });
+
+  it("refuses From after To", () => {
+    expect(isGenerateRange("2026-11-11", { from: "2026-11-18", to: "2026-11-17" })).toBe(false);
+  });
+
+  it("refuses dates outside the two weeks", () => {
+    expect(isGenerateRange("2026-11-11", { from: "2026-11-08", to: "2026-11-15" })).toBe(false);
+    expect(isGenerateRange("2026-11-11", { from: "2026-11-16", to: "2026-11-23" })).toBe(false);
+  });
+
+  it("refuses text that isn't a date", () => {
+    expect(isGenerateRange("2026-11-11", { from: "2026-11-09", to: "soon" })).toBe(false);
+  });
+});
+
+describe("chosenRange", () => {
+  it("gives a preset's dates on the viewer's date", () => {
+    expect(chosenRange({ preset: "next" }, "2026-11-11")).toEqual({ from: "2026-11-16", to: "2026-11-22" });
+    expect(chosenRange({ preset: "next" }, "2026-11-16")).toEqual({ from: "2026-11-23", to: "2026-11-29" });
+  });
+
+  it("gives dates of your own as they are", () => {
+    const own = { preset: null, range: { from: "2026-11-12", to: "2026-11-17" } };
+    expect(chosenRange(own, "2026-11-11")).toEqual({ from: "2026-11-12", to: "2026-11-17" });
+  });
+});
+
+describe("currentChoice", () => {
+  const own = { preset: null, range: { from: "2026-11-12", to: "2026-11-17" } };
+
+  it("keeps dates of your own while they lie in the Planner's two weeks", () => {
+    expect(currentChoice(own, "2026-11-11")).toEqual(own);
+  });
+
+  it("goes back to the planned week once the viewer's date leaves dates of your own behind", () => {
+    expect(currentChoice(own, "2026-11-16")).toEqual({ preset: "planned" });
+  });
+
+  it("keeps a preset, whose dates follow the viewer's date", () => {
+    expect(currentChoice({ preset: "next" }, "2026-11-16")).toEqual({ preset: "next" });
   });
 });
