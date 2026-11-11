@@ -49,7 +49,7 @@ const press = (element: Element | null | undefined) =>
 const row = (name: string) => [...container.querySelectorAll("li")].find((li) => text(li).includes(name));
 
 const show = (items: ShoppingListItem[]) =>
-  act(() => root.render(createElement(ShoppingListView, { items, today: "2026-11-11", products: [], candidates: [] })));
+  act(() => root.render(createElement(ShoppingListView, { items, today: "2026-11-11", products: [], candidates: [], shortfalls: [] })));
 
 beforeEach(() => {
   setTicked.mockReset().mockResolvedValue();

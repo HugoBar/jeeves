@@ -4993,6 +4993,54 @@ body:has(.needs-confirmation-locked) :is(.top-menu, .bottom-menu, a.app-badge) {
   grid-row: 1 / span 2;
 }
 
+/* Running low, first while nothing is typed, and the other Products under
+   it, each under a small heading. On phone Running low's line sits under its
+   name; from 768px beside it. */
+.hand-add-low,
+.hand-add-others {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.hand-add-heading {
+  margin: 0;
+  padding: 0 6px;
+  color: var(--color-ink-muted);
+  font-size: var(--text-meta);
+}
+
+.hand-add-heading strong,
+.hand-add-others .hand-add-heading {
+  font-size: var(--text-label);
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.hand-add-low .hand-add-heading strong {
+  display: block;
+  color: var(--color-warning-ink);
+}
+
+.hand-add-low .hand-add-options {
+  border-color: var(--color-warning-line);
+  background: var(--color-warning-soft);
+}
+
+.hand-add-low .hand-add-options > li + li {
+  border-top-color: var(--color-warning-line);
+}
+
+.hand-add-low .hand-add-status {
+  color: var(--color-warning-ink);
+  font-weight: 500;
+}
+
+.hand-add-low .hand-add-button {
+  --button-bg: var(--color-surface);
+}
+
 .hand-add-show-all {
   --button-bg: transparent;
   --button-line: transparent;
@@ -5079,5 +5127,10 @@ body:has(.needs-confirmation-locked) :is(.top-menu, .bottom-menu, a.app-badge) {
   .hand-add-button {
     grid-column: 3;
     grid-row: 1;
+  }
+
+  .hand-add-low .hand-add-heading strong {
+    display: inline;
+    margin-right: 10px;
   }
 }
