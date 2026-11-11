@@ -15,6 +15,7 @@ vi.mock("./actions", () => ({
   generateShoppingListAction: vi.fn(),
   setShoppingListItemTickedAction: vi.fn(),
   setAllShoppingListItemsTickedAction: vi.fn(),
+  restockTickedItemsAction: vi.fn(),
 }));
 const remove = vi.mocked(removeShoppingListItemAction);
 

@@ -16,6 +16,7 @@ import {
 } from "./actions";
 import { AddByHand, type HandAddProduct } from "./add-by-hand";
 import { ChooseDates, datesLabel } from "./choose-dates";
+import { RestockTicked } from "./restock-ticked";
 
 // "Today" is the date in the viewer's time zone (spec "Platform"), which
 // decides the Planner's current week.
@@ -24,7 +25,8 @@ export function ShoppingList({ items, products }: { items: ShoppingListItem[]; p
 }
 
 // The Shopping List on `today`, or before the browser knows it (null). On
-// phone From Shortfalls comes first; from 768px it sits right of the list.
+// phone From Shortfalls comes first and Restock ticked items last; from 768px
+// both sit right of the list.
 // `products` are the ones that can be added by hand, A to Z.
 export function ShoppingListView({
   items,
@@ -67,6 +69,7 @@ export function ShoppingListView({
             </ul>
           )}
         </div>
+        {ticked.length > 0 && <RestockTicked ticked={ticked} />}
       </div>
     </section>
   );

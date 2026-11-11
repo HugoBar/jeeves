@@ -4819,6 +4819,69 @@ body:has(.needs-confirmation-locked) :is(.top-menu, .bottom-menu, a.app-badge) {
   cursor: pointer;
 }
 
+/* "Restock 2 ticked items", under the list on phone. */
+.shopping-restock {
+  min-height: 52px;
+  font-size: var(--text-item);
+}
+
+/* Restock ticked items: each item's amount bought on a tinted card, its
+   unit beside the field and its packs at the end. */
+.restock-form {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.restock-form .sheet-body {
+  margin-bottom: 4px;
+}
+
+.restock-item {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 12px 14px;
+  border-radius: 16px;
+  background: var(--color-inset);
+}
+
+.restock-item label {
+  gap: 8px;
+}
+
+.restock-item-name {
+  color: var(--color-ink);
+  font-size: var(--text-body);
+  font-weight: 600;
+}
+
+.restock-item-amount {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.restock-item-amount input {
+  width: 8em;
+  min-height: 44px;
+  font-size: var(--text-item);
+  font-weight: 500;
+}
+
+.restock-item-unit {
+  color: var(--color-ink);
+  font-size: var(--text-item);
+  font-weight: 400;
+}
+
+.restock-item-packs {
+  margin-left: auto;
+  color: var(--color-ink-muted);
+  font-size: var(--text-meta);
+  font-weight: 400;
+}
+
 /* Adding a Product by hand, at the top of the list: the field, Cancel
    while open, and under them the Products to add. */
 .hand-add {
@@ -4942,9 +5005,12 @@ body:has(.needs-confirmation-locked) :is(.top-menu, .bottom-menu, a.app-badge) {
     font-size: 30px;
   }
 
+  /* Row 2 takes whatever height the list needs beyond From Shortfalls, so
+     Restock ticked items sits right under it. */
   .shopping-columns {
     display: grid;
     grid-template-columns: minmax(0, 1.8fr) minmax(0, 1fr);
+    grid-template-rows: auto 1fr;
     align-items: start;
     gap: 20px;
   }
@@ -4954,9 +5020,14 @@ body:has(.needs-confirmation-locked) :is(.top-menu, .bottom-menu, a.app-badge) {
     grid-row: 1;
   }
 
+  .shopping-restock {
+    grid-column: 2;
+    grid-row: 2;
+  }
+
   .shopping-items {
     grid-column: 1;
-    grid-row: 1;
+    grid-row: 1 / span 2;
   }
 
   .hand-add-option {
