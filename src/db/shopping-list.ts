@@ -1,5 +1,6 @@
 import "server-only";
-import { and, eq, inArray, isNull, sql } from "drizzle-orm";
+import { and, eq, inArray, isNull, lt, sql } from "drizzle-orm";
+import { productsInSlotOrder } from "@/core/confirmation";
 import { sortByName } from "@/core/names";
 import type { PackSize } from "@/core/products";
 import {
@@ -9,12 +10,13 @@ import {
   planUntickAll,
   shortfallsBetween,
   type ShoppingListSource,
+  type UncertainCandidate,
 } from "@/core/shopping-list";
 import type { DefaultUnit } from "@/core/units";
 import type { Db } from "./index";
 import { toPackSize } from "./products";
-import { loadStockProjection } from "./projected-stock";
-import { products, shoppingListItems } from "./schema";
+import { loadMealSlots, loadStockProjection } from "./projected-stock";
+import { meals, products, shoppingListItems } from "./schema";
 import { restockProduct } from "./stock-movements";
 
 export interface ShoppingListItem {
@@ -207,4 +209,15 @@ export async function restockTickedItems(db: Db, bought: readonly { id: string; 
     }
     if (items.length > 0) await tx.delete(shoppingListItems).where(inArray(shoppingListItems.id, items.map(({ id }) => id)));
   });
+}
+
+// Every Meal that could be Unconfirmed for any viewer, Planned and before
+// `before`, with the Products its slots use, for core's stockUncertainty.
+export async function listUncertainCandidates(db: Db, before: string): Promise<UncertainCandidate[]> {
+  const rows = await db
+    .select({ id: meals.id, status: meals.status, date: meals.date, untracked: meals.untracked })
+    .from(meals)
+    .where(and(eq(meals.status, "planned"), lt(meals.date, before)));
+  const { slotsByMeal } = await loadMealSlots(db, rows.map((meal) => meal.id));
+  return rows.map(({ id, ...meal }) => ({ ...meal, productIds: productsInSlotOrder(slotsByMeal.get(id)!) }));
 }
