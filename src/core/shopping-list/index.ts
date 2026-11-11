@@ -79,6 +79,15 @@ export function packsCovering(quantity: number, packAmount: number): number {
   return Math.ceil(Math.round((quantity / packAmount) * 1e6) / 1e6);
 }
 
+// What "Restock ticked items" starts an item's amount bought at (spec
+// "Shopping List"): the whole packs that cover its amount, or the amount
+// without a Pack Size; null, so empty, for an item with no amount. In the
+// Product's Default Unit, as is `packAmount`, null without a Pack Size.
+export function restockStart(quantity: number | null, packAmount: number | null): number | null {
+  if (quantity === null || packAmount === null) return quantity;
+  return roundForColumn(packsCovering(quantity, packAmount) * packAmount, AMOUNT_COLUMN);
+}
+
 // What adding a Product by hand changes: a new item, its unticked item
 // raised, or, with no pack to add, its unticked item kept as it is.
 export type HandAddPlan =
@@ -97,6 +106,51 @@ export function planAddByHand(packAmount: number | null, items: readonly ListedI
   if (packAmount === null) return { kind: "keep", id: unticked.id };
   const quantity = roundForColumn((unticked.quantity ?? 0) + packAmount, AMOUNT_COLUMN);
   return { kind: "raise", id: unticked.id, quantity };
+}
+
+// What unticking an item changes: just its tick, or, when its Product
+// already has an unticked item, that item takes its amount and it goes.
+export type UntickPlan = { kind: "untick" } | { kind: "merge"; into: string; quantity: number | null };
+
+// A Product has at most one unticked item (data-model T7), so unticking one
+// beside it adds the two together, counting no amount as 0; with neither
+// holding one the sum has none either. `items` are its Product's items.
+export function planUntick(id: string, items: readonly ListedItem[]): UntickPlan {
+  const unticked = items.find((item) => !item.ticked && item.id !== id);
+  if (!unticked) return { kind: "untick" };
+  const own = items.filter((item) => item.id === id);
+  return { kind: "merge", into: unticked.id, quantity: sumAmounts([...own, unticked]) };
+}
+
+// What unticking every item changes: the items left, each its Product's one
+// unticked item with the amount it now holds, and the items that go.
+export interface UntickAllPlan {
+  keep: { id: string; quantity: number | null }[];
+  remove: string[];
+}
+
+// Unticking the whole list leaves each Product one unticked item (data-model
+// T7), so a Product's items are added together, as one untick adds into its
+// unticked item: into that one if there is one, else into its first.
+export function planUntickAll(items: readonly ListedItem[]): UntickAllPlan {
+  const byProduct = new Map<string, ListedItem[]>();
+  for (const item of items) byProduct.set(item.productId, [...(byProduct.get(item.productId) ?? []), item]);
+  const plan: UntickAllPlan = { keep: [], remove: [] };
+  for (const own of byProduct.values()) {
+    const kept = own.find((item) => !item.ticked) ?? own[0]!;
+    plan.keep.push({ id: kept.id, quantity: sumAmounts(own) });
+    plan.remove.push(...own.filter((item) => item !== kept).map((item) => item.id));
+  }
+  return plan;
+}
+
+// Items' amounts added together, counting no amount as 0; none if none has one.
+function sumAmounts(items: readonly ListedItem[]): number | null {
+  if (items.every((item) => item.quantity === null)) return null;
+  return roundForColumn(
+    items.reduce((sum, item) => sum + (item.quantity ?? 0), 0),
+    AMOUNT_COLUMN,
+  );
 }
 
 // Dates Generate works over, both included.
