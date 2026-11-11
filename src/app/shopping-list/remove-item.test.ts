@@ -47,7 +47,7 @@ beforeEach(() => {
   root = createRoot(container);
   act(() =>
     root.render(
-      createElement(ShoppingListView, { items: [item("Spinach", false), item("Ground beef", true)], today: "2026-11-11", products: [], candidates: [] }),
+      createElement(ShoppingListView, { items: [item("Spinach", false), item("Ground beef", true)], today: "2026-11-11", products: [], candidates: [], shortfalls: [] }),
     ),
   );
 });

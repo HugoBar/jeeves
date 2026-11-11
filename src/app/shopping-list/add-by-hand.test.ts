@@ -2,6 +2,7 @@
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import type { DatedShortfall } from "@/core/shopping-list";
 import type { ShoppingListItem } from "@/db/shopping-list";
 import { addProductByHandAction } from "./actions";
 import type { HandAddProduct } from "./add-by-hand";
@@ -18,11 +19,16 @@ vi.mock("./actions", () => ({
 }));
 const add = vi.mocked(addProductByHandAction);
 
-const product = (name: string, packSize: { name: string; amount: number } | null = null): HandAddProduct => ({
+const product = (
+  name: string,
+  packSize: { name: string; amount: number } | null = null,
+  { stock = 1000, defaultUnit = "g" }: Partial<Pick<HandAddProduct, "stock" | "defaultUnit">> = {},
+): HandAddProduct => ({
   id: `product-${name}`,
   name,
-  defaultUnit: "g",
+  defaultUnit,
   packSize,
+  stock,
 });
 
 // A to Z, as the page reads them.
@@ -67,8 +73,15 @@ const type = (value: string) =>
     field().dispatchEvent(new Event("input", { bubbles: true }));
   });
 
-const render = (items: ShoppingListItem[]) =>
-  act(() => root.render(createElement(ShoppingListView, { items, today: "2026-11-11", products, candidates: [] })));
+const render = (
+  items: ShoppingListItem[],
+  { shown = products, shortfalls = [] }: { shown?: HandAddProduct[]; shortfalls?: DatedShortfall[] } = {},
+) =>
+  act(() =>
+    root.render(
+      createElement(ShoppingListView, { items, today: "2026-11-11", products: shown, candidates: [], shortfalls }),
+    ),
+  );
 
 beforeEach(() => {
   add.mockReset().mockResolvedValue(null);
@@ -177,5 +190,80 @@ describe("adding a Product by hand", () => {
 
     const link = [...container.querySelectorAll("a")].find((each) => text(each) === "Not here? Add it in Stock");
     expect(link?.getAttribute("href")).toBe("/products/new");
+  });
+});
+
+describe("Running low in the add field", () => {
+  // A to Z. On Wed 11 Nov the Planner covers Mon 9 to Sun 22 Nov.
+  const stocked = [
+    product("Apple", { name: "bag", amount: 6 }),
+    product("Basmati rice", { name: "bag", amount: 1000 }, { stock: 0 }),
+    product("Bread"),
+    product("Eggs", { name: "box", amount: 6 }, { stock: 2, defaultUnit: "pc" }),
+    product("Olive oil", { name: "bottle", amount: 750 }, { stock: 200, defaultUnit: "ml" }),
+  ];
+  const shortfalls = [
+    { productId: "product-Olive oil", date: "2026-11-12", amount: 100 },
+    { productId: "product-Eggs", date: "2026-11-10", amount: 4 },
+  ];
+  const group = () => container.querySelector(".hand-add-low");
+  const lowRows = () => [...container.querySelectorAll(".hand-add-low .hand-add-option")].map((row) => [...row.children].map(text).join(" "));
+  const otherRows = () => [...container.querySelectorAll(".hand-add-others .hand-add-option")].map((row) => text(row.firstElementChild));
+
+  it("comes first with nothing typed, most urgent first, each saying why", async () => {
+    render([], { shown: stocked, shortfalls });
+    await open();
+
+    expect(text(group()?.querySelector(".hand-add-heading"))).toBe(
+      "Running low Out of Stock, or short for a planned Meal and not on the list yet.",
+    );
+    expect(lowRows()).toEqual([
+      "Basmati rice 0 g in Stock 1 bag",
+      "Eggs Short 4 pc on Tue 10 Nov 1 box",
+      "Olive oil Short 100 ml on Thu 12 Nov 1 bottle",
+    ]);
+  });
+
+  it("adds from its rows as the other rows do", async () => {
+    render([], { shown: stocked, shortfalls });
+    await open();
+    await press(group()?.querySelector('button[aria-label="Add 1 box of Eggs"]'));
+
+    expect(add).toHaveBeenCalledWith("product-Eggs");
+  });
+
+  it("leaves its Products out of the A to Z list under it", async () => {
+    render([], { shown: stocked, shortfalls });
+    await open();
+
+    expect(text(container.querySelector(".hand-add-others .hand-add-heading"))).toBe("All other Products · A to Z");
+    expect(otherRows()).toEqual(["Apple", "Bread"]);
+  });
+
+  it("leaves out a Product already on the list", async () => {
+    const eggs = stocked[3]!;
+    const onList: ShoppingListItem = { id: "item-eggs", quantity: 6, source: "manual", ticked: true, product: eggs };
+    render([onList], { shown: stocked, shortfalls });
+    await open();
+
+    expect(lowRows().map((row) => row.split(" ")[0])).toEqual(["Basmati", "Olive"]);
+    expect(otherRows()).toEqual(["Apple", "Bread", "Eggs"]);
+  });
+
+  it("doesn't show with nothing running low", async () => {
+    render([], { shown: stocked.filter((each) => each.stock > 0) });
+    await open();
+
+    expect(group()).toBeNull();
+    expect(container.querySelector(".hand-add-heading")).toBeNull();
+  });
+
+  it("hides once something is typed, leaving the matching Products", async () => {
+    render([], { shown: stocked, shortfalls });
+    await open();
+    await type("i");
+
+    expect(group()).toBeNull();
+    expect(options().map((option) => option.split(" ")[0])).toEqual(["Basmati", "Olive"]);
   });
 });

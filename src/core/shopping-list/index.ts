@@ -38,6 +38,70 @@ export function shortfallsBetween(
   return totals;
 }
 
+// What a Product is short of on one day, in its Default Unit.
+export interface DatedShortfall {
+  productId: string;
+  date: string;
+  amount: number;
+}
+
+// Each Product's Shortfalls on each day, as the Planner works them out,
+// added up over that day's Meals, by day. `meals` holds every Meal up to the
+// last day wanted, as earlier ones take Stock first.
+export function datedShortfalls(
+  meals: readonly ProjectedMeal[],
+  products: ReadonlyMap<string, ProjectedProduct>,
+): DatedShortfall[] {
+  const projection = projectStock(meals, products);
+  const byKey = new Map<string, DatedShortfall>();
+  for (const meal of meals.toSorted((a, b) => a.date.localeCompare(b.date))) {
+    for (const slot of meal.slots) {
+      for (const { productId, amount } of projection.get(slot.id)?.shortfalls ?? []) {
+        const key = `${meal.date} ${productId}`;
+        const sum = roundForColumn((byKey.get(key)?.amount ?? 0) + amount, AMOUNT_COLUMN);
+        byKey.set(key, { productId, date: meal.date, amount: sum });
+      }
+    }
+  }
+  return [...byKey.values()];
+}
+
+// Why a Product is running low: none in Stock, or short for a Meal, by
+// `amount` on `date`, the first day in range it is short.
+export type RunningLowReason = { kind: "outOfStock" } | { kind: "short"; date: string; amount: number };
+
+export interface RunningLow {
+  productId: string;
+  reason: RunningLowReason;
+}
+
+// The Products most likely needed, that have no item on the list, ticked or
+// not (`listed`): those at 0 Stock, then those short for a Meal in `range`,
+// by the first day they are short. `products` are A to Z, which breaks ties;
+// `shortfalls` are as datedShortfalls gives them, in any order.
+export function runningLow(
+  products: readonly { id: string; stock: number }[],
+  shortfalls: readonly DatedShortfall[],
+  listed: ReadonlySet<string>,
+  range: DateRange,
+): RunningLow[] {
+  const firstShortfall = new Map<string, DatedShortfall>();
+  for (const shortfall of shortfalls) {
+    if (shortfall.date < range.from || shortfall.date > range.to) continue;
+    const earlier = firstShortfall.get(shortfall.productId);
+    if (!earlier || shortfall.date < earlier.date) firstShortfall.set(shortfall.productId, shortfall);
+  }
+  const unlisted = products.filter((product) => !listed.has(product.id));
+  const outOfStock = unlisted
+    .filter((product) => product.stock <= 0)
+    .map(({ id }): RunningLow => ({ productId: id, reason: { kind: "outOfStock" } }));
+  const short = unlisted
+    .flatMap(({ id, stock }) => (stock > 0 && firstShortfall.has(id) ? [firstShortfall.get(id)!] : []))
+    .sort((a, b) => a.date.localeCompare(b.date))
+    .map(({ productId, date, amount }): RunningLow => ({ productId, reason: { kind: "short", date, amount } }));
+  return [...outOfStock, ...short];
+}
+
 // What Generate needs of an item already on the list. `quantity` is in its
 // Product's Default Unit, null for one added by hand without one.
 export interface ListedItem {

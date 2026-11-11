@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
+import type { ProjectedMeal, ProjectedProduct } from "@/core/projected-stock";
 import {
   chosenRange,
   currentChoice,
+  datedShortfalls,
   generatePresets,
   isGenerateRange,
   packsCovering,
@@ -10,6 +12,7 @@ import {
   planUntick,
   planUntickAll,
   restockStart,
+  runningLow,
   stockUncertainty,
 } from "./index";
 
@@ -280,5 +283,113 @@ describe("stockUncertainty", () => {
   it("counts an Untracked Meal but flags none of its Products", () => {
     const result = stockUncertainty([meal("2026-11-10", ["salmon"], { untracked: true })], today);
     expect(result).toEqual({ unconfirmed: 1, productIds: new Set() });
+  });
+});
+
+// Rice in grams with 500 g in Stock, eggs in pieces with 6.
+const stocked = new Map<string, ProjectedProduct>([
+  ["rice", { defaultUnit: "g", density: null, stock: 500 }],
+  ["eggs", { defaultUnit: "pc", density: null, stock: 6 }],
+]);
+
+// A tracked, Planned Lunch on `date`, its one slot taking `quantity` of a Product.
+function takes(id: string, date: string, productId: string, quantity: number, fields: Partial<ProjectedMeal> = {}): ProjectedMeal {
+  return {
+    id,
+    date,
+    hour: "12:00",
+    createdAt: new Date("2026-11-01T10:00:00Z"),
+    priority: 2,
+    status: "planned",
+    untracked: false,
+    slots: [{ id: `${id}-slot`, content: "product", productId, quantity }],
+    ...fields,
+  };
+}
+
+describe("datedShortfalls", () => {
+  it("adds up a Product's Shortfalls on one day, as the Planner works them out", () => {
+    const meals = [
+      takes("lunch", "2026-11-10", "rice", 800),
+      takes("dinner", "2026-11-10", "rice", 100, { hour: "19:30", priority: 3 }),
+      takes("next-day", "2026-11-11", "rice", 50),
+      takes("eggs", "2026-11-12", "eggs", 10),
+    ];
+
+    expect(datedShortfalls(meals, stocked)).toEqual([
+      { productId: "rice", date: "2026-11-10", amount: 400 },
+      { productId: "rice", date: "2026-11-11", amount: 50 },
+      { productId: "eggs", date: "2026-11-12", amount: 4 },
+    ]);
+  });
+
+  it("leaves out Untracked Meals, which take no Stock", () => {
+    const meals = [takes("lunch", "2026-11-10", "rice", 800, { untracked: true })];
+
+    expect(datedShortfalls(meals, stocked)).toEqual([]);
+  });
+});
+
+describe("runningLow", () => {
+  // The Planner's two weeks on Wed 11 Nov 2026.
+  const weeks = { from: "2026-11-09", to: "2026-11-22" };
+  // A to Z, as the add field lists them.
+  const products = [
+    { id: "basil", stock: 0 },
+    { id: "eggs", stock: 2 },
+    { id: "milk", stock: 0 },
+    { id: "oil", stock: 300 },
+    { id: "rice", stock: 500 },
+  ];
+
+  it("lists Products at 0 Stock first, then those short by the first day they are short", () => {
+    const shortfalls = [
+      { productId: "oil", date: "2026-11-12", amount: 100 },
+      { productId: "eggs", date: "2026-11-10", amount: 4 },
+      { productId: "eggs", date: "2026-11-12", amount: 2 },
+      { productId: "milk", date: "2026-11-10", amount: 200 },
+    ];
+
+    expect(runningLow(products, shortfalls, new Set(), weeks)).toEqual([
+      { productId: "basil", reason: { kind: "outOfStock" } },
+      { productId: "milk", reason: { kind: "outOfStock" } },
+      { productId: "eggs", reason: { kind: "short", date: "2026-11-10", amount: 4 } },
+      { productId: "oil", reason: { kind: "short", date: "2026-11-12", amount: 100 } },
+    ]);
+  });
+
+  it("leaves out Products with an item on the list, ticked or not", () => {
+    const shortfalls = [{ productId: "eggs", date: "2026-11-10", amount: 4 }];
+
+    expect(runningLow(products, shortfalls, new Set(["basil", "eggs"]), weeks)).toEqual([
+      { productId: "milk", reason: { kind: "outOfStock" } },
+    ]);
+  });
+
+  it("counts only Shortfalls in the Planner's two weeks", () => {
+    const shortfalls = [
+      { productId: "eggs", date: "2026-11-08", amount: 4 },
+      { productId: "oil", date: "2026-11-23", amount: 100 },
+      { productId: "rice", date: "2026-11-22", amount: 50 },
+    ];
+
+    expect(runningLow(products, shortfalls, new Set(["basil", "milk"]), weeks)).toEqual([
+      { productId: "rice", reason: { kind: "short", date: "2026-11-22", amount: 50 } },
+    ]);
+  });
+
+  it("says the first day a Product is short, whatever order the Shortfalls come in", () => {
+    const shortfalls = [
+      { productId: "eggs", date: "2026-11-12", amount: 2 },
+      { productId: "eggs", date: "2026-11-10", amount: 4 },
+    ];
+
+    expect(runningLow(products, shortfalls, new Set(["basil", "milk"]), weeks)).toEqual([
+      { productId: "eggs", reason: { kind: "short", date: "2026-11-10", amount: 4 } },
+    ]);
+  });
+
+  it("lists nothing when nothing is running low", () => {
+    expect(runningLow([{ id: "rice", stock: 500 }], [], new Set(), weeks)).toEqual([]);
   });
 });

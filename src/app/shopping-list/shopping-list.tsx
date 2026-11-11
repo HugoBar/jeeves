@@ -7,6 +7,7 @@ import {
   currentChoice,
   packsCovering,
   stockUncertainty,
+  type DatedShortfall,
   type DatesChoice,
   type UncertainCandidate,
 } from "@/core/shopping-list";
@@ -33,13 +34,21 @@ export function ShoppingList({
   items,
   products,
   candidates,
+  shortfalls,
 }: {
   items: ShoppingListItem[];
   products: HandAddProduct[];
   candidates: UncertainCandidate[];
+  shortfalls: DatedShortfall[];
 }) {
   return (
-    <ShoppingListView items={items} today={useViewerNow()?.date ?? null} products={products} candidates={candidates} />
+    <ShoppingListView
+      items={items}
+      today={useViewerNow()?.date ?? null}
+      products={products}
+      candidates={candidates}
+      shortfalls={shortfalls}
+    />
   );
 }
 
@@ -49,16 +58,19 @@ export function ShoppingList({
 // `products` are the ones that can be added by hand, A to Z. `candidates` are
 // the Meals that could be Unconfirmed: while some are on `today`, a banner
 // says Stock is uncertain and the items their Products are on are flagged.
+// `shortfalls` are each day's Shortfalls, for Running low in the add field.
 export function ShoppingListView({
   items,
   today,
   products,
   candidates,
+  shortfalls,
 }: {
   items: ShoppingListItem[];
   today: string | null;
   products: HandAddProduct[];
   candidates: UncertainCandidate[];
+  shortfalls: DatedShortfall[];
 }) {
   const uncertainty = today ? stockUncertainty(candidates, today) : null;
   // The item just added or changed by hand, shown with a fading highlight.
@@ -77,7 +89,13 @@ export function ShoppingListView({
         <FromShortfalls today={today} />
         <div className="card shopping-items">
           {items.length > 0 && <h2 className="shopping-count">{formatShoppingCount(items.length)}</h2>}
-          <AddByHand products={products} items={items} onAdded={(id) => setFresh({ id, at: Date.now() })} />
+          <AddByHand
+            products={products}
+            items={items}
+            shortfalls={shortfalls}
+            today={today}
+            onAdded={(id) => setFresh({ id, at: Date.now() })}
+          />
           {items.length > 0 && <TickAll ticked={ticked.length} total={shown.length} onTick={setAllTicked} />}
           {items.length === 0 ? (
             <div className="shopping-empty">
