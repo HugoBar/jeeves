@@ -70,6 +70,16 @@ export function formatShoppingCount(count: number): string {
   return count === 1 ? t("shopping.countOne") : t("shopping.count", { count });
 }
 
+// "Restock ticked items" for how many are ticked: "Restock 2 ticked items".
+export function formatRestockTicked(count: number): string {
+  return count === 1 ? t("shopping.restockTickedOne") : t("shopping.restockTicked", { count });
+}
+
+// Its sheet's button: "Restock 2 items".
+export function formatRestockSubmit(count: number): string {
+  return count === 1 ? t("shopping.restockSubmitOne") : t("shopping.restockSubmit", { count });
+}
+
 // A pack's name, typed by the user, in running text: a capital starting it
 // is dropped, as in a sentence, but "XL bag" keeps its letters.
 function inSentence(name: string): string {

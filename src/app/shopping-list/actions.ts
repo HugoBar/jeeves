@@ -3,8 +3,16 @@
 import { refresh } from "next/cache";
 import { isDate } from "@/core/planner";
 import { isGenerateRange, type DateRange } from "@/core/shopping-list";
+import { parseStockAmount, type QuantityError } from "@/core/stock";
 import { getDb } from "@/db";
-import { addProductByHand, generateShoppingList, removeShoppingListItem } from "@/db/shopping-list";
+import {
+  addProductByHand,
+  generateShoppingList,
+  removeShoppingListItem,
+  restockTickedItems,
+  setAllShoppingListItemsTicked,
+  setShoppingListItemTicked,
+} from "@/db/shopping-list";
 
 // Generate from the Shortfalls of the Meals in `range`, which lies in the
 // Planner's two weeks. `today` is the viewer's date, which decides those
@@ -27,4 +35,42 @@ export async function addProductByHandAction(productId: string): Promise<string 
   const result = await addProductByHand(getDb(), productId);
   refresh();
   return result.ok ? result.itemId : null;
+}
+
+// Ticks an item as bought, or unticks it; Stock doesn't change.
+export async function setShoppingListItemTickedAction(id: string, ticked: boolean): Promise<void> {
+  await setShoppingListItemTicked(getDb(), id, ticked);
+  refresh();
+}
+
+// Ticks every item, or unticks every item; Stock doesn't change.
+export async function setAllShoppingListItemsTickedAction(ticked: boolean): Promise<void> {
+  await setAllShoppingListItemsTicked(getDb(), ticked);
+  refresh();
+}
+
+// The amount bought of each ticked item, as typed, in its Product's Default
+// Unit.
+export interface BoughtAmount {
+  id: string;
+  amount: string;
+}
+
+// Restocks each ticked item by the amount bought and takes them off the list.
+// Each amount is read as Restock on the Product page reads it; if any is
+// rejected nothing changes, and why is returned by item id.
+export async function restockTickedItemsAction(
+  bought: BoughtAmount[],
+): Promise<Record<string, QuantityError> | null> {
+  const errors: Record<string, QuantityError> = {};
+  const quantities: { id: string; quantity: number }[] = [];
+  for (const { id, amount } of bought) {
+    const parsed = parseStockAmount("restock", amount);
+    if (parsed.ok) quantities.push({ id, quantity: parsed.quantity });
+    else errors[id] = parsed.error;
+  }
+  if (Object.keys(errors).length > 0) return errors;
+  await restockTickedItems(getDb(), quantities);
+  refresh();
+  return null;
 }
