@@ -77,3 +77,23 @@ export function planGenerate(shortfalls: ReadonlyMap<string, number>, items: rea
 export function packsCovering(quantity: number, packAmount: number): number {
   return Math.ceil(Math.round((quantity / packAmount) * 1e6) / 1e6);
 }
+
+// What adding a Product by hand changes: a new item, its unticked item
+// raised, or, with no pack to add, its unticked item kept as it is.
+export type HandAddPlan =
+  | { kind: "add"; quantity: number | null }
+  | { kind: "raise"; id: string; quantity: number }
+  | { kind: "keep"; id: string };
+
+// Adding a Product by hand puts one pack on the list (spec "Shopping List"):
+// on its unticked item if it has one, counting no amount as 0, or on a new
+// item beside its ticked ones. Without a Pack Size it goes on with no amount,
+// and an unticked item stays as it is. `packAmount` is its Pack Size's
+// amount, null without one; `items` are its items already on the list.
+export function planAddByHand(packAmount: number | null, items: readonly ListedItem[]): HandAddPlan {
+  const unticked = items.find((item) => !item.ticked);
+  if (!unticked) return { kind: "add", quantity: packAmount };
+  if (packAmount === null) return { kind: "keep", id: unticked.id };
+  const quantity = roundForColumn((unticked.quantity ?? 0) + packAmount, AMOUNT_COLUMN);
+  return { kind: "raise", id: unticked.id, quantity };
+}
