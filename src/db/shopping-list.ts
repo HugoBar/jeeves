@@ -1,8 +1,8 @@
 import "server-only";
-import { eq, sql } from "drizzle-orm";
+import { and, eq, isNull, sql } from "drizzle-orm";
 import { sortByName } from "@/core/names";
 import type { PackSize } from "@/core/products";
-import { planGenerate, shortfallsBetween, type ShoppingListSource } from "@/core/shopping-list";
+import { planAddByHand, planGenerate, shortfallsBetween, type ShoppingListSource } from "@/core/shopping-list";
 import type { DefaultUnit } from "@/core/units";
 import type { Db } from "./index";
 import { toPackSize } from "./products";
@@ -72,6 +72,44 @@ export async function generateShoppingList(db: Db, from: string, to: string): Pr
     for (const { id, quantity } of plan.raise) {
       await tx.update(shoppingListItems).set({ quantity }).where(eq(shoppingListItems.id, id));
     }
+  });
+}
+
+// Adds one pack of a Product by hand (spec "Shopping List"): to its unticked
+// item, or on a new one. `itemId` is the item added or changed. A Product
+// Archived or gone meanwhile is unavailable. The list is locked meanwhile, like
+// Generate, so the Product never gets two unticked items.
+export async function addProductByHand(
+  db: Db,
+  productId: string,
+): Promise<{ ok: true; itemId: string } | { ok: false; error: "unavailable" }> {
+  return db.transaction(async (tx) => {
+    await tx.execute(sql`lock table ${shoppingListItems} in exclusive mode`);
+    const [product] = await tx
+      .select({ packSizeName: products.packSizeName, packSizeAmount: products.packSizeAmount })
+      .from(products)
+      .where(and(eq(products.id, productId), isNull(products.archivedAt)));
+    if (!product) return { ok: false, error: "unavailable" } as const;
+    const items = await tx
+      .select({
+        id: shoppingListItems.id,
+        productId: shoppingListItems.productId,
+        quantity: shoppingListItems.quantity,
+        ticked: shoppingListItems.ticked,
+      })
+      .from(shoppingListItems)
+      .where(eq(shoppingListItems.productId, productId));
+    const plan = planAddByHand(toPackSize(product)?.amount ?? null, items);
+    if (plan.kind === "keep") return { ok: true, itemId: plan.id } as const;
+    if (plan.kind === "raise") {
+      await tx.update(shoppingListItems).set({ quantity: plan.quantity }).where(eq(shoppingListItems.id, plan.id));
+      return { ok: true, itemId: plan.id } as const;
+    }
+    const [added] = await tx
+      .insert(shoppingListItems)
+      .values({ productId, quantity: plan.quantity, source: "manual" })
+      .returning({ id: shoppingListItems.id });
+    return { ok: true, itemId: added!.id } as const;
   });
 }
 

@@ -1,3 +1,4 @@
+import { inArray } from "drizzle-orm";
 import { beforeEach, describe, expect, it } from "vitest";
 import type { NewMealSlot } from "@/core/meals";
 import { listActiveCategories } from "./food-categories";
@@ -5,8 +6,8 @@ import { listActiveMealTypes } from "./meal-types";
 import { createMeal } from "./meals";
 import { createProduct } from "./products";
 import { createRecipe } from "./recipes";
-import { shoppingListItems } from "./schema";
-import { generateShoppingList, listShoppingList } from "./shopping-list";
+import { products, shoppingListItems } from "./schema";
+import { addProductByHand, generateShoppingList, listShoppingList } from "./shopping-list";
 import { restockProduct } from "./stock-movements";
 import { createTestDb } from "./test-database";
 
@@ -112,5 +113,21 @@ describe("generateShoppingList", () => {
       { name: "Spinach", quantity: 150, source: "shortfall", ticked: false },
     ]);
     expect(await summary()).toEqual(once);
+  });
+
+  it("treats a pack added by hand like any other item: raised if short, never lowered", async () => {
+    const rice = await aProduct("Rice");
+    const pasta = await aProduct("Pasta");
+    await db.update(products).set({ packSizeName: "bag", packSizeAmount: 500 }).where(inArray(products.id, [rice.id, pasta.id]));
+    await aMeal("2026-11-10", eats(rice.id, 800), eats(pasta.id, 200));
+    await addProductByHand(db, rice.id);
+    await addProductByHand(db, pasta.id);
+
+    await generateShoppingList(db, WEEK.from, WEEK.to);
+
+    expect(await summary()).toEqual([
+      { name: "Pasta", quantity: 500, source: "manual", ticked: false },
+      { name: "Rice", quantity: 800, source: "manual", ticked: false },
+    ]);
   });
 });
