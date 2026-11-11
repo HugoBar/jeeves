@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 import { ShoppingListView } from "./shopping-list";
 
 // Wednesday 11 Nov 2026, for the viewer: the Planner's week runs 9-15 Nov.
-const render = (today: string | null) => renderToStaticMarkup(createElement(ShoppingListView, { items: [], today, products: [] }));
+const render = (today: string | null) => renderToStaticMarkup(createElement(ShoppingListView, { items: [], today, products: [], candidates: [] }));
 const text = (html: string) => html.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ");
 
 describe("the empty Shopping List", () => {
@@ -55,11 +55,11 @@ describe("the Shopping List with items", () => {
     item("Whole milk", 1400, "ml", { name: "Carton", amount: 1000 }),
     item("Salmon fillet", 150, "g"),
   ];
-  const html = renderToStaticMarkup(createElement(ShoppingListView, { items, today: "2026-11-11", products: [] }));
+  const html = renderToStaticMarkup(createElement(ShoppingListView, { items, today: "2026-11-11", products: [], candidates: [] }));
 
   it("shows how many items it holds", () => {
     expect(text(html)).toContain("3 items");
-    const one = renderToStaticMarkup(createElement(ShoppingListView, { items: [items[2]!], today: "2026-11-11", products: [] }));
+    const one = renderToStaticMarkup(createElement(ShoppingListView, { items: [items[2]!], today: "2026-11-11", products: [], candidates: [] }));
     expect(text(one)).toContain("1 item");
   });
 
@@ -82,5 +82,66 @@ describe("the Shopping List with items", () => {
 
   it("no longer says the list is empty", () => {
     expect(text(html)).not.toContain("Nothing on the list");
+  });
+});
+
+describe("Stock uncertain", () => {
+  const unconfirmed = (date: string, productIds: string[], untracked = false) => ({
+    status: "planned" as const,
+    date,
+    untracked,
+    productIds,
+  });
+  const item = (name: string) => ({
+    id: `item-${name}`,
+    quantity: 150,
+    source: "shortfall" as const,
+    ticked: false,
+    product: { id: `product-${name}`, name, defaultUnit: "g" as const, packSize: null },
+  });
+  const items = [item("Spinach"), item("Salmon fillet")];
+  const render = (candidates: ReturnType<typeof unconfirmed>[], today: string | null = "2026-11-11", listed = items) =>
+    renderToStaticMarkup(createElement(ShoppingListView, { items: listed, today, products: [], candidates }));
+
+  it("warns while Meals are Unconfirmed, with a Review link to Needs confirmation", () => {
+    const html = render([unconfirmed("2026-11-09", []), unconfirmed("2026-11-10", [])]);
+    expect(text(html)).toContain("Stock uncertain. 2 Meals are Unconfirmed, so some amounts may change. Review");
+    expect(html).toMatch(/<a[^>]*href="\/needs-confirmation"[^>]*>Review<\/a>/);
+  });
+
+  it("says 1 Meal is for one", () => {
+    expect(text(render([unconfirmed("2026-11-10", [], true)]))).toContain(
+      "Stock uncertain. 1 Meal is Unconfirmed, so some amounts may change.",
+    );
+  });
+
+  it("works out Unconfirmed with the viewer's today", () => {
+    // Today's Meal isn't Unconfirmed yet.
+    expect(text(render([unconfirmed("2026-11-11", ["product-Salmon fillet"])]))).not.toContain("Stock uncertain");
+  });
+
+  it("flags each item whose Product an Unconfirmed Meal uses", () => {
+    const shown = text(render([unconfirmed("2026-11-10", ["product-Salmon fillet"])]));
+    expect(shown).toContain("Salmon fillet Stock uncertain 150 g");
+    expect(shown).toContain("Spinach 150 g");
+  });
+
+  it("flags nothing for an Untracked Meal", () => {
+    const shown = text(render([unconfirmed("2026-11-10", ["product-Salmon fillet"], true)]));
+    expect(shown).toContain("Salmon fillet 150 g");
+  });
+
+  it("shows neither the banner nor the pills with no Unconfirmed Meals", () => {
+    expect(text(render([]))).not.toContain("Stock uncertain");
+  });
+
+  it("shows nothing before the viewer's date is known", () => {
+    expect(text(render([unconfirmed("2026-11-10", ["product-Salmon fillet"])], null))).not.toContain("Stock uncertain");
+  });
+
+  it("shows the banner on the empty list too", () => {
+    const shown = text(render([unconfirmed("2026-11-10", [])], "2026-11-11", []));
+    expect(shown).toContain("Stock uncertain. 1 Meal is Unconfirmed");
+    expect(shown).toContain("Nothing on the list");
   });
 });

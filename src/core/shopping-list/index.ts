@@ -1,4 +1,5 @@
 import { AMOUNT_COLUMN, roundForColumn } from "@/core/amounts";
+import { isUnconfirmed, type MealStatus } from "@/core/meals";
 import { isDate, plannerWeeks } from "@/core/planner";
 import { projectStock, type ProjectedMeal, type ProjectedProduct } from "@/core/projected-stock";
 
@@ -194,4 +195,28 @@ export function chosenRange(choice: DatesChoice, today: string): DateRange {
 // Sunday, give way to the planned week.
 export function currentChoice(choice: DatesChoice, today: string): DatesChoice {
   return choice.preset || isGenerateRange(today, choice.range) ? choice : { preset: "planned" };
+}
+
+// A Meal as the Stock uncertain banner needs it, with the Products its slots
+// use: a Product slot's Product and a Recipe slot's Ingredients.
+export interface UncertainCandidate {
+  status: MealStatus;
+  date: string;
+  untracked: boolean;
+  productIds: readonly string[];
+}
+
+// What makes the Shopping List's Stock uncertain on `today`, the viewer's
+// date: how many Meals are Unconfirmed, and the Products they use, whose
+// amounts may change once they are Confirmed or Skipped. An Untracked Meal
+// counts, but takes no Stock, so flags none.
+export function stockUncertainty(
+  meals: readonly UncertainCandidate[],
+  today: string,
+): { unconfirmed: number; productIds: Set<string> } {
+  const unconfirmed = meals.filter((meal) => isUnconfirmed(meal, today));
+  return {
+    unconfirmed: unconfirmed.length,
+    productIds: new Set(unconfirmed.flatMap((meal) => (meal.untracked ? [] : meal.productIds))),
+  };
 }

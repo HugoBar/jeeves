@@ -60,7 +60,7 @@ const type = (input: HTMLInputElement | null | undefined, value: string) =>
   });
 
 const show = (items: ShoppingListItem[]) =>
-  act(() => root.render(createElement(ShoppingListView, { items, today: "2026-11-11", products: [] })));
+  act(() => root.render(createElement(ShoppingListView, { items, today: "2026-11-11", products: [], candidates: [] })));
 
 beforeEach(() => {
   restock.mockReset().mockResolvedValue(null);

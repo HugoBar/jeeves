@@ -7,7 +7,8 @@ import { createMeal } from "./meals";
 import { createProduct } from "./products";
 import { createRecipe } from "./recipes";
 import { products, shoppingListItems } from "./schema";
-import { addProductByHand, generateShoppingList, listShoppingList } from "./shopping-list";
+import { skipMeal } from "./confirmation";
+import { addProductByHand, generateShoppingList, listShoppingList, listUncertainCandidates } from "./shopping-list";
 import { restockProduct } from "./stock-movements";
 import { createTestDb } from "./test-database";
 
@@ -31,15 +32,16 @@ async function aProduct(name: string, stock = 0) {
   return result.product;
 }
 
-// A Lunch on `date` with a slot for each fill.
+// A Lunch on `date` with a slot for each fill. Returns its id.
 async function aMeal(date: string, ...fills: SlotFill[]) {
   const lunch = (await listActiveMealTypes(db)).find((mealType) => mealType.seedKey === "lunch")!;
   const slotCategoryId = (await listActiveCategories(db))[0]!.id;
-  await createMeal(
+  const { id } = await createMeal(
     db,
     { date, hour: "12:30", name: null, mealTypeId: lunch.id },
     fills.map((fill) => ({ slotCategoryId, fill })),
   );
+  return id;
 }
 
 // A slot eating `quantity` of a Product.
@@ -128,6 +130,35 @@ describe("generateShoppingList", () => {
     expect(await summary()).toEqual([
       { name: "Pasta", quantity: 500, source: "manual", ticked: false },
       { name: "Rice", quantity: 800, source: "manual", ticked: false },
+    ]);
+  });
+});
+
+describe("listUncertainCandidates", () => {
+  it("reads each Planned Meal before the date with the Products its slots use", async () => {
+    const salmon = await aProduct("Salmon fillet");
+    const rice = await aProduct("Rice");
+    const eggs = await aProduct("Eggs");
+    const recipe = await createRecipe(db, {
+      name: "Fried Rice",
+      portions: 2,
+      steps: "Fry",
+      prepTimeMinutes: 20,
+      sourceUrl: null,
+      ingredients: [
+        { productId: rice.id, amount: 200, unit: "g", minor: false },
+        { productId: eggs.id, amount: 100, unit: "g", minor: false },
+      ],
+      categoryOverrides: [],
+    });
+    await aMeal("2026-11-10", eats(salmon.id, 150), { content: "recipe", recipeId: recipe.id, portions: 2 });
+    const skipped = await aMeal("2026-11-09", eats(rice.id, 80));
+    await skipMeal(db, skipped, "2026-11-11");
+    // On the date itself, so left out.
+    await aMeal("2026-11-12", eats(eggs.id, 50));
+
+    expect(await listUncertainCandidates(db, "2026-11-12")).toEqual([
+      { status: "planned", date: "2026-11-10", untracked: false, productIds: [salmon.id, rice.id, eggs.id] },
     ]);
   });
 });
