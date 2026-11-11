@@ -12,7 +12,7 @@ import {
   formatLongDayHeading,
   formatMealCount,
   formatSlotCount,
-  formatWeekRange,
+  formatDateRange,
   mealPanelLabel,
   t,
 } from "@/strings";
@@ -289,7 +289,7 @@ function WeekBar({
   foldedDays: string[];
   onUnfold: () => void;
 }) {
-  const dates = formatWeekRange(days[0]!, days[6]!);
+  const dates = formatDateRange(days[0]!, days[6]!);
   return (
     <div className="planner-week-bar">
       <p className="planner-week-label">{t(week === "next" ? "planner.nextWeek" : "planner.thisWeek", { dates })}</p>

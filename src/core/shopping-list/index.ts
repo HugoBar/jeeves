@@ -1,4 +1,5 @@
 import { AMOUNT_COLUMN, roundForColumn } from "@/core/amounts";
+import { isDate, plannerWeeks } from "@/core/planner";
 import { projectStock, type ProjectedMeal, type ProjectedProduct } from "@/core/projected-stock";
 
 // Where a Shopping List item came from: Generate, from a Shortfall, or added
@@ -96,4 +97,47 @@ export function planAddByHand(packAmount: number | null, items: readonly ListedI
   if (packAmount === null) return { kind: "keep", id: unticked.id };
   const quantity = roundForColumn((unticked.quantity ?? 0) + packAmount, AMOUNT_COLUMN);
   return { kind: "raise", id: unticked.id, quantity };
+}
+
+// Dates Generate works over, both included.
+export interface DateRange {
+  from: string;
+  to: string;
+}
+
+export const GENERATE_PRESETS = ["planned", "next", "both"] as const;
+
+export type GeneratePreset = (typeof GENERATE_PRESETS)[number];
+
+// The ranges Choose dates offers on `today`, the viewer's date: the Planner's
+// current week, its next week, and both.
+export function generatePresets(today: string): Record<GeneratePreset, DateRange> {
+  const { thisWeek, nextWeek } = plannerWeeks(today);
+  const planned = { from: thisWeek[0]!, to: thisWeek.at(-1)! };
+  const next = { from: nextWeek[0]!, to: nextWeek.at(-1)! };
+  return { planned, next, both: { from: planned.from, to: next.to } };
+}
+
+// Whether Generate can work over `range` on `today`: real dates in the
+// Planner's two weeks, From on or before To.
+export function isGenerateRange(today: string, { from, to }: DateRange): boolean {
+  if (!isDate(from) || !isDate(to)) return false;
+  const { both } = generatePresets(today);
+  return both.from <= from && from <= to && to <= both.to;
+}
+
+// The dates Generate works over: a preset, whose dates follow the viewer's
+// date, or dates of your own.
+export type DatesChoice = { preset: GeneratePreset } | { preset: null; range: DateRange };
+
+// The dates `choice` stands for on `today`.
+export function chosenRange(choice: DatesChoice, today: string): DateRange {
+  return choice.preset ? generatePresets(today)[choice.preset] : choice.range;
+}
+
+// `choice` as it stands on `today`: dates of your own left outside the
+// Planner's two weeks as the viewer's date moves on, as past midnight on
+// Sunday, give way to the planned week.
+export function currentChoice(choice: DatesChoice, today: string): DatesChoice {
+  return choice.preset || isGenerateRange(today, choice.range) ? choice : { preset: "planned" };
 }

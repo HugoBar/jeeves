@@ -139,11 +139,12 @@ function dayPart(date: string, options: Intl.DateTimeFormatOptions): string {
   return new Date(`${date}T00:00:00Z`).toLocaleDateString("en", { ...options, timeZone: "UTC" });
 }
 
-// A week's dates for its planner header: "19–25 Oct", or "26 Oct–1 Nov" when
-// it runs into the next month.
-export function formatWeekRange(first: string, last: string): string {
+// A range of dates, as a planner week's header shows it: "19–25 Oct", "26
+// Oct–1 Nov" when it runs into the next month, or "20 Nov" for one day.
+export function formatDateRange(first: string, last: string): string {
   const day = (date: string) => dayPart(date, { day: "numeric" });
   const month = (date: string) => dayPart(date, { month: "short" });
+  if (first === last) return `${day(first)} ${month(first)}`;
   return month(first) === month(last)
     ? `${day(first)}–${day(last)} ${month(last)}`
     : `${day(first)} ${month(first)}–${day(last)} ${month(last)}`;
