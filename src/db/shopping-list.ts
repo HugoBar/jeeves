@@ -1,13 +1,21 @@
 import "server-only";
-import { and, eq, isNull, sql } from "drizzle-orm";
+import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 import { sortByName } from "@/core/names";
 import type { PackSize } from "@/core/products";
-import { planAddByHand, planGenerate, shortfallsBetween, type ShoppingListSource } from "@/core/shopping-list";
+import {
+  planAddByHand,
+  planGenerate,
+  planUntick,
+  planUntickAll,
+  shortfallsBetween,
+  type ShoppingListSource,
+} from "@/core/shopping-list";
 import type { DefaultUnit } from "@/core/units";
 import type { Db } from "./index";
 import { toPackSize } from "./products";
 import { loadStockProjection } from "./projected-stock";
 import { products, shoppingListItems } from "./schema";
+import { restockProduct } from "./stock-movements";
 
 export interface ShoppingListItem {
   id: string;
@@ -117,4 +125,86 @@ export async function addProductByHand(
 // if its Product is still short. Gone already is fine: it is off the list.
 export async function removeShoppingListItem(db: Db, id: string): Promise<void> {
   await db.delete(shoppingListItems).where(eq(shoppingListItems.id, id));
+}
+
+// Ticks an item as bought, or unticks it. Neither changes Stock. Unticked
+// beside its Product's unticked item, it adds its amount to that one and
+// goes, as a Product has one unticked item at most. The list is locked
+// meanwhile, like Generate. Gone already is fine: there is nothing to tick.
+export async function setShoppingListItemTicked(db: Db, id: string, ticked: boolean): Promise<void> {
+  await db.transaction(async (tx) => {
+    await tx.execute(sql`lock table ${shoppingListItems} in exclusive mode`);
+    const [item] = await tx
+      .select({ productId: shoppingListItems.productId })
+      .from(shoppingListItems)
+      .where(eq(shoppingListItems.id, id));
+    if (!item) return;
+    if (ticked) {
+      await tx.update(shoppingListItems).set({ ticked }).where(eq(shoppingListItems.id, id));
+      return;
+    }
+    const items = await tx
+      .select({
+        id: shoppingListItems.id,
+        productId: shoppingListItems.productId,
+        quantity: shoppingListItems.quantity,
+        ticked: shoppingListItems.ticked,
+      })
+      .from(shoppingListItems)
+      .where(eq(shoppingListItems.productId, item.productId));
+    const plan = planUntick(id, items);
+    if (plan.kind === "untick") {
+      await tx.update(shoppingListItems).set({ ticked }).where(eq(shoppingListItems.id, id));
+      return;
+    }
+    await tx.delete(shoppingListItems).where(eq(shoppingListItems.id, id));
+    await tx.update(shoppingListItems).set({ quantity: plan.quantity }).where(eq(shoppingListItems.id, plan.into));
+  });
+}
+
+// Ticks every item, or unticks every item. Neither changes Stock. Unticked,
+// a Product's items are added into one, as unticking one does. The list is
+// locked meanwhile, like Generate.
+export async function setAllShoppingListItemsTicked(db: Db, ticked: boolean): Promise<void> {
+  await db.transaction(async (tx) => {
+    await tx.execute(sql`lock table ${shoppingListItems} in exclusive mode`);
+    if (ticked) {
+      await tx.update(shoppingListItems).set({ ticked });
+      return;
+    }
+    const items = await tx
+      .select({
+        id: shoppingListItems.id,
+        productId: shoppingListItems.productId,
+        quantity: shoppingListItems.quantity,
+        ticked: shoppingListItems.ticked,
+      })
+      .from(shoppingListItems);
+    const plan = planUntickAll(items);
+    // The items that go first, so no Product has two unticked items meanwhile.
+    if (plan.remove.length > 0) await tx.delete(shoppingListItems).where(inArray(shoppingListItems.id, plan.remove));
+    for (const { id, quantity } of plan.keep) {
+      await tx.update(shoppingListItems).set({ ticked, quantity }).where(eq(shoppingListItems.id, id));
+    }
+  });
+}
+
+// "Restock ticked items" (spec "Shopping List"): one Restock per item, of the
+// amount bought, in its Product's Default Unit, and the item leaves the list;
+// all or none. Two items of one Product are two Restocks. An item gone or
+// unticked meanwhile is left as it is, so pressing twice restocks once. The
+// list is locked meanwhile, like Generate.
+export async function restockTickedItems(db: Db, bought: readonly { id: string; quantity: number }[]): Promise<void> {
+  if (bought.length === 0) return;
+  await db.transaction(async (tx) => {
+    await tx.execute(sql`lock table ${shoppingListItems} in exclusive mode`);
+    const items = await tx
+      .select({ id: shoppingListItems.id, productId: shoppingListItems.productId })
+      .from(shoppingListItems)
+      .where(and(inArray(shoppingListItems.id, bought.map(({ id }) => id)), eq(shoppingListItems.ticked, true)));
+    for (const { id, productId } of items) {
+      await restockProduct(tx, productId, bought.find((item) => item.id === id)!.quantity);
+    }
+    if (items.length > 0) await tx.delete(shoppingListItems).where(inArray(shoppingListItems.id, items.map(({ id }) => id)));
+  });
 }

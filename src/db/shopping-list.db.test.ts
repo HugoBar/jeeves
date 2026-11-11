@@ -1,8 +1,16 @@
 import { eq } from "drizzle-orm";
-import { beforeAll, describe, expect, it } from "vitest";
+import { beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { createProduct } from "./products";
 import { products, shoppingListItems } from "./schema";
-import { addProductByHand, listShoppingList, removeShoppingListItem } from "./shopping-list";
+import {
+  addProductByHand,
+  listShoppingList,
+  removeShoppingListItem,
+  restockTickedItems,
+  setAllShoppingListItemsTicked,
+  setShoppingListItemTicked,
+} from "./shopping-list";
+import { listStockMovements } from "./stock-movements";
 import { createTestDb } from "./test-database";
 
 let db: Awaited<ReturnType<typeof createTestDb>>;
@@ -160,5 +168,155 @@ describe("addProductByHand", () => {
 
     expect(await addProductByHand(db, pasta.id)).toEqual({ ok: false, error: "unavailable" });
     expect(await itemsOf(pasta.id)).toEqual([]);
+  });
+});
+
+describe("setShoppingListItemTicked", () => {
+  const itemsOf = async (productId: string) =>
+    (await listShoppingList(db))
+      .filter((item) => item.product.id === productId)
+      .map(({ id, quantity, ticked }) => ({ id, quantity, ticked }))
+      .sort((a, b) => Number(b.ticked) - Number(a.ticked));
+
+  it("ticks an item and unticks it again, leaving Stock as it is", async () => {
+    const lentils = await aProduct("Lentils");
+    const [item] = await db
+      .insert(shoppingListItems)
+      .values({ productId: lentils.id, quantity: 400, source: "shortfall" })
+      .returning({ id: shoppingListItems.id });
+
+    await setShoppingListItemTicked(db, item!.id, true);
+    expect(await itemsOf(lentils.id)).toEqual([{ id: item!.id, quantity: 400, ticked: true }]);
+
+    await setShoppingListItemTicked(db, item!.id, false);
+    expect(await itemsOf(lentils.id)).toEqual([{ id: item!.id, quantity: 400, ticked: false }]);
+    const [after] = await db.select({ stock: products.stock }).from(products).where(eq(products.id, lentils.id));
+    expect(after!.stock).toBe(0);
+  });
+
+  it("adds an unticked item to its Product's other unticked item", async () => {
+    const spinach = await aProduct("Baby spinach");
+    const [ticked, unticked] = await db
+      .insert(shoppingListItems)
+      .values([
+        { productId: spinach.id, quantity: 100, source: "shortfall", ticked: true },
+        { productId: spinach.id, quantity: 150, source: "shortfall" },
+      ])
+      .returning({ id: shoppingListItems.id });
+
+    await setShoppingListItemTicked(db, ticked!.id, false);
+
+    expect(await itemsOf(spinach.id)).toEqual([{ id: unticked!.id, quantity: 250, ticked: false }]);
+  });
+
+  it("does nothing to an item gone meanwhile", async () => {
+    await expect(setShoppingListItemTicked(db, "00000000-0000-4000-8000-000000000000", true)).resolves.toBeUndefined();
+  });
+});
+
+describe("restockTickedItems", () => {
+  const stockOf = async (productId: string) =>
+    (await db.select({ stock: products.stock }).from(products).where(eq(products.id, productId)))[0]!.stock;
+  const tickedItem = async (productId: string, quantity: number | null, ticked = true) =>
+    (
+      await db
+        .insert(shoppingListItems)
+        .values({ productId, quantity, source: "shortfall", ticked })
+        .returning({ id: shoppingListItems.id })
+    )[0]!.id;
+  const onList = async (...productIds: string[]) =>
+    (await listShoppingList(db)).filter((item) => productIds.includes(item.product.id)).map((item) => item.id);
+
+  it("Restocks each item by the amount bought and takes them off the list", async () => {
+    const beef = await aProduct("Minced beef", { name: "pack", amount: 500 });
+    const milk = await aProduct("Oat milk");
+    const beefItem = await tickedItem(beef.id, 300);
+    const milkItem = await tickedItem(milk.id, 1400);
+
+    await restockTickedItems(db, [
+      { id: beefItem, quantity: 500 },
+      { id: milkItem, quantity: 2000 },
+    ]);
+
+    expect(await stockOf(beef.id)).toBe(500);
+    expect(await stockOf(milk.id)).toBe(2000);
+    expect((await listStockMovements(db, milk.id)).map(({ type, delta }) => ({ type, delta }))).toEqual([
+      { type: "restock", delta: 2000 },
+    ]);
+    expect(await onList(beef.id, milk.id)).toEqual([]);
+  });
+
+  it("makes two items of one Product two Restocks", async () => {
+    const eggs = await aProduct("Free-range eggs");
+    const first = await tickedItem(eggs.id, 6);
+    const second = await tickedItem(eggs.id, 12);
+
+    await restockTickedItems(db, [
+      { id: first, quantity: 6 },
+      { id: second, quantity: 12 },
+    ]);
+
+    expect(await stockOf(eggs.id)).toBe(18);
+    expect((await listStockMovements(db, eggs.id)).map(({ delta }) => delta).sort()).toEqual([12, 6]);
+  });
+
+  it("leaves an item gone or unticked meanwhile, and the rest of the list", async () => {
+    const butter = await aProduct("Salted butter");
+    const jam = await aProduct("Strawberry jam");
+    const unticked = await tickedItem(butter.id, 250, false);
+    const other = await tickedItem(jam.id, 300);
+
+    await restockTickedItems(db, [
+      { id: unticked, quantity: 250 },
+      { id: "00000000-0000-4000-8000-000000000000", quantity: 100 },
+    ]);
+
+    expect(await stockOf(butter.id)).toBe(0);
+    expect(await onList(butter.id, jam.id)).toEqual(expect.arrayContaining([unticked, other]));
+  });
+});
+
+describe("setAllShoppingListItemsTicked", () => {
+  // Each test starts from an empty list, as ticking all reaches every item.
+  beforeEach(async () => {
+    await db.delete(shoppingListItems);
+  });
+
+  const summary = async () =>
+    (await listShoppingList(db))
+      .map(({ product, quantity, ticked }) => ({ name: product.name, quantity, ticked }))
+      .sort((a, b) => a.name.localeCompare(b.name) || Number(b.ticked) - Number(a.ticked));
+
+  it("ticks every item", async () => {
+    const tea = await aProduct("Green tea");
+    const honey = await aProduct("Honey");
+    await db.insert(shoppingListItems).values([
+      { productId: tea.id, quantity: 100, source: "shortfall" },
+      { productId: honey.id, quantity: 300, source: "shortfall", ticked: true },
+    ]);
+
+    await setAllShoppingListItemsTicked(db, true);
+
+    expect(await summary()).toEqual([
+      { name: "Green tea", quantity: 100, ticked: true },
+      { name: "Honey", quantity: 300, ticked: true },
+    ]);
+  });
+
+  it("unticks every item, adding a Product's items into one", async () => {
+    const yoghurt = await aProduct("Greek yoghurt");
+    const bread = await aProduct("Rye bread");
+    await db.insert(shoppingListItems).values([
+      { productId: yoghurt.id, quantity: 500, source: "shortfall", ticked: true },
+      { productId: yoghurt.id, quantity: 250, source: "shortfall" },
+      { productId: bread.id, quantity: null, source: "manual", ticked: true },
+    ]);
+
+    await setAllShoppingListItemsTicked(db, false);
+
+    expect(await summary()).toEqual([
+      { name: "Greek yoghurt", quantity: 750, ticked: false },
+      { name: "Rye bread", quantity: null, ticked: false },
+    ]);
   });
 });
