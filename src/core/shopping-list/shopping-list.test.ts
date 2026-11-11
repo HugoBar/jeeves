@@ -10,6 +10,7 @@ import {
   planUntick,
   planUntickAll,
   restockStart,
+  stockUncertainty,
 } from "./index";
 
 // Spinach, 250 g short (spec "Shopping List").
@@ -245,5 +246,39 @@ describe("currentChoice", () => {
 
   it("keeps a preset, whose dates follow the viewer's date", () => {
     expect(currentChoice({ preset: "next" }, "2026-11-16")).toEqual({ preset: "next" });
+  });
+});
+
+describe("stockUncertainty", () => {
+  // Wednesday 11 Nov 2026, for the viewer.
+  const today = "2026-11-11";
+  const meal = (
+    date: string,
+    productIds: string[],
+    { status = "planned", untracked = false }: { status?: "planned" | "confirmed" | "skipped"; untracked?: boolean } = {},
+  ) => ({ status, date, untracked, productIds });
+
+  it("counts Meals whose day has passed unconfirmed and flags the Products they use", () => {
+    const result = stockUncertainty([meal("2026-11-09", ["salmon", "rice"]), meal("2026-11-10", ["rice", "spinach"])], today);
+    expect(result.unconfirmed).toBe(2);
+    expect([...result.productIds].sort()).toEqual(["rice", "salmon", "spinach"]);
+  });
+
+  it("leaves out Meals from today on, and Meals Confirmed or Skipped", () => {
+    const result = stockUncertainty(
+      [
+        meal("2026-11-11", ["salmon"]),
+        meal("2026-11-12", ["rice"]),
+        meal("2026-11-09", ["spinach"], { status: "confirmed" }),
+        meal("2026-11-09", ["milk"], { status: "skipped" }),
+      ],
+      today,
+    );
+    expect(result).toEqual({ unconfirmed: 0, productIds: new Set() });
+  });
+
+  it("counts an Untracked Meal but flags none of its Products", () => {
+    const result = stockUncertainty([meal("2026-11-10", ["salmon"], { untracked: true })], today);
+    expect(result).toEqual({ unconfirmed: 1, productIds: new Set() });
   });
 });
