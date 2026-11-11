@@ -113,6 +113,11 @@ export function formatPackSize({ name, amount }: PackSize, unit: DefaultUnit): s
   });
 }
 
+// A Pack Size where a Product is added by hand: "Pack Size · box, 500 g".
+export function formatAddPackSize({ name, amount }: PackSize, unit: DefaultUnit): string {
+  return t("shopping.addPackSize", { name: inSentence(name), quantity: formatQuantity(amount, unit) });
+}
+
 // A Pack Size in a sentence: "Pack Size is a 1,000 g bag." The amount is
 // spoken right after the article, so eight and eleven take "an".
 export function formatPackSizeNote({ name, amount }: PackSize, unit: DefaultUnit): string {

@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 import { ShoppingListView } from "./shopping-list";
 
 // Wednesday 11 Nov 2026, for the viewer: the Planner's week runs 9-15 Nov.
-const render = (today: string | null) => renderToStaticMarkup(createElement(ShoppingListView, { items: [], today }));
+const render = (today: string | null) => renderToStaticMarkup(createElement(ShoppingListView, { items: [], today, products: [] }));
 const text = (html: string) => html.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ");
 
 describe("the empty Shopping List", () => {
@@ -31,9 +31,9 @@ describe("the empty Shopping List", () => {
     expect(text(render(null))).toContain("From Shortfalls Planned week Generate");
   });
 
-  it("shows the field and + button for adding a Product by hand", () => {
-    expect(html).toMatch(/<input[^>]*placeholder="Add a Product by hand"/);
-    expect(html).toMatch(/<button[^>]*aria-label="Add a Product by hand"/);
+  it("shows the field for adding a Product by hand, closed, above the empty state", () => {
+    expect(text(html)).not.toContain("Cancel");
+    expect(html).toMatch(/<input[^>]*placeholder="Add a Product by hand"[^>]*>.*Nothing on the list/);
   });
 });
 
@@ -55,11 +55,11 @@ describe("the Shopping List with items", () => {
     item("Whole milk", 1400, "ml", { name: "Carton", amount: 1000 }),
     item("Salmon fillet", 150, "g"),
   ];
-  const html = renderToStaticMarkup(createElement(ShoppingListView, { items, today: "2026-11-11" }));
+  const html = renderToStaticMarkup(createElement(ShoppingListView, { items, today: "2026-11-11", products: [] }));
 
   it("shows how many items it holds", () => {
     expect(text(html)).toContain("3 items");
-    const one = renderToStaticMarkup(createElement(ShoppingListView, { items: [items[2]!], today: "2026-11-11" }));
+    const one = renderToStaticMarkup(createElement(ShoppingListView, { items: [items[2]!], today: "2026-11-11", products: [] }));
     expect(text(one)).toContain("1 item");
   });
 
