@@ -17,7 +17,7 @@ Started 2026-10-20 with `/grill-with-docs`. Resume by re-running it and pointing
 - **Q11 Shopping List**: Products only, no free-text items. (Ticking vs Restock: see round 2.)
 
 - **Q9b Time zone**: resolved in [#15](https://github.com/HugoBar/jeeves/issues/15). One Household Time Zone (HTZ), stored in `settings`; default from the first browser, editable. Later parked in [#61](https://github.com/HugoBar/jeeves/issues/61): "today" is the date in the viewer's browser time zone, and V1 has no `settings` table.
-- **Q11b Ticking**: ticking only marks an item as in the cart (untickable, no Stock change); a "Restock ticked items" action asks for quantities (pre-filled with the pack-rounded amount), performs one Restock each and removes those items. Spec, glossary and #14 updated.
+- **Q11b Ticking**: ticking only marks an item as bought (untickable, no Stock change); a "Restock ticked items" action asks for quantities (pre-filled with the pack-rounded amount), performs one Restock each and removes those items. Spec, glossary and #14 updated.
 - **Q11c Regenerating**: keeps manual items and items already on the list with their tick (only matters for ticked-but-not-yet-restocked items).
 - **Q12 Reopen**: reopening writes opposite Stock Movements that add back exactly what the Confirmation removed (respecting clamping); Meal-caused movements link to their Meal. Glossary entry **Reopen** added; Stock Movement causes now include Reopen. Spec and #10 updated. The "stock was probably wrong" flag clears on Reopen only if that Confirmation's clamp was all that set it since the last Correction; each movement stores `clamped` so this can be told ([#70](https://github.com/HugoBar/jeeves/issues/70)).
 
