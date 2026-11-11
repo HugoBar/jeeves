@@ -2,15 +2,15 @@
 
 import Link from "next/link";
 import { useState, useTransition } from "react";
-import { plannerWeeks } from "@/core/planner";
-import { packsCovering } from "@/core/shopping-list";
+import { chosenRange, currentChoice, packsCovering, type DatesChoice } from "@/core/shopping-list";
 import type { ShoppingListItem } from "@/db/shopping-list";
-import { formatPacks, formatQuantity, formatShoppingCount, formatDateRange, t } from "@/strings";
+import { formatPacks, formatQuantity, formatShoppingCount, t } from "@/strings";
 import { productHref } from "../products/origin";
 import { ConfirmSheet } from "../sheet";
 import { useViewerNow } from "../viewer-clock";
 import { generateShoppingListAction, removeShoppingListItemAction } from "./actions";
 import { AddByHand, type HandAddProduct } from "./add-by-hand";
+import { ChooseDates, datesLabel } from "./choose-dates";
 
 // "Today" is the date in the viewer's time zone (spec "Platform"), which
 // decides the Planner's current week.
@@ -127,30 +127,40 @@ function ShoppingAmount({ item }: { item: ShoppingListItem }) {
   );
 }
 
-// Choosing the dates does nothing yet: its ticket adds it. Generate waits for
-// the viewer's date, which decides the week.
+// Generate over the chosen dates, which start as the planned week each time
+// the page opens. Choosing them and Generate wait for the viewer's date,
+// which decides the Planner's weeks.
 function FromShortfalls({ today }: { today: string | null }) {
   const [pending, startTransition] = useTransition();
-  let dates = t("shopping.plannedWeek");
-  if (today) {
-    const { thisWeek } = plannerWeeks(today);
-    dates = t("shopping.plannedWeekDates", { dates: formatDateRange(thisWeek[0]!, thisWeek.at(-1)!) });
-  }
+  const [choice, setChoice] = useState<DatesChoice>({ preset: "planned" });
+  const [choosing, setChoosing] = useState(false);
+  const current = today ? currentChoice(choice, today) : choice;
   return (
     <div className="card shopping-generate">
       <h2>{t("shopping.fromShortfalls")}</h2>
-      <button type="button" className="shopping-dates">
-        {dates}
+      <button type="button" className="shopping-dates" disabled={!today} onClick={() => setChoosing(true)}>
+        {datesLabel(current, today)}
         <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
           <path d="M9 6l6 6-6 6" />
         </svg>
       </button>
+      {choosing && today && (
+        <ChooseDates
+          today={today}
+          choice={current}
+          onUse={(chosen) => {
+            setChoice(chosen);
+            setChoosing(false);
+          }}
+          onClose={() => setChoosing(false)}
+        />
+      )}
       <button
         type="button"
         className="button-primary"
         disabled={!today || pending}
         onClick={() => {
-          if (today) startTransition(() => generateShoppingListAction(today));
+          if (today) startTransition(() => generateShoppingListAction(today, chosenRange(current, today)));
         }}
       >
         {t("shopping.generate")}

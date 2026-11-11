@@ -1,16 +1,17 @@
 "use server";
 
 import { refresh } from "next/cache";
-import { isDate, plannerWeeks } from "@/core/planner";
+import { isDate } from "@/core/planner";
+import { isGenerateRange, type DateRange } from "@/core/shopping-list";
 import { getDb } from "@/db";
 import { addProductByHand, generateShoppingList, removeShoppingListItem } from "@/db/shopping-list";
 
-// Generate from the Shortfalls of the Planner's current week. `today` is the
-// viewer's date, which decides that week (spec "Platform").
-export async function generateShoppingListAction(today: string): Promise<void> {
-  if (!isDate(today)) throw new Error("Not a date");
-  const { thisWeek } = plannerWeeks(today);
-  await generateShoppingList(getDb(), thisWeek[0]!, thisWeek.at(-1)!);
+// Generate from the Shortfalls of the Meals in `range`, which lies in the
+// Planner's two weeks. `today` is the viewer's date, which decides those
+// weeks (spec "Platform").
+export async function generateShoppingListAction(today: string, range: DateRange): Promise<void> {
+  if (!isDate(today) || !isGenerateRange(today, range)) throw new Error("Not dates Generate can use");
+  await generateShoppingList(getDb(), range.from, range.to);
   refresh();
 }
 
