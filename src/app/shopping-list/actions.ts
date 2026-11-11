@@ -3,7 +3,7 @@
 import { refresh } from "next/cache";
 import { isDate, plannerWeeks } from "@/core/planner";
 import { getDb } from "@/db";
-import { generateShoppingList, removeShoppingListItem } from "@/db/shopping-list";
+import { addProductByHand, generateShoppingList, removeShoppingListItem } from "@/db/shopping-list";
 
 // Generate from the Shortfalls of the Planner's current week. `today` is the
 // viewer's date, which decides that week (spec "Platform").
@@ -18,4 +18,12 @@ export async function generateShoppingListAction(today: string): Promise<void> {
 export async function removeShoppingListItemAction(id: string): Promise<void> {
   await removeShoppingListItem(getDb(), id);
   refresh();
+}
+
+// Adds one pack of a Product by hand. Returns the item added or changed, or
+// null when the Product was Archived meanwhile, so nothing was added.
+export async function addProductByHandAction(productId: string): Promise<string | null> {
+  const result = await addProductByHand(getDb(), productId);
+  refresh();
+  return result.ok ? result.itemId : null;
 }

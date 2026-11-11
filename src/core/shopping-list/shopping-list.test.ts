@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { packsCovering, planGenerate } from "./index";
+import { packsCovering, planAddByHand, planGenerate } from "./index";
 
 // Spinach, 250 g short (spec "Shopping List").
 const short = new Map([["spinach", 250]]);
@@ -60,5 +60,40 @@ describe("packsCovering", () => {
 
   it("is not thrown off by decimals", () => {
     expect(packsCovering(1.1, 0.1)).toBe(11);
+  });
+});
+
+describe("planAddByHand", () => {
+  // Coffee beans, sold in 250 g bags.
+  const bag = 250;
+  const item = (id: string, quantity: number | null, ticked = false) => ({ id, productId: "coffee", quantity, ticked });
+
+  it("puts one pack on a new item when the Product isn't on the list", () => {
+    expect(planAddByHand(bag, [])).toEqual({ kind: "add", quantity: 250 });
+  });
+
+  it("adds the pack to the unticked item, whatever made it", () => {
+    expect(planAddByHand(bag, [item("a", 100)])).toEqual({ kind: "raise", id: "a", quantity: 350 });
+  });
+
+  it("counts an unticked item with no amount as 0", () => {
+    expect(planAddByHand(bag, [item("a", null)])).toEqual({ kind: "raise", id: "a", quantity: 250 });
+  });
+
+  it("puts the pack on a new item beside ticked ones, leaving them as they are", () => {
+    expect(planAddByHand(bag, [item("a", 500, true)])).toEqual({ kind: "add", quantity: 250 });
+  });
+
+  it("adds to the unticked item when ticked ones sit beside it", () => {
+    expect(planAddByHand(bag, [item("a", 500, true), item("b", 250)])).toEqual({ kind: "raise", id: "b", quantity: 500 });
+  });
+
+  it("puts a Product without a Pack Size on with no amount", () => {
+    expect(planAddByHand(null, [])).toEqual({ kind: "add", quantity: null });
+    expect(planAddByHand(null, [item("a", 500, true)])).toEqual({ kind: "add", quantity: null });
+  });
+
+  it("leaves the unticked item of a Product without a Pack Size as it is", () => {
+    expect(planAddByHand(null, [item("a", 150)])).toEqual({ kind: "keep", id: "a" });
   });
 });

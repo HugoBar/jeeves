@@ -70,11 +70,15 @@ export function formatShoppingCount(count: number): string {
   return count === 1 ? t("shopping.countOne") : t("shopping.count", { count });
 }
 
-// Whole packs of a Pack Size: "1 bag", "2 cartons", "3 boxes". The name is
-// typed by the user: a capital starting it is dropped, as in a sentence, but
-// "XL bag" keeps its letters.
+// A pack's name, typed by the user, in running text: a capital starting it
+// is dropped, as in a sentence, but "XL bag" keeps its letters.
+function inSentence(name: string): string {
+  return name.replace(/^\p{Lu}(?!\p{Lu})/u, (capital) => capital.toLowerCase());
+}
+
+// Whole packs of a Pack Size: "1 bag", "2 cartons", "3 boxes".
 export function formatPacks(count: number, name: string): string {
-  const lower = name.replace(/^\p{Lu}(?!\p{Lu})/u, (capital) => capital.toLowerCase());
+  const lower = inSentence(name);
   const plural = count === 1 ? lower : /(s|x|z|ch|sh)$/i.test(lower) ? `${lower}es` : `${lower}s`;
   return t("shopping.packs", { count: quantityFormat.format(count), name: plural });
 }
@@ -109,14 +113,18 @@ export function formatPackSize({ name, amount }: PackSize, unit: DefaultUnit): s
   });
 }
 
+// A Pack Size where a Product is added by hand: "Pack Size · box, 500 g".
+export function formatAddPackSize({ name, amount }: PackSize, unit: DefaultUnit): string {
+  return t("shopping.addPackSize", { name: inSentence(name), quantity: formatQuantity(amount, unit) });
+}
+
 // A Pack Size in a sentence: "Pack Size is a 1,000 g bag." The amount is
-// spoken right after the article, so eight and eleven take "an". A capital
-// starting a word is dropped, but "XL bag" keeps its letters.
+// spoken right after the article, so eight and eleven take "an".
 export function formatPackSizeNote({ name, amount }: PackSize, unit: DefaultUnit): string {
   const quantity = formatQuantity(amount, unit);
   return t(/^(8|1[18](,\d{3})*(\.| ))/.test(quantity) ? "products.packSizeNoteAn" : "products.packSizeNote", {
     quantity,
-    name: name.replace(/^\p{Lu}(?!\p{Lu})/u, (capital) => capital.toLowerCase()),
+    name: inSentence(name),
   });
 }
 

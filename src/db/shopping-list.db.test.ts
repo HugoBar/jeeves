@@ -1,7 +1,8 @@
+import { eq } from "drizzle-orm";
 import { beforeAll, describe, expect, it } from "vitest";
 import { createProduct } from "./products";
-import { shoppingListItems } from "./schema";
-import { listShoppingList, removeShoppingListItem } from "./shopping-list";
+import { products, shoppingListItems } from "./schema";
+import { addProductByHand, listShoppingList, removeShoppingListItem } from "./shopping-list";
 import { createTestDb } from "./test-database";
 
 let db: Awaited<ReturnType<typeof createTestDb>>;
@@ -88,5 +89,76 @@ describe("removeShoppingListItem", () => {
     await removeShoppingListItem(db, flourItem!.id);
 
     expect((await onList()).map((item) => item.product.name)).toEqual(["Sugar"]);
+  });
+});
+
+describe("addProductByHand", () => {
+  // A Product's items, its ticked one first.
+  const itemsOf = async (productId: string) =>
+    (await listShoppingList(db))
+      .filter((item) => item.product.id === productId)
+      .map(({ id, quantity, source, ticked }) => ({ id, quantity, source, ticked }))
+      .sort((a, b) => Number(b.ticked) - Number(a.ticked));
+
+  it("puts one pack on the list as a new item added by hand", async () => {
+    const cornFlakes = await aProduct("Corn flakes", { name: "box", amount: 500 });
+
+    const result = await addProductByHand(db, cornFlakes.id);
+
+    const items = await itemsOf(cornFlakes.id);
+    expect(items).toEqual([{ id: expect.any(String), quantity: 500, source: "manual", ticked: false }]);
+    expect(result).toEqual({ ok: true, itemId: items[0]!.id });
+  });
+
+  it("puts a Product without a Pack Size on with no amount", async () => {
+    const cod = await aProduct("Cod fillet");
+
+    await addProductByHand(db, cod.id);
+
+    expect(await itemsOf(cod.id)).toEqual([{ id: expect.any(String), quantity: null, source: "manual", ticked: false }]);
+  });
+
+  it("adds the pack to the Product's unticked item, which keeps where it came from", async () => {
+    const coffee = await aProduct("Coffee beans", { name: "bag", amount: 250 });
+    const [made] = await db
+      .insert(shoppingListItems)
+      .values({ productId: coffee.id, quantity: 100, source: "shortfall" })
+      .returning({ id: shoppingListItems.id });
+
+    const result = await addProductByHand(db, coffee.id);
+
+    expect(result).toEqual({ ok: true, itemId: made!.id });
+    expect(await itemsOf(coffee.id)).toEqual([{ id: made!.id, quantity: 350, source: "shortfall", ticked: false }]);
+  });
+
+  it("puts the pack on a new item when the Product's only item is ticked", async () => {
+    const coconut = await aProduct("Coconut milk", { name: "can", amount: 400 });
+    await db.insert(shoppingListItems).values({ productId: coconut.id, quantity: 800, source: "shortfall", ticked: true });
+
+    await addProductByHand(db, coconut.id);
+
+    expect(await itemsOf(coconut.id)).toEqual([
+      { id: expect.any(String), quantity: 800, source: "shortfall", ticked: true },
+      { id: expect.any(String), quantity: 400, source: "manual", ticked: false },
+    ]);
+  });
+
+  it("leaves the unticked item of a Product without a Pack Size as it is", async () => {
+    const salmon = await aProduct("Salmon fillet");
+    const [made] = await db
+      .insert(shoppingListItems)
+      .values({ productId: salmon.id, quantity: 150, source: "shortfall" })
+      .returning({ id: shoppingListItems.id });
+
+    expect(await addProductByHand(db, salmon.id)).toEqual({ ok: true, itemId: made!.id });
+    expect(await itemsOf(salmon.id)).toEqual([{ id: made!.id, quantity: 150, source: "shortfall", ticked: false }]);
+  });
+
+  it("refuses an Archived Product, and adds nothing", async () => {
+    const pasta = await aProduct("Old pasta", { name: "pack", amount: 500 });
+    await db.update(products).set({ archivedAt: new Date() }).where(eq(products.id, pasta.id));
+
+    expect(await addProductByHand(db, pasta.id)).toEqual({ ok: false, error: "unavailable" });
+    expect(await itemsOf(pasta.id)).toEqual([]);
   });
 });

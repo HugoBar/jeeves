@@ -321,6 +321,40 @@ textarea {
   font-weight: 400;
 }
 
+/* A search box: a pill with a magnifier, outlined in the accent while in
+   use and dashed while it waits to be opened. */
+.search-box {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.search-box svg {
+  position: absolute;
+  left: 16px;
+  color: var(--color-ink-muted);
+  pointer-events: none;
+}
+
+.search-box input:not([type="checkbox"]) {
+  flex: 1;
+  min-height: 48px;
+  padding-left: 44px;
+  border: 1.5px solid var(--color-accent);
+  border-radius: 999px;
+  outline: none;
+}
+
+.search-box-idle input:not([type="checkbox"]) {
+  border-style: dashed;
+  border-color: var(--color-line-strong);
+  cursor: pointer;
+}
+
+.search-box input::-webkit-search-cancel-button {
+  display: none;
+}
+
 textarea {
   padding: 10px 14px;
 }
@@ -4688,26 +4722,121 @@ body:has(.needs-confirmation-locked) :is(.top-menu, .bottom-menu, a.app-badge) {
   padding: 0;
 }
 
-/* Adding by hand, under the list. */
-.shopping-add {
+/* Adding a Product by hand, at the top of the list: the field, Cancel
+   while open, and under them the Products to add. */
+.hand-add {
   display: flex;
+  flex-direction: column;
   gap: 10px;
-  padding-top: 14px;
+  padding: 8px 0 14px;
+  border-bottom: 1px solid var(--color-line-soft);
+}
+
+.hand-add-field {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.hand-add-field .search-box {
+  flex: 1;
+}
+
+.hand-add-cancel {
+  --button-bg: transparent;
+  --button-line: transparent;
+  --button-ink: var(--color-ink-soft);
+  flex: none;
+  padding: 0 12px;
+}
+
+.hand-add-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.hand-add-options {
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  border: 1px solid var(--color-line-soft);
+  border-radius: 16px;
+  background: var(--color-inset);
+  list-style: none;
+}
+
+.hand-add-options > li + li {
   border-top: 1px solid var(--color-line-soft);
 }
 
-.shopping-add input:not([type="checkbox"]) {
-  flex: 1;
-  border-style: dashed;
-  border-color: var(--color-line-strong);
-  border-radius: 999px;
+/* On phone the name sits over what adding does, the button right of both;
+   from 768px all three share one line. */
+.hand-add-option {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  column-gap: 12px;
+  padding: 10px 10px 10px 16px;
 }
 
-.shopping-add-button {
-  flex: none;
-  width: 44px;
-  padding: 0;
-  font-size: 18px;
+.hand-add-name {
+  grid-column: 1;
+  grid-row: 1;
+  font-weight: 500;
+}
+
+.hand-add-status {
+  grid-column: 1;
+  grid-row: 2;
+  color: var(--color-ink-muted);
+  font-size: var(--text-meta);
+}
+
+.hand-add-button {
+  grid-column: 2;
+  grid-row: 1 / span 2;
+}
+
+.hand-add-show-all {
+  --button-bg: transparent;
+  --button-line: transparent;
+  --button-ink: var(--color-link);
+  width: 100%;
+  border-radius: 0;
+}
+
+.hand-add-none,
+.hand-add-note {
+  margin: 0;
+  color: var(--color-ink-muted);
+  font-size: var(--text-meta);
+}
+
+/* An item just added or changed by hand: an accent outline that fades. */
+.shopping-item-fresh {
+  border-radius: 12px;
+  outline: 2px solid transparent;
+  outline-offset: -2px;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .shopping-item-fresh {
+    animation: fresh-fade 2.4s ease-out;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .shopping-item-fresh {
+    outline-color: var(--color-open-row-border);
+  }
+}
+
+@keyframes fresh-fade {
+  from {
+    outline-color: var(--color-accent);
+    background: var(--color-accent-soft);
+  }
 }
 
 @media (min-width: 768px) {
@@ -4730,6 +4859,22 @@ body:has(.needs-confirmation-locked) :is(.top-menu, .bottom-menu, a.app-badge) {
 
   .shopping-items {
     grid-column: 1;
+    grid-row: 1;
+  }
+
+  .hand-add-option {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr) auto;
+    min-height: 60px;
+    padding-left: 20px;
+  }
+
+  .hand-add-status {
+    grid-column: 2;
+    grid-row: 1;
+  }
+
+  .hand-add-button {
+    grid-column: 3;
     grid-row: 1;
   }
 }
