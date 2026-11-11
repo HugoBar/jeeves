@@ -68,7 +68,7 @@ const type = (value: string) =>
   });
 
 const render = (items: ShoppingListItem[]) =>
-  act(() => root.render(createElement(ShoppingListView, { items, today: "2026-11-11", products })));
+  act(() => root.render(createElement(ShoppingListView, { items, today: "2026-11-11", products, candidates: [] })));
 
 beforeEach(() => {
   add.mockReset().mockResolvedValue(null);

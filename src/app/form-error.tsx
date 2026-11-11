@@ -10,6 +10,16 @@ export function AlertIcon() {
   );
 }
 
+// The warning triangle beside a warning that blocks nothing.
+export function WarningIcon() {
+  return (
+    <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M10.3 4.2 2.6 17.5A2 2 0 0 0 4.3 20.5h15.4a2 2 0 0 0 1.7-3L13.7 4.2a2 2 0 0 0-3.4 0z" />
+      <path d="M12 9.5v4M12 17h.01" />
+    </svg>
+  );
+}
+
 // The lock beside a field that can't be changed.
 export function LockIcon() {
   return (

@@ -2,11 +2,20 @@
 
 import Link from "next/link";
 import { useEffect, useOptimistic, useRef, useState, useTransition } from "react";
-import { chosenRange, currentChoice, packsCovering, type DatesChoice } from "@/core/shopping-list";
+import {
+  chosenRange,
+  currentChoice,
+  packsCovering,
+  stockUncertainty,
+  type DatesChoice,
+  type UncertainCandidate,
+} from "@/core/shopping-list";
 import type { ShoppingListItem } from "@/db/shopping-list";
 import { formatPacks, formatQuantity, formatShoppingCount, t } from "@/strings";
+import { WarningIcon } from "../form-error";
 import { productHref } from "../products/origin";
 import { ConfirmSheet } from "../sheet";
+import { NEEDS_CONFIRMATION_PATH } from "../unconfirmed-alerts";
 import { useViewerNow } from "../viewer-clock";
 import {
   generateShoppingListAction,
@@ -19,24 +28,39 @@ import { ChooseDates, datesLabel } from "./choose-dates";
 import { RestockTicked } from "./restock-ticked";
 
 // "Today" is the date in the viewer's time zone (spec "Platform"), which
-// decides the Planner's current week.
-export function ShoppingList({ items, products }: { items: ShoppingListItem[]; products: HandAddProduct[] }) {
-  return <ShoppingListView items={items} today={useViewerNow()?.date ?? null} products={products} />;
+// decides the Planner's current week and which Meals are Unconfirmed.
+export function ShoppingList({
+  items,
+  products,
+  candidates,
+}: {
+  items: ShoppingListItem[];
+  products: HandAddProduct[];
+  candidates: UncertainCandidate[];
+}) {
+  return (
+    <ShoppingListView items={items} today={useViewerNow()?.date ?? null} products={products} candidates={candidates} />
+  );
 }
 
 // The Shopping List on `today`, or before the browser knows it (null). On
 // phone From Shortfalls comes first and Restock ticked items last; from 768px
 // both sit right of the list.
-// `products` are the ones that can be added by hand, A to Z.
+// `products` are the ones that can be added by hand, A to Z. `candidates` are
+// the Meals that could be Unconfirmed: while some are on `today`, a banner
+// says Stock is uncertain and the items their Products are on are flagged.
 export function ShoppingListView({
   items,
   today,
   products,
+  candidates,
 }: {
   items: ShoppingListItem[];
   today: string | null;
   products: HandAddProduct[];
+  candidates: UncertainCandidate[];
 }) {
+  const uncertainty = today ? stockUncertainty(candidates, today) : null;
   // The item just added or changed by hand, shown with a fading highlight.
   // `at` tells one add from the next, so the highlight plays again.
   const [fresh, setFresh] = useState<{ id: string; at: number } | null>(null);
@@ -48,6 +72,7 @@ export function ShoppingListView({
   return (
     <section className="page-wide">
       <h1 className="shopping-title">{t("shopping.title")}</h1>
+      {uncertainty && uncertainty.unconfirmed > 0 && <UncertainBanner unconfirmed={uncertainty.unconfirmed} />}
       <div className="shopping-columns">
         <FromShortfalls today={today} />
         <div className="card shopping-items">
@@ -64,7 +89,14 @@ export function ShoppingListView({
               {shown.map((item) => {
                 const isFresh = fresh?.id === item.id;
                 // A new key replays the highlight when the same item changes again.
-                return <ShoppingItemRow key={isFresh ? `${item.id}-${fresh.at}` : item.id} item={item} fresh={isFresh} />;
+                return (
+                  <ShoppingItemRow
+                    key={isFresh ? `${item.id}-${fresh.at}` : item.id}
+                    item={item}
+                    fresh={isFresh}
+                    uncertain={uncertainty?.productIds.has(item.product.id) ?? false}
+                  />
+                );
               })}
             </ul>
           )}
@@ -72,6 +104,21 @@ export function ShoppingListView({
         {ticked.length > 0 && <RestockTicked ticked={ticked} />}
       </div>
     </section>
+  );
+}
+
+// Stock is uncertain while Meals are Unconfirmed: until they are Confirmed
+// or Skipped, they count as eaten as planned. Review opens Needs confirmation.
+function UncertainBanner({ unconfirmed }: { unconfirmed: number }) {
+  return (
+    <div className="banner shopping-uncertain">
+      <WarningIcon />
+      <p>
+        <strong>{t("shopping.uncertainTitle")}</strong>{" "}
+        {unconfirmed === 1 ? t("shopping.uncertainBodyOne") : t("shopping.uncertainBody", { count: unconfirmed })}{" "}
+        <Link href={NEEDS_CONFIRMATION_PATH}>{t("shopping.uncertainReview")}</Link>
+      </p>
+    </div>
   );
 }
 
@@ -112,8 +159,9 @@ function TickAll({ ticked, total, onTick }: { ticked: number; total: number; onT
 // strikes its name through, at once, before the list comes back. Removing is
 // quick and an item is easy to add again, so ✕ asks only for a ticked item:
 // it is bought, and once removed, Restock won't add it to Stock.
-// `fresh` marks it just added or changed by hand.
-function ShoppingItemRow({ item, fresh }: { item: ShoppingListItem; fresh: boolean }) {
+// `fresh` marks it just added or changed by hand; `uncertain` flags a
+// Product an Unconfirmed Meal uses.
+function ShoppingItemRow({ item, fresh, uncertain }: { item: ShoppingListItem; fresh: boolean; uncertain: boolean }) {
   const [asking, setAsking] = useState(false);
   const [removing, startRemoving] = useTransition();
   const [, startTicking] = useTransition();
@@ -137,9 +185,12 @@ function ShoppingItemRow({ item, fresh }: { item: ShoppingListItem; fresh: boole
         }}
       />
       <div className="list-row-text">
-        <Link href={productHref(item.product.id, "shopping-list")} className="list-row-title shopping-item-name">
-          {name}
-        </Link>
+        <span className="shopping-item-head">
+          <Link href={productHref(item.product.id, "shopping-list")} className="list-row-title shopping-item-name">
+            {name}
+          </Link>
+          {uncertain && <span className="shopping-uncertain-pill">{t("shopping.uncertain")}</span>}
+        </span>
         <ShoppingAmount item={item} />
       </div>
       <button

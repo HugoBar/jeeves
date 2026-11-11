@@ -4774,6 +4774,41 @@ body:has(.needs-confirmation-locked) :is(.top-menu, .bottom-menu, a.app-badge) {
   text-decoration: underline;
 }
 
+/* Stock uncertain: the banner under the title, and the pill beside a
+   flagged item's name. */
+.shopping-uncertain {
+  margin-bottom: 14px;
+}
+
+.shopping-uncertain p {
+  line-height: 1.6;
+}
+
+.shopping-uncertain strong {
+  font-weight: 700;
+}
+
+.shopping-uncertain a {
+  color: inherit;
+  font-weight: 700;
+}
+
+.shopping-item-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+}
+
+.shopping-uncertain-pill {
+  padding: 2px 9px;
+  border-radius: 999px;
+  background: var(--color-warning);
+  color: var(--color-warning-ink);
+  font-size: 12px;
+  font-weight: 600;
+}
+
 /* "1 bag" stands out from "(100 g needed)". */
 .shopping-amount {
   color: var(--color-ink-muted);
