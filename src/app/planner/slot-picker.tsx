@@ -98,8 +98,16 @@ export function SlotPickerSheetView({
   );
 }
 
+// On Edit Meal, where Change Slot Category and Remove Slot are kept on the
+// form until Save, rather than written straight away.
+export interface SlotPickerKeptUntilSave {
+  setSlotCategory: (slotCategoryId: string) => void;
+  remove: () => void;
+}
+
 // What the slot picker shows under its heading, in a sheet or in the Meal
-// panel. `onDone` closes it.
+// panel. `onDone` closes it. With `keptUntilSave`, on Edit Meal, `slot` is as
+// changed on the form, and its food is checked against that Slot Category.
 export function SlotPickerBody({
   meal,
   slot,
@@ -107,6 +115,7 @@ export function SlotPickerBody({
   screen,
   onScreen,
   onDone,
+  keptUntilSave,
 }: {
   meal: PlannerMeal;
   slot: PlannerMealSlot;
@@ -114,6 +123,7 @@ export function SlotPickerBody({
   screen: SlotPickerScreen;
   onScreen: (screen: SlotPickerScreen) => void;
   onDone: () => void;
+  keptUntilSave?: SlotPickerKeptUntilSave;
 }) {
   const toPick = () => onScreen({ kind: "pick" });
   if (screen.kind === "category") {
@@ -123,6 +133,7 @@ export function SlotPickerBody({
         slotCategories={pickers.slotCategories}
         onCancel={screen.fromPick ? toPick : onDone}
         onSaved={toPick}
+        keptUntilSave={keptUntilSave}
       />
     );
   }
@@ -130,9 +141,15 @@ export function SlotPickerBody({
     const value = slotFoodValue(screen.content, screen.id);
     const food = foodOptions(pickers, slot.slotCategoryId).find((option) => option.value === value);
     // Gone from what the slot can take since it was picked.
-    if (food) return <PickAmount slot={slot} food={food} onBack={toPick} onDone={onDone} />;
+    if (food) return <PickAmount slot={slot} food={food} onBack={toPick} onDone={onDone} keptUntilSave={keptUntilSave} />;
   }
-  return <PickFood meal={meal} slot={slot} pickers={pickers} onScreen={onScreen} onDone={onDone} />;
+  return <PickFood meal={meal} slot={slot} pickers={pickers} onScreen={onScreen} onDone={onDone} keptUntilSave={keptUntilSave} />;
+}
+
+// On Edit Meal, the Slot Category the fill is checked against: the one on
+// the form, which may not be saved yet.
+function FormSlotCategory({ slot, keptUntilSave }: { slot: PlannerMealSlot; keptUntilSave?: SlotPickerKeptUntilSave }) {
+  return keptUntilSave ? <input type="hidden" name="slotCategoryId" value={slot.slotCategoryId} /> : null;
 }
 
 // A Recipe or Product the picker offers, with its line under its name. A
@@ -204,12 +221,14 @@ function PickFood({
   pickers,
   onScreen,
   onDone,
+  keptUntilSave,
 }: {
   meal: PlannerMeal;
   slot: PlannerMealSlot;
   pickers: SlotPickers;
   onScreen: (screen: SlotPickerScreen) => void;
   onDone: () => void;
+  keptUntilSave?: SlotPickerKeptUntilSave;
 }) {
   const [state, action, pending] = useSlotAction(fillMealSlotAction, slot.id, onDone);
   const { allMessages } = useSlotErrors(state.error);
@@ -248,6 +267,7 @@ function PickFood({
         </button>
       </div>
       <form action={action} className="slot-picker-food">
+        <FormSlotCategory slot={slot} keptUntilSave={keptUntilSave} />
         {foods.length > 0 ? (
           <>
             {suggested.length > 0 && (
@@ -288,7 +308,7 @@ function PickFood({
         )}
         {allMessages()}
       </form>
-      <SlotPickerFoot slot={slot} onDone={onDone} />
+      <SlotPickerFoot slot={slot} onDone={onDone} keptUntilSave={keptUntilSave} />
     </>
   );
 }
@@ -364,11 +384,13 @@ function PickAmount({
   food,
   onBack,
   onDone,
+  keptUntilSave,
 }: {
   slot: PlannerMealSlot;
   food: FoodOption;
   onBack: () => void;
   onDone: () => void;
+  keptUntilSave?: SlotPickerKeptUntilSave;
 }) {
   const [state, action, pending] = useSlotAction(fillMealSlotAction, slot.id, onDone);
   return (
@@ -381,7 +403,9 @@ function PickAmount({
       pending={pending}
       onChangeFood={onBack}
       onBack={onBack}
-    />
+    >
+      <FormSlotCategory slot={slot} keptUntilSave={keptUntilSave} />
+    </AmountForm>
   );
 }
 
@@ -500,20 +524,31 @@ function startingAmount(slot: PlannerMealSlot, food: FoodOption): string {
 
 // Change Slot Category: the non-Archived Roles, then Kinds, with the slot's
 // own picked and marked "now". An Archived one isn't listed, so nothing is
-// picked. Saving keeps the food in the slot.
+// picked. Saving keeps the food in the slot; with `keptUntilSave` it is kept on
+// Edit Meal until Save, and picking none just stays.
 function ChangeSlotCategory({
   slot,
   slotCategories,
   onCancel,
   onSaved,
+  keptUntilSave,
 }: {
   slot: PlannerMealSlot;
   slotCategories: SlotCategoryOption[];
   onCancel: () => void;
   onSaved: () => void;
+  keptUntilSave?: SlotPickerKeptUntilSave;
 }) {
-  const [state, action, pending] = useSlotAction(setMealSlotCategoryAction, slot.id, onSaved);
+  const [state, saveAction, pending] = useSlotAction(setMealSlotCategoryAction, slot.id, onSaved);
   const { invalid, allMessages } = useSlotErrors(state.error);
+  const action = keptUntilSave
+    ? (formData: FormData) => {
+        const picked = formData.get("slotCategoryId");
+        if (picked === null) return;
+        keptUntilSave.setSlotCategory(String(picked));
+        onSaved();
+      }
+    : saveAction;
 
   return (
     <form action={action} className="slot-category-form">
@@ -552,8 +587,17 @@ function ChangeSlotCategory({
 }
 
 // The foot of the picker: Empty, when the slot holds something, Remove Slot,
-// which asks first, and Cancel.
-function SlotPickerFoot({ slot, onDone }: { slot: PlannerMealSlot; onDone: () => void }) {
+// which asks first, and Cancel. Empty is written straight away; with
+// `keptUntilSave`, Remove Slot is kept on Edit Meal until Save.
+function SlotPickerFoot({
+  slot,
+  onDone,
+  keptUntilSave,
+}: {
+  slot: PlannerMealSlot;
+  onDone: () => void;
+  keptUntilSave?: SlotPickerKeptUntilSave;
+}) {
   const [pending, startTransition] = useTransition();
   return (
     <div className="sheet-actions slot-picker-foot">
@@ -572,7 +616,7 @@ function SlotPickerFoot({ slot, onDone }: { slot: PlannerMealSlot; onDone: () =>
         </button>
       )}
       <RemoveButton
-        action={() => removeMealSlotAction(slot.id)}
+        action={keptUntilSave ? async () => keptUntilSave.remove() : () => removeMealSlotAction(slot.id)}
         label={t("planner.removeSlot")}
         title={t("planner.removeSlotConfirm", { category: slot.slotCategoryLabel })}
       />

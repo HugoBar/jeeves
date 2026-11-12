@@ -1,6 +1,6 @@
 "use client";
 
-import { startTransition, useActionState, useEffect, useId, useOptimistic, useRef, useState, useTransition, type ReactNode } from "react";
+import { useActionState, useEffect, useId, useRef, useState, useTransition, type ReactNode } from "react";
 import {
   asksForAnotherFood,
   blockedByArchivedFood,
@@ -14,6 +14,8 @@ import {
   slotFoodValue,
   type MealCardStatus,
   type MealFieldError,
+  type MealSlotCategoryError,
+  type MealSlotChangeError,
   type MealStatus,
   type NewMealSlotError,
   type NewMealSlotInput,
@@ -47,7 +49,6 @@ import {
   confirmMealAction,
   editMealAction,
   fillEmptySlotsAction,
-  moveMealSlotAction,
   removeMealAction,
   reopenMealAction,
   skipMealAction,
@@ -55,6 +56,15 @@ import {
   type MealChangesFormState,
   type SkipMealError,
 } from "./actions";
+import {
+  hasSlotEdits,
+  moveShownSlot,
+  NO_SLOT_EDITS,
+  withSlotRemoved,
+  withSlotCategory,
+  shownSlots,
+  type SlotEdits,
+} from "./edit-meal-slots";
 import {
   ChevronIcon,
   SlotPickerBody,
@@ -1043,7 +1053,7 @@ function draftFood(input: NewMealSlotInput, slotFoods: SlotFoods): PlannerSlotFo
 
 // "Slot 2 (Rice): Enter a quantity above 0.", or without the food when it is
 // no longer offered.
-function slotErrorMessage(row: number, food: PlannerSlotFood, error: NewMealSlotError): string {
+function slotErrorMessage(row: number, food: PlannerSlotFood, error: NewMealSlotError | MealSlotCategoryError): string {
   const reason = t(`planner.error.${error}`);
   return "label" in food
     ? t("planner.error.slot", { row, food: food.label, reason })
@@ -1224,31 +1234,31 @@ function useMoveFocus(keys: readonly string[]) {
   return { list, focusAfterMove };
 }
 
-// Edit Meal's slots. A tap opens the slot picker when `onPickSlot` is given,
-// and ▲ or ▼ saves the slot's new place straight away when `onMoveSlot` is,
-// showing it there while it saves.
+// Edit Meal's slots, as changed on the form. A tap opens the slot picker when
+// `onPickSlot` is given, and ▲ or ▼ moves the slot on the form when
+// `onMoveSlot` is. `slotErrors` are the slots Save refused, under their row.
 function EditMealSlotList({
   slots,
+  slotErrors = [],
   onPickSlot,
   onMoveSlot,
 }: {
   slots: PlannerMealSlot[];
+  slotErrors?: MealSlotChangeError[];
   onPickSlot?: (slot: PlannerMealSlot) => void;
-  onMoveSlot?: (slot: PlannerMealSlot, offset: SlotMove) => Promise<void>;
+  onMoveSlot?: (index: number, offset: SlotMove) => void;
 }) {
-  const [shown, move] = useOptimistic(slots, (current, { index, offset }: { index: number; offset: SlotMove }) =>
-    moveSlot(current, index, offset),
-  );
-  const { list, focusAfterMove } = useMoveFocus(shown.map((slot) => slot.id));
+  const { list, focusAfterMove } = useMoveFocus(slots.map((slot) => slot.id));
   return (
     <ol ref={list} className="slot-list">
-      {shown.map((slot, index) => {
+      {slots.map((slot, index) => {
         const empty = slot.food.content === "empty";
         const dashed = empty || slot.slotCategoryArchived;
         // On the food's line, as on New Meal. An empty slot has none, so its
         // chevron stays by "Not chosen yet", clear of ▲ ▼.
         const chevron = onPickSlot !== undefined && !slot.slotCategoryArchived;
         const summary = <SlotSummary slot={slot} showAmount chevron={chevron && empty} />;
+        const error = slotErrors.find((refused) => refused.slotId === slot.id);
         return (
           <li
             key={slot.id}
@@ -1267,16 +1277,14 @@ function EditMealSlotList({
                 slotKey={slot.id}
                 category={slot.slotCategoryLabel}
                 index={index}
-                count={shown.length}
+                count={slots.length}
                 onMove={(offset) => {
                   focusAfterMove(slot.id, index + offset);
-                  startTransition(async () => {
-                    move({ index, offset });
-                    await onMoveSlot(slot, offset);
-                  });
+                  onMoveSlot(index, offset);
                 }}
               />
             )}
+            {error && <FormError>{slotErrorMessage(index + 1, slot.food, error.code)}</FormError>}
           </li>
         );
       })}
@@ -1335,6 +1343,7 @@ export function EditMealPanel({
   onClose: () => void;
 }) {
   const [picking, setPicking] = useState<SlotPicking | null>(null);
+  const [slotEdits, setSlotEdits] = useState(NO_SLOT_EDITS);
   return (
     <EditMealPanelView
       meal={meal}
@@ -1342,6 +1351,8 @@ export function EditMealPanel({
       pickers={pickers}
       picking={picking}
       onPicking={setPicking}
+      slotEdits={slotEdits}
+      onSlotEdits={setSlotEdits}
       onClose={onClose}
     />
   );
@@ -1353,13 +1364,17 @@ export type SlotPicking = { slotId: string; screen: SlotPickerScreen };
 // Edit Meal, or the slot picker for one of its slots in its place, headed
 // "Back to {Meal}": nothing stacks on top of the panel. The form stays
 // mounted, hidden, so what was typed in it is still there on the way back. A
-// slot removed meanwhile goes back to the form.
+// slot removed meanwhile, or on the form, goes back to the form. The slots
+// show `slotEdits`, kept until Save; the picker's Remove Slot and Change
+// Slot Category add to them, while its food is written straight away.
 export function EditMealPanelView({
   meal,
   week,
   pickers,
   picking,
   onPicking,
+  slotEdits,
+  onSlotEdits,
   onClose,
 }: {
   meal: PlannerMeal;
@@ -1367,15 +1382,21 @@ export function EditMealPanelView({
   pickers: SlotPickers;
   picking: SlotPicking | null;
   onPicking: (picking: SlotPicking | null) => void;
+  slotEdits: SlotEdits;
+  onSlotEdits: (edits: SlotEdits) => void;
   onClose: () => void;
 }) {
   const label = meal.name ?? meal.mealTypeLabel;
-  const pickedSlot = picking ? meal.slots.find((slot) => slot.id === picking.slotId) : undefined;
+  const slots = shownSlots(meal.slots, slotEdits, pickers.slotCategories);
+  const pickedSlot = picking ? slots.find((slot) => slot.id === picking.slotId) : undefined;
   const back = () => onPicking(null);
   const mealFormAndDelete = (
     <>
       <EditMealForm
         meal={meal}
+        slots={slots}
+        slotEdits={slotEdits}
+        onMoveSlot={(index, offset) => onSlotEdits(moveShownSlot(slotEdits, slots, index, offset))}
         onPickSlot={(slot) => onPicking({ slotId: slot.id, screen: startScreen(slot) })}
         onDone={onClose}
       />
@@ -1405,6 +1426,13 @@ export function EditMealPanelView({
           screen={picking.screen}
           onScreen={(screen) => onPicking({ slotId: pickedSlot.id, screen })}
           onDone={back}
+          keptUntilSave={{
+            setSlotCategory: (slotCategoryId) => onSlotEdits(withSlotCategory(slotEdits, pickedSlot.id, slotCategoryId)),
+            remove: () => {
+              onSlotEdits(withSlotRemoved(slotEdits, pickedSlot.id));
+              back();
+            },
+          }}
         />
       )}
       {/* The same element either way, so the form isn't mounted again. */}
@@ -1430,11 +1458,13 @@ export interface MealFormValues {
 // repeat, under a banner counting the errors once a submit is rejected.
 // Adding offers `mealTypes` as chips, with `mealTypeHint` under them, and
 // shows `slotsCard`, its NewMealSlotsCard, whose refused slots `slotErrors`
-// holds; `editing` shows its Meal Type locked and lists its slots. Mounted
-// again on every submit, so it starts from what was sent.
+// holds; `editing` shows its Meal Type locked and lists its slots, as
+// changed on the form, with the ones Save refused in `editSlotErrors`.
+// Mounted again on every submit, so it starts from what was sent.
 export function MealFormFields({
   errors,
   slotErrors = [],
+  editSlotErrors = [],
   values,
   mealTypes,
   mealTypeHint = t("planner.mealTypeHint"),
@@ -1445,6 +1475,7 @@ export function MealFormFields({
 }: {
   errors: MealFieldError[];
   slotErrors?: NewMealSlotRowError[];
+  editSlotErrors?: MealSlotChangeError[];
   values: MealFormValues;
   mealTypes: PickerOption[];
   mealTypeHint?: string;
@@ -1452,8 +1483,9 @@ export function MealFormFields({
   editing?: Pick<PlannerMeal, "mealTypeLabel" | "slots">;
   // Opens the slot picker for a slot of the Meal being edited.
   onPickSlot?: (slot: PlannerMealSlot) => void;
-  // Saves a slot of the Meal being edited one place up (-1) or down (1).
-  onMoveSlot?: (slot: PlannerMealSlot, offset: SlotMove) => Promise<void>;
+  // Moves the slot at `index` of the Meal being edited one place up (-1) or
+  // down (1) on the form.
+  onMoveSlot?: (index: number, offset: SlotMove) => void;
 }) {
   const [picked, setPicked] = useState(values.mealTypeId ?? "");
   const { invalid, messages } = useMealErrors(errors);
@@ -1461,7 +1493,7 @@ export function MealFormFields({
 
   return (
     <>
-      <MealFormBanner count={errors.length + slotErrors.length} editing={editing !== undefined} />
+      <MealFormBanner count={errors.length + slotErrors.length + editSlotErrors.length} editing={editing !== undefined} />
       {messages(FORM_LEVEL)}
       <FormCard title={t("planner.basics")}>
         {editing ? (
@@ -1528,7 +1560,7 @@ export function MealFormFields({
       {editing ? (
         <FormCard title={t("planner.slots")}>
           {editing.slots.length > 0 ? (
-            <EditMealSlotList slots={editing.slots} onPickSlot={onPickSlot} onMoveSlot={onMoveSlot} />
+            <EditMealSlotList slots={editing.slots} slotErrors={editSlotErrors} onPickSlot={onPickSlot} onMoveSlot={onMoveSlot} />
           ) : (
             <p className="meal-form-no-slots">{t("planner.noSlots")}</p>
           )}
@@ -1598,34 +1630,66 @@ function FixMessage({ count, editing }: { count: number; editing: boolean }) {
   );
 }
 
+// `slots` are the Meal's as changed on the form. Once `slotEdits` changed
+// them, Save sends their order, the ones removed and the new Slot Categories
+// only, so a slot added, removed or given a Slot Category elsewhere meanwhile
+// keeps that change.
 function EditMealForm({
   meal,
+  slots,
+  slotEdits,
+  onMoveSlot,
   onPickSlot,
   onDone,
 }: {
   meal: PlannerMeal;
+  slots: PlannerMealSlot[];
+  slotEdits: SlotEdits;
+  onMoveSlot: (index: number, offset: SlotMove) => void;
   onPickSlot: (slot: PlannerMealSlot) => void;
   onDone: () => void;
 }) {
   const [state, action, pending] = useActionState(
     async ({ submits, ...previous }: Submitted<MealChangesFormState>, formData: FormData) => {
       const next = await editMealAction(meal.id, previous, formData);
-      if (next.errors.length === 0) onDone();
+      if (next.errors.length === 0 && next.slotErrors.length === 0) onDone();
       return { ...next, submits: submits + 1 };
     },
-    { errors: [], values: { hour: meal.hour, name: meal.name ?? "", untracked: meal.untracked }, submits: 0 },
+    {
+      errors: [],
+      slotErrors: [],
+      values: { hour: meal.hour, name: meal.name ?? "", untracked: meal.untracked },
+      submits: 0,
+    },
   );
   return (
     <form action={action} className="form-cards" noValidate>
       <MealFormFields
         key={state.submits}
         errors={state.errors}
+        editSlotErrors={state.slotErrors}
         values={state.values}
         mealTypes={[]}
-        editing={meal}
+        editing={{ mealTypeLabel: meal.mealTypeLabel, slots }}
         onPickSlot={onPickSlot}
-        onMoveSlot={(slot, offset) => moveMealSlotAction(slot.id, offset)}
+        onMoveSlot={onMoveSlot}
       />
+      {hasSlotEdits(slotEdits) && (
+        <>
+          {slots.map((slot) => (
+            <input key={slot.id} type="hidden" name="slotOrder" value={slot.id} />
+          ))}
+          {slotEdits.removed.map((slotId) => (
+            <input key={slotId} type="hidden" name="removedSlotId" value={slotId} />
+          ))}
+          {slots
+            .filter((slot) => slot.id in slotEdits.slotCategories)
+            .flatMap((slot) => [
+              <input key={`${slot.id}:id`} type="hidden" name="changedSlotId" value={slot.id} />,
+              <input key={`${slot.id}:category`} type="hidden" name="changedSlotCategoryId" value={slot.slotCategoryId} />,
+            ])}
+        </>
+      )}
       <MealPanelActions submitLabel={t("planner.save")} pending={pending} onCancel={onDone} />
     </form>
   );

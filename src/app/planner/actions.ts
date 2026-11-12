@@ -2,11 +2,11 @@
 
 import { refresh } from "next/cache";
 import { sortCategories } from "@/core/food-categories";
-import type { SlotMove } from "@/core/slot-order";
 import {
   canChangeMeal,
   parseMealChanges,
   parseMealSlotCategory,
+  parseMealSlotChanges,
   parseMealSlotFill,
   parseNewMeal,
   parseNewMealSlot,
@@ -15,6 +15,8 @@ import {
   pickableForSlot,
   type MealFieldError,
   type MealSlotCategoryError,
+  type MealSlotChangeError,
+  type MealSlotChangesInput,
   type MealSlotFillError,
   type NewMealInput,
   type NewMealSlotError,
@@ -44,7 +46,6 @@ import {
   getMeal,
   getMealSlotContext,
   listFoodsForSlots,
-  moveMealSlot,
   removeMealSlot,
   setMealSlotCategory,
   updateMeal,
@@ -57,11 +58,16 @@ import { foodCategoryLabel } from "@/strings";
 export type NewMealFormValues = Omit<NewMealInput, "date"> & { slots: NewMealSlotInput[] };
 export type NewMealFormState = { errors: MealFieldError[]; slotErrors: NewMealSlotRowError[]; values: NewMealFormValues };
 export type MealChangesFormValues = Pick<NewMealInput, "hour" | "name" | "untracked">;
-export type MealChangesFormState = { errors: MealFieldError[]; values: MealChangesFormValues };
+// `slotErrors` are the slots whose new Slot Category was refused.
+export type MealChangesFormState = {
+  errors: MealFieldError[];
+  slotErrors: MealSlotChangeError[];
+  values: MealChangesFormValues;
+};
 // "notChangeable": the Meal was Confirmed or Skipped since the planner was
 // loaded.
 export type MealSlotCategoryFormState = { error: MealSlotCategoryError | "notChangeable" | null };
-export type MealSlotFillFormState = { error: MealSlotFillError | "notChangeable" | null };
+export type MealSlotFillFormState = { error: MealSlotFillError | MealSlotCategoryError | "notChangeable" | null };
 export type NewMealSlotFormState = { error: NewMealSlotError | "notChangeable" | null };
 export type ConfirmMealError = Exclude<ConfirmMealResult, { ok: true }>;
 export type { RefusedMeal };
@@ -159,23 +165,56 @@ export async function createMealAction(
   return { errors: [], slotErrors: [], values: { mealTypeId: "", hour: "", name: "", untracked: false, slots: [] } };
 }
 
+// The ids of the non-Archived Food Categories: what a slot can be changed to.
+async function activeCategoryIds(db: Db): Promise<Set<string>> {
+  return new Set((await listActiveCategories(db)).map((category) => category.id));
+}
+
+// Edit Meal's slots, when they were changed on the form: each slot kept, in
+// the order shown, each removed, and each given a new Slot Category, with it
+// under the same index.
+function slotChangesInput(formData: FormData): MealSlotChangesInput | null {
+  if (!formData.has("slotOrder") && !formData.has("removedSlotId")) return null;
+  const all = (name: string) => formData.getAll(name).map(String);
+  const categories = all("changedSlotCategoryId");
+  return {
+    order: all("slotOrder"),
+    removed: all("removedSlotId"),
+    slotCategories: all("changedSlotId").map((slotId, index) => ({ slotId, slotCategoryId: categories[index] ?? "" })),
+  };
+}
+
+// Hour, name, Untracked and the slot changes kept on the form are written
+// together, or not at all. Nothing changes if the Meal was Confirmed or
+// Skipped; the refresh shows the planner it was.
 export async function editMealAction(
   id: string,
   _state: MealChangesFormState,
   formData: FormData,
 ): Promise<MealChangesFormState> {
   const db = getDb();
-  if (!(await getMeal(db, id))) throw new Error("Meal not found");
+  const meal = await getMeal(db, id);
+  if (!meal) throw new Error("Meal not found");
+  if (!canChangeMeal(meal)) {
+    refresh();
+    return { errors: [], slotErrors: [], values: { hour: meal.hour, name: meal.name ?? "", untracked: meal.untracked } };
+  }
   const values = {
     hour: String(formData.get("hour") ?? ""),
     name: String(formData.get("name") ?? ""),
     untracked: formData.get("untracked") === "on",
   };
   const parsed = parseMealChanges(values);
-  if (!parsed.ok) return { errors: parsed.errors, values };
-  await updateMeal(db, id, parsed.changes);
+  const input = slotChangesInput(formData);
+  const slots = input
+    ? parseMealSlotChanges(input, meal.slots, await activeCategoryIds(db))
+    : null;
+  if (!parsed.ok || (slots && !slots.ok)) {
+    return { errors: parsed.ok ? [] : parsed.errors, slotErrors: slots && !slots.ok ? slots.errors : [], values };
+  }
+  await updateMeal(db, id, parsed.changes, slots?.changes);
   refresh();
-  return { errors: [], values };
+  return { errors: [], slotErrors: [], values };
 }
 
 // A slot can only be changed to a Food Category that is not Archived. Every
@@ -189,8 +228,7 @@ export async function setMealSlotCategoryAction(
   const slot = await getMealSlotContext(db, slotId);
   if (!slot) throw new Error("Meal Slot not found");
   if (!canChangeMeal(slot.meal)) return { error: "notChangeable" };
-  const pickable = new Set((await listActiveCategories(db)).map((category) => category.id));
-  const parsed = parseMealSlotCategory(String(formData.get("slotCategoryId") ?? ""), pickable);
+  const parsed = parseMealSlotCategory(String(formData.get("slotCategoryId") ?? ""), await activeCategoryIds(db));
   if (!parsed.ok) return { error: parsed.error };
   await setMealSlotCategory(db, slotId, parsed.slotCategoryId);
   refresh();
@@ -199,7 +237,9 @@ export async function setMealSlotCategoryAction(
 
 // A slot can only be filled with what its picker offers: a non-Archived
 // Recipe or Product carrying its Slot Category, or Leftovers if its Meal Type
-// allows them.
+// allows them. On Edit Meal, `slotCategoryId` is the one picked on the form,
+// not saved yet, which must not be Archived; the fill is checked against it
+// but only the food is written.
 export async function fillMealSlotAction(
   slotId: string,
   _state: MealSlotFillFormState,
@@ -209,13 +249,20 @@ export async function fillMealSlotAction(
   const slot = await getMealSlotContext(db, slotId);
   if (!slot) throw new Error("Meal Slot not found");
   if (!canChangeMeal(slot.meal)) return { error: "notChangeable" };
+  const formCategory = formData.get("slotCategoryId");
+  let slotCategoryId = slot.slotCategoryId;
+  if (formCategory !== null && String(formCategory) !== slotCategoryId) {
+    const parsed = parseMealSlotCategory(String(formCategory), await activeCategoryIds(db));
+    if (!parsed.ok) return { error: parsed.error };
+    slotCategoryId = parsed.slotCategoryId;
+  }
   const { recipes, products } = await listFoodsForSlots(db);
   const ids = (foods: { id: string }[]) => new Set(foods.map((food) => food.id));
   const parsed = parseMealSlotFill(
     { food: String(formData.get("food") ?? ""), amount: String(formData.get("amount") ?? "") },
     {
-      recipeIds: ids(pickableForSlot(recipes, slot.slotCategoryId)),
-      productIds: ids(pickableForSlot(products, slot.slotCategoryId)),
+      recipeIds: ids(pickableForSlot(recipes, slotCategoryId)),
+      productIds: ids(pickableForSlot(products, slotCategoryId)),
       allowsLeftovers: slot.allowsLeftovers,
     },
   );
@@ -284,14 +331,6 @@ export async function removeMealSlotAction(slotId: string): Promise<void> {
   const db = getDb();
   const slot = await getMealSlotContext(db, slotId);
   if (slot && canChangeMeal(slot.meal)) await removeMealSlot(db, slotId);
-  refresh();
-}
-
-// The slot swapped with the one above it (-1) or below it (1). Nothing changes
-// if it is already first or last, or the Meal was Confirmed or Skipped; the
-// refresh shows the planner as it is.
-export async function moveMealSlotAction(slotId: string, move: SlotMove): Promise<void> {
-  await moveMealSlot(getDb(), slotId, move);
   refresh();
 }
 

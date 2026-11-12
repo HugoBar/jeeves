@@ -2,6 +2,7 @@ import { createElement, type ComponentProps } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { EditMealPanel, EditMealPanelView, MealFormFields, MealMenuList, NewMealSlotsCard, ReopenSheet, type PlannerMeal, type PlannerMealSlot, type SlotWarnings } from "./meal-card";
+import { NO_SLOT_EDITS, type SlotEdits } from "./edit-meal-slots";
 import { AddMealPanel, AddMealPanelView, PlannerView } from "./planner";
 
 type Props = ComponentProps<typeof PlannerView>;
@@ -716,6 +717,8 @@ describe("the Meal panel with a slot picked", () => {
         pickers: panelPickers,
         picking,
         onPicking: () => {},
+        slotEdits: NO_SLOT_EDITS,
+        onSlotEdits: () => {},
         onClose: () => {},
       }),
     );
@@ -734,6 +737,8 @@ describe("the Meal panel with a slot picked", () => {
         pickers: panelPickers,
         picking: null,
         onPicking: () => {},
+        slotEdits: NO_SLOT_EDITS,
+        onSlotEdits: () => {},
         onClose: () => {},
       }),
     );
@@ -769,6 +774,88 @@ describe("the Meal panel with a slot picked", () => {
     const html = renderView({ slotId: "removed", screen: { kind: "pick" } });
     expect(text(/<h2 [^>]*>(.*?)<\/h2>/.exec(html)![1]!)).toBe("Edit Weekday Lunch");
     expect(html).not.toMatch(/meal-panel-content" hidden/);
+  });
+});
+
+describe("Edit Meal's slot changes, kept until Save", () => {
+  const slot = (id: string, slotCategoryId: string, slotCategoryLabel: string): PlannerMealSlot => ({
+    id,
+    slotCategoryId,
+    slotCategoryLabel,
+    slotCategoryArchived: false,
+    food: { content: "empty" },
+    warnings: null,
+  });
+  const slots = [slot("slot-1", "main", "Main Dish"), slot("slot-2", "veg", "Vegetables"), slot("slot-3", "fruit", "Fruit")];
+  const editPickers = {
+    ...pickers,
+    slotCategories: [
+      { id: "main", label: "Main Dish", kind: "role" as const },
+      { id: "veg", label: "Vegetables", kind: "kind" as const },
+      { id: "fruit", label: "Fruit", kind: "kind" as const },
+      { id: "fish", label: "Fish", kind: "kind" as const },
+    ],
+  };
+  const renderEdit = (slotEdits: SlotEdits, picking: ComponentProps<typeof EditMealPanelView>["picking"] = null) =>
+    renderToStaticMarkup(
+      createElement(EditMealPanelView, {
+        meal: meal({ slots }),
+        week: "this",
+        pickers: editPickers,
+        picking,
+        onPicking: () => {},
+        slotEdits,
+        onSlotEdits: () => {},
+        onClose: () => {},
+      }),
+    );
+  const shown = (html: string) =>
+    [...html.matchAll(/<li class="slot-row[^"]*">.*?<\/li>/g)].map((row) => text(row[0]).split(" ")[0]);
+  const hidden = (html: string, name: string) =>
+    [...html.matchAll(new RegExp(`<input type="hidden" name="${name}" value="([^"]*)"`, "g"))].map((m) => m[1]);
+
+  it("sends no slot changes while there are none", () => {
+    const html = renderEdit(NO_SLOT_EDITS);
+    expect(shown(html)).toEqual(["Main", "Vegetables", "Fruit"]);
+    expect(hidden(html, "slotOrder")).toEqual([]);
+    expect(hidden(html, "removedSlotId")).toEqual([]);
+  });
+
+  it("shows a removed slot gone, and sends it removed with the rest kept", () => {
+    const html = renderEdit({ ...NO_SLOT_EDITS, removed: ["slot-2"] });
+    expect(shown(html)).toEqual(["Main", "Fruit"]);
+    expect(hidden(html, "slotOrder")).toEqual(["slot-1", "slot-3"]);
+    expect(hidden(html, "changedSlotId")).toEqual([]);
+    expect(hidden(html, "removedSlotId")).toEqual(["slot-2"]);
+  });
+
+  it("shows the slots in their new order, and sends them in it", () => {
+    const html = renderEdit({ ...NO_SLOT_EDITS, order: ["slot-3", "slot-1", "slot-2"] });
+    expect(shown(html)).toEqual(["Fruit", "Main", "Vegetables"]);
+    expect(hidden(html, "slotOrder")).toEqual(["slot-3", "slot-1", "slot-2"]);
+  });
+
+  it("shows a slot added meanwhile after the ones put in order", () => {
+    const html = renderEdit({ ...NO_SLOT_EDITS, order: ["slot-2", "slot-1"] });
+    expect(shown(html)).toEqual(["Vegetables", "Main", "Fruit"]);
+  });
+
+  it("shows a slot's new Slot Category, and sends it", () => {
+    const html = renderEdit({ ...NO_SLOT_EDITS, slotCategories: { "slot-1": "fish" } });
+    expect(shown(html)).toEqual(["Fish", "Vegetables", "Fruit"]);
+    expect(hidden(html, "changedSlotId")).toEqual(["slot-1"]);
+    expect(hidden(html, "changedSlotCategoryId")).toEqual(["fish"]);
+  });
+
+  it("picks food for the new Slot Category, checked against it", () => {
+    const html = renderEdit({ ...NO_SLOT_EDITS, slotCategories: { "slot-1": "fish" } }, { slotId: "slot-1", screen: { kind: "pick" } });
+    expect(text(/<h2 [^>]*>(.*?)<\/h2>/.exec(html)![1]!)).toBe("Pick for Fish");
+    expect(hidden(html, "slotCategoryId")).toEqual(["fish"]);
+  });
+
+  it("goes back to the Meal when the slot picked for was removed on the form", () => {
+    const html = renderEdit({ ...NO_SLOT_EDITS, removed: ["slot-1"] }, { slotId: "slot-1", screen: { kind: "pick" } });
+    expect(text(/<h2 [^>]*>(.*?)<\/h2>/.exec(html)![1]!)).toBe("Edit Weekday Lunch");
   });
 });
 

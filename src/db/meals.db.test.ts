@@ -16,7 +16,6 @@ import {
   listFoodsForSlots,
   listMeals,
   listPlannedMealsBefore,
-  moveMealSlot,
   removeMealSlot,
   setMealSlotCategory,
   updateMeal,
@@ -610,61 +609,6 @@ describe("removeMealSlot", () => {
 
   it("does nothing for a slot that is gone", async () => {
     await expect(removeMealSlot(db, "00000000-0000-4000-8000-000000000000")).resolves.toBeUndefined();
-  });
-});
-
-describe("moveMealSlot", () => {
-  // A Meal with one empty slot of each given Slot Category.
-  async function aMealWithSlots(slotCategoryIds: string[]) {
-    const meal = await createMeal(
-      db,
-      { date: "2026-11-14", hour: "12:00", name: "Moving", mealTypeId: await seededMealTypeId("lunch") },
-      emptySlots(slotCategoryIds),
-    );
-    return (await getMeal(db, meal.id))!;
-  }
-  const order = async (mealId: string) => (await getMeal(db, mealId))!.slots.map((slot) => slot.slotCategoryId);
-
-  it("moves a slot up or down one place, swapping it with its neighbour", async () => {
-    const [grains, vegetables, fruit] = await Promise.all([
-      seededCategoryId("grains"),
-      seededCategoryId("vegetables"),
-      seededCategoryId("fruit"),
-    ]);
-    const meal = await aMealWithSlots([grains, vegetables, fruit]);
-
-    expect(await moveMealSlot(db, meal.slots[1]!.id, -1)).toBe(true);
-    expect(await order(meal.id)).toEqual([vegetables, grains, fruit]);
-
-    // Grains, now second, goes down to last.
-    expect(await moveMealSlot(db, meal.slots[0]!.id, 1)).toBe(true);
-    expect(await order(meal.id)).toEqual([vegetables, fruit, grains]);
-  });
-
-  it("keeps the first slot first and the last slot last", async () => {
-    const [grains, fruit] = await Promise.all([seededCategoryId("grains"), seededCategoryId("fruit")]);
-    const meal = await aMealWithSlots([grains, fruit]);
-
-    expect(await moveMealSlot(db, meal.slots[0]!.id, -1)).toBe(false);
-    expect(await moveMealSlot(db, meal.slots[1]!.id, 1)).toBe(false);
-    expect(await order(meal.id)).toEqual([grains, fruit]);
-  });
-
-  it("moves no slot of a Confirmed or Skipped Meal", async () => {
-    const [grains, fruit] = await Promise.all([seededCategoryId("grains"), seededCategoryId("fruit")]);
-    const confirmed = await aMealWithSlots([grains, fruit]);
-    await confirmMeal(db, confirmed.id, { untracked: false, today: "2026-11-14" });
-    const skipped = await aMealWithSlots([grains, fruit]);
-    await skipMeal(db, skipped.id, "2026-11-14");
-
-    for (const meal of [confirmed, skipped]) {
-      expect(await moveMealSlot(db, meal.slots[1]!.id, -1)).toBe(false);
-      expect(await order(meal.id)).toEqual([grains, fruit]);
-    }
-  });
-
-  it("does nothing for a slot that is gone", async () => {
-    expect(await moveMealSlot(db, "00000000-0000-4000-8000-000000000000", 1)).toBe(false);
   });
 });
 
