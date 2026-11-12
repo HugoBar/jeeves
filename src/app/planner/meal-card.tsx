@@ -22,6 +22,7 @@ import {
   type NewMealSlotRowError,
 } from "@/core/meals";
 import type { CategoryKind } from "@/core/food-categories";
+import { WEEKDAYS, type Weekday } from "@/core/meal-series";
 import { moveSlot, type SlotMove } from "@/core/slot-order";
 import type { AddedBack, ConfirmTakes } from "@/db/confirmation";
 import { localDate, localHour, type Week } from "@/core/planner";
@@ -34,7 +35,9 @@ import {
   mealPanelLabel,
   formatPortions,
   formatQuantity,
+  formatRepeats,
   t,
+  weekdayName,
   type StringKey,
 } from "@/strings";
 import { FORM_LEVEL, MEAL_ERROR_FIELDS } from "../field-errors";
@@ -43,7 +46,7 @@ import { FormCard } from "../form-card";
 import { AlertIcon, FormBanner, FormError, LockIcon, useFieldErrors } from "../form-error";
 import { ConfirmSheet, Sheet } from "../sheet";
 import { SidePanel } from "../side-panel";
-import { viewerMoment, viewerToday } from "../viewer-clock";
+import { useViewerNow, viewerMoment, viewerToday } from "../viewer-clock";
 import { AddSlotSheet } from "./add-slot";
 import {
   confirmMealAction,
@@ -89,6 +92,8 @@ export interface PlannerMeal {
   allowsLeftovers: boolean;
   status: MealStatus;
   untracked: boolean;
+  // Its Meal Series' days, Monday first; null if it is in none.
+  repeats: Weekday[] | null;
   slots: PlannerMealSlot[];
   // What Reopening it adds back to Stock, by Product name: exactly what its
   // Confirmation took. Empty unless it is Confirmed and took something.
@@ -214,6 +219,7 @@ export function MealCard({
         <div className="meal-card-title">
           <p className="meal-card-eyebrow">{t("planner.mealEyebrow", { mealType: meal.mealTypeLabel, hour: meal.hour })}</p>
           <h3 className="meal-card-name">{label}</h3>
+          {meal.repeats && <p className="meal-card-repeats">{formatRepeats(meal.repeats)}</p>}
           {meal.mealTypeArchived && <span className="tag">{t("planner.mealTypeArchived")}</span>}
         </div>
         {status && <MealCardStatusLine status={status} />}
@@ -1452,6 +1458,32 @@ export interface MealFormValues {
   untracked: boolean;
   // The slots added while adding.
   slots?: NewMealSlotInput[];
+  // "Repeat on": each ticked weekday's number.
+  repeatOn: string[];
+}
+
+// What "Repeat on" can do on a Meal form: nothing on a Meal dated before the
+// viewer's date (`past`), and nothing on Edit Meal for a Meal already in a
+// Meal Series (`locked`), which shows its series' days.
+export interface RepeatOnState {
+  past: boolean;
+  locked: boolean;
+}
+
+// Whether a Meal on `date` is before the viewer's date, so it can't repeat.
+// Not yet known before hydration, when it is taken as today.
+export function useIsPastDay(date: string): boolean {
+  const now = useViewerNow();
+  return now !== null && date < now.date;
+}
+
+// A Meal form's action, sent the viewer's date as they submitted: "Repeat
+// on" is checked against it.
+export function withViewerToday<State>(action: (state: State, formData: FormData) => Promise<State>) {
+  return (state: State, formData: FormData) => {
+    formData.set("today", viewerToday());
+    return action(state, formData);
+  };
 }
 
 // The Meal form's cards, without its buttons: Basics, Slots, and Tracking and
@@ -1466,6 +1498,7 @@ export function MealFormFields({
   slotErrors = [],
   editSlotErrors = [],
   values,
+  repeat,
   mealTypes,
   mealTypeHint = t("planner.mealTypeHint"),
   slotsCard,
@@ -1477,6 +1510,7 @@ export function MealFormFields({
   slotErrors?: NewMealSlotRowError[];
   editSlotErrors?: MealSlotChangeError[];
   values: MealFormValues;
+  repeat: RepeatOnState;
   mealTypes: PickerOption[];
   mealTypeHint?: string;
   slotsCard?: ReactNode;
@@ -1570,6 +1604,7 @@ export function MealFormFields({
       )}
       <FormCard title={t("planner.trackingAndRepeat")}>
         <UntrackedSwitch untracked={values.untracked} />
+        <RepeatOn ticked={values.repeatOn} {...repeat} invalid={invalid("repeatOn")} message={messages("repeatOn")} />
       </FormCard>
     </>
   );
@@ -1597,6 +1632,49 @@ function UntrackedSwitch({ untracked }: { untracked: boolean }) {
         aria-describedby={`${id}-hint`}
       />
     </label>
+  );
+}
+
+// "Repeat on": the seven weekdays as tick boxes, Monday first. None is no
+// repeat, one is weekly, all seven is daily. On a past Meal they show
+// disabled, with why; on a Meal already in a Meal Series, its days, disabled.
+// An error takes the hint's place.
+function RepeatOn({
+  ticked,
+  past,
+  locked,
+  invalid,
+  message,
+}: RepeatOnState & {
+  ticked: string[];
+  invalid: object;
+  message: ReactNode;
+}) {
+  const disabled = past || locked;
+  return (
+    <fieldset className="form-field meal-form-repeat" disabled={disabled}>
+      <legend>{t("planner.repeatOn")}</legend>
+      <div className="chips">
+        {WEEKDAYS.map((weekday) => (
+          <label key={weekday} className="chip repeat-day-chip">
+            <input
+              type="checkbox"
+              name="repeatOn"
+              value={weekday}
+              defaultChecked={ticked.includes(String(weekday))}
+              {...invalid}
+            />
+            {weekdayName(weekday)}
+          </label>
+        ))}
+      </div>
+      {message ??
+        (past ? (
+          <p className="field-hint">{t("planner.repeatOnPast")}</p>
+        ) : (
+          !locked && <p className="field-hint">{t("planner.repeatOnHint")}</p>
+        ))}
+    </fieldset>
   );
 }
 
@@ -1650,18 +1728,24 @@ function EditMealForm({
   onDone: () => void;
 }) {
   const [state, action, pending] = useActionState(
-    async ({ submits, ...previous }: Submitted<MealChangesFormState>, formData: FormData) => {
+    withViewerToday(async ({ submits, ...previous }: Submitted<MealChangesFormState>, formData: FormData) => {
       const next = await editMealAction(meal.id, previous, formData);
       if (next.errors.length === 0 && next.slotErrors.length === 0) onDone();
       return { ...next, submits: submits + 1 };
-    },
+    }),
     {
       errors: [],
       slotErrors: [],
-      values: { hour: meal.hour, name: meal.name ?? "", untracked: meal.untracked },
+      values: {
+        hour: meal.hour,
+        name: meal.name ?? "",
+        untracked: meal.untracked,
+        repeatOn: (meal.repeats ?? []).map(String),
+      },
       submits: 0,
     },
   );
+  const past = useIsPastDay(meal.date);
   return (
     <form action={action} className="form-cards" noValidate>
       <MealFormFields
@@ -1669,6 +1753,7 @@ function EditMealForm({
         errors={state.errors}
         editSlotErrors={state.slotErrors}
         values={state.values}
+        repeat={{ past, locked: meal.repeats !== null }}
         mealTypes={[]}
         editing={{ mealTypeLabel: meal.mealTypeLabel, slots }}
         onPickSlot={onPickSlot}

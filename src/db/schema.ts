@@ -3,6 +3,7 @@
 import { sql } from "drizzle-orm";
 import type { CategorySeedKey } from "@/core/food-categories";
 import { AMOUNT_COLUMN, DENSITY_COLUMN } from "@/core/amounts";
+import type { Weekday } from "@/core/meal-series";
 import type { MealTypeSeedKey } from "@/core/meal-types";
 import { MEAL_SLOT_CONTENTS, MEAL_STATUSES } from "@/core/meals";
 import { CATEGORY_OVERRIDE_MODES } from "@/core/recipes";
@@ -19,6 +20,7 @@ import {
   pgEnum,
   pgTable,
   primaryKey,
+  smallint,
   text,
   time,
   timestamp,
@@ -228,26 +230,57 @@ export const mealTemplates = pgTable(
   (table) => [index("meal_templates_meal_type_id").on(table.mealTypeId)],
 );
 
-// A Meal Template's slots, each only a Slot Category, never food. They go with
-// the template when it is deleted; a category one uses cannot be deleted, so
-// removing it Archives it and the slot keeps it. `position` keeps the order
-// entered (data-model T5). Meal Series will own slots too (data-model Q5),
-// making `template_id` nullable with a CHECK for exactly one owner.
+// Meals repeating on chosen weekdays (spec "Meal Series", data-model Q5).
+// Each repeat is an ordinary Meal (ADR 0004), copying the series' name, Meal
+// Type, hour, Untracked and its slots' Slot Categories. `weekdays` run 1
+// (Monday) to 7 (Sunday). `generated_through` is the last day repeats were
+// created through, first the starting Meal's day; it only moves forward. A
+// Meal Type a series uses cannot be deleted, so removing it Archives it, and
+// the series then creates no new repeats.
+export const mealSeries = pgTable(
+  "meal_series",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    name: text("name"),
+    mealTypeId: uuid("meal_type_id")
+      .notNull()
+      .references(() => mealTypes.id, { onDelete: "restrict" }),
+    hour: time("hour", { precision: 0 }).notNull(),
+    untracked: boolean("untracked").notNull().default(false),
+    weekdays: smallint("weekdays").array().$type<Weekday[]>().notNull(),
+    generatedThrough: date("generated_through", { mode: "string" }).notNull(),
+  },
+  (table) => [
+    check(
+      "meal_series_weekdays",
+      sql`cardinality(${table.weekdays}) > 0 and ${table.weekdays} <@ array[1,2,3,4,5,6,7]::smallint[]`,
+    ),
+    index("meal_series_meal_type_id").on(table.mealTypeId),
+  ],
+);
+
+// A Meal Template's or Meal Series' slots, each only a Slot Category, never
+// food; exactly one of them owns it (data-model Q5). They go with their owner
+// when it is deleted; a category one uses cannot be deleted, so removing it
+// Archives it and the slot keeps it. `position` keeps the order entered
+// (data-model T5).
 export const layoutSlots = pgTable(
   "layout_slots",
   {
     id: uuid("id").primaryKey().defaultRandom(),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-    templateId: uuid("template_id")
-      .notNull()
-      .references(() => mealTemplates.id, { onDelete: "cascade" }),
+    templateId: uuid("template_id").references(() => mealTemplates.id, { onDelete: "cascade" }),
+    seriesId: uuid("series_id").references(() => mealSeries.id, { onDelete: "cascade" }),
     slotCategoryId: uuid("slot_category_id")
       .notNull()
       .references(() => foodCategories.id, { onDelete: "restrict" }),
     position: integer("position").notNull(),
   },
   (table) => [
+    check("layout_slots_one_owner", sql`(${table.templateId} is null) <> (${table.seriesId} is null)`),
     uniqueIndex("layout_slots_template_id_position").on(table.templateId, table.position),
+    uniqueIndex("layout_slots_series_id_position").on(table.seriesId, table.position),
     index("layout_slots_slot_category_id").on(table.slotCategoryId),
   ],
 );
@@ -259,8 +292,9 @@ export const mealStatus = pgEnum("meal_status", MEAL_STATUSES);
 // values with no time zone (Q9). Its Meal Type never changes; one a Meal uses
 // cannot be deleted, so removing it Archives it and the Meal keeps it. A day
 // can have several Meals of one Meal Type, so there is no unique
-// (date, meal_type_id). The Meal Series link comes with Meal Series (#16). A
-// Confirmed Meal cannot be removed: it must be Reopened first.
+// (date, meal_type_id). A Meal of a Meal Series, its starting Meal or a
+// repeat, links to it; the link is dropped if the series goes. A Confirmed
+// Meal cannot be removed: it must be Reopened first.
 export const meals = pgTable(
   "meals",
   {
@@ -274,8 +308,13 @@ export const meals = pgTable(
     name: text("name"),
     status: mealStatus("status").notNull().default("planned"),
     untracked: boolean("untracked").notNull().default(false),
+    seriesId: uuid("series_id").references(() => mealSeries.id, { onDelete: "set null" }),
   },
-  (table) => [index("meals_date").on(table.date), index("meals_meal_type_id").on(table.mealTypeId)],
+  (table) => [
+    index("meals_date").on(table.date),
+    index("meals_meal_type_id").on(table.mealTypeId),
+    index("meals_series_id").on(table.seriesId),
+  ],
 );
 
 export const mealSlotContent = pgEnum("meal_slot_content", MEAL_SLOT_CONTENTS);
@@ -286,7 +325,9 @@ export const mealSlotContent = pgEnum("meal_slot_content", MEAL_SLOT_CONTENTS);
 // its Default Unit, and an empty or Leftovers slot neither. They go with the
 // Meal when it is deleted; a category, Recipe or Product one uses cannot be
 // deleted, so removing it Archives it and the slot keeps it. `position` keeps
-// the order (data-model T5).
+// the order (data-model T5). A Meal Series' Meal links each slot to the series
+// slot it was copied from, for "this and all following" (data-model Q5); a
+// slot added to that Meal only has none.
 export const mealSlots = pgTable(
   "meal_slots",
   {
@@ -304,6 +345,7 @@ export const mealSlots = pgTable(
     portions: integer("portions"),
     productId: uuid("product_id").references(() => products.id, { onDelete: "restrict" }),
     quantity: amount("quantity"),
+    layoutSlotId: uuid("layout_slot_id").references(() => layoutSlots.id, { onDelete: "set null" }),
   },
   (table) => [
     check(
@@ -320,6 +362,7 @@ export const mealSlots = pgTable(
     index("meal_slots_slot_category_id").on(table.slotCategoryId),
     index("meal_slots_recipe_id").on(table.recipeId),
     index("meal_slots_product_id").on(table.productId),
+    index("meal_slots_layout_slot_id").on(table.layoutSlotId),
   ],
 );
 

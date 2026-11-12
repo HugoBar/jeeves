@@ -44,6 +44,7 @@ const meal = (overrides: Partial<PlannerMeal> = {}): PlannerMeal => ({
   allowsLeftovers: true,
   status: "planned",
   untracked: false,
+  repeats: null,
   slots: [],
   addsBack: [],
   takes: { ok: true, products: [] },
@@ -1032,10 +1033,16 @@ describe("the Meal form", () => {
   type FormProps = ComponentProps<typeof MealFormFields>;
   const renderForm = (props: Partial<FormProps> = {}) =>
     renderToStaticMarkup(
-      createElement(MealFormFields, { errors: [], values: { mealTypeId: "", hour: "", name: "", untracked: false }, mealTypes, ...props }),
+      createElement(MealFormFields, {
+        errors: [],
+        values: { mealTypeId: "", hour: "", name: "", untracked: false, repeatOn: [] },
+        repeat: { past: false, locked: false },
+        mealTypes,
+        ...props,
+      }),
     );
   const renderEditForm = (props: Partial<FormProps> = {}) =>
-    renderForm({ mealTypes: [], editing: meal(), values: { hour: "12:30", name: "Weekday Lunch", untracked: false }, ...props });
+    renderForm({ mealTypes: [], editing: meal(), values: { hour: "12:30", name: "Weekday Lunch", untracked: false, repeatOn: [] }, ...props });
   const banner = (html: string) => text(/<div role="alert" class="banner banner-error">(.*?)<\/div>/.exec(html)?.[1] ?? "");
   const errorTexts = (html: string) => [...html.matchAll(/<p class="form-error">(.*?)<\/p>/g)].map((m) => text(m[1]!));
   const input = (html: string, name: string) => new RegExp(`<input [^>]*name="${name}"[^>]*>`).exec(html)?.[0] ?? "";
@@ -1065,7 +1072,7 @@ describe("the Meal form", () => {
   it("marks the name optional, and says what an empty one shows", () => {
     expect(text(renderForm())).toContain("Name · optional");
     expect(input(renderForm(), "name")).toContain('placeholder="Leave empty to show the Meal Type"');
-    expect(input(renderForm({ values: { mealTypeId: "dinner", hour: "", name: "", untracked: false } }), "name")).toContain(
+    expect(input(renderForm({ values: { mealTypeId: "dinner", hour: "", name: "", untracked: false, repeatOn: [] } }), "name")).toContain(
       "placeholder=\"Leave empty to show &quot;Dinner&quot;\"",
     );
     expect(input(renderEditForm(), "name")).toContain("placeholder=\"Leave empty to show &quot;Lunch&quot;\"");
@@ -1206,7 +1213,7 @@ describe("the Meal form", () => {
 
     it("starts off for a New Meal, and shows an edited Meal's setting", () => {
       expect(untracked(renderForm())).not.toContain("checked");
-      expect(untracked(renderEditForm({ values: { hour: "12:30", name: "", untracked: true } }))).toContain('checked=""');
+      expect(untracked(renderEditForm({ values: { hour: "12:30", name: "", untracked: true, repeatOn: [] } }))).toContain('checked=""');
     });
   });
 });

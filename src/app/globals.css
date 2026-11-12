@@ -3124,6 +3124,14 @@ body:has(.needs-confirmation-locked) :is(.top-menu, .bottom-menu, a.app-badge) {
   line-height: 1.3;
 }
 
+/* A Meal Series' Meal: "Repeats Mon to Fri", under its name. */
+.meal-card-repeats {
+  margin: 2px 0 0;
+  color: var(--color-ink-muted);
+  font-size: var(--text-meta);
+  font-weight: 600;
+}
+
 .meal-card-skipped .meal-card-name {
   color: var(--color-ink-muted);
   text-decoration: line-through;
@@ -4135,14 +4143,27 @@ body:has(.needs-confirmation-locked) :is(.top-menu, .bottom-menu, a.app-badge) {
   font-size: var(--text-body);
 }
 
-.form-cards .meal-type-chip:has(input:checked) {
+.form-cards .meal-type-chip:has(input:checked),
+.form-cards .repeat-day-chip:has(input:checked) {
   border-color: var(--week-accent);
   background: var(--week-soft);
   color: var(--week-ink);
 }
 
-.meal-type-chip:has(input:checked)::before {
+.meal-type-chip:has(input:checked)::before,
+.repeat-day-chip:has(input:checked)::before {
   content: none;
+}
+
+/* "Repeat on" under the Untracked switch. Its days show greyed out on a past
+   Meal, or on one already in a Meal Series. */
+.form-cards .meal-form-repeat {
+  margin-top: 16px;
+}
+
+.form-cards .meal-form-repeat:disabled .chip {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 /* The hour beside the name, which takes the rest of the row. */

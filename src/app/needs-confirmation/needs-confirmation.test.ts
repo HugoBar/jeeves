@@ -56,6 +56,7 @@ const meal = (id: string, date: string, name: string, overrides: Partial<Planner
   allowsLeftovers: true,
   status: "planned",
   untracked: false,
+  repeats: null,
   slots: [slot(name, 4)],
   addsBack: [],
   takes: { ok: true, products: [] },

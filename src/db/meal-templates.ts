@@ -26,7 +26,8 @@ async function slotCategoryIdsByTemplate(db: Db, templateIds: string[]): Promise
     .from(layoutSlots)
     .where(inArray(layoutSlots.templateId, templateIds))
     .orderBy(asc(layoutSlots.position));
-  for (const slot of slots) byTemplate.get(slot.templateId)!.push(slot.slotCategoryId);
+  // Read by template, so each has one.
+  for (const slot of slots) byTemplate.get(slot.templateId!)!.push(slot.slotCategoryId);
   return byTemplate;
 }
 

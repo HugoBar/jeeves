@@ -8,6 +8,7 @@ import {
   formatMovementMeal,
   formatPackSize,
   formatPackSizeNote,
+  formatRepeats,
   formatDateRange,
   mealPanelLabel,
   mealTypeLabel,
@@ -167,5 +168,36 @@ describe("formatList", () => {
     [["a", "b", "c"], "a, b, and c"],
   ])("lists %j as %j", (items, expected) => {
     expect(formatList(items)).toBe(expected);
+  });
+});
+
+describe("formatRepeats", () => {
+  it("names one day", () => {
+    expect(formatRepeats([1])).toBe("Repeats Mon");
+  });
+
+  it("is daily for all seven", () => {
+    expect(formatRepeats([1, 2, 3, 4, 5, 6, 7])).toBe("Repeats daily");
+  });
+
+  it("is a range for three or more days in a row", () => {
+    expect(formatRepeats([1, 2, 3, 4, 5])).toBe("Repeats Mon to Fri");
+    expect(formatRepeats([5, 6, 7])).toBe("Repeats Fri to Sun");
+  });
+
+  it("lists days that are not in a row", () => {
+    expect(formatRepeats([1, 3, 5])).toBe("Repeats Mon, Wed, Fri");
+  });
+
+  it("lists two days in a row", () => {
+    expect(formatRepeats([6, 7])).toBe("Repeats Sat, Sun");
+  });
+
+  it("never runs past Sunday into Monday", () => {
+    expect(formatRepeats([1, 6, 7])).toBe("Repeats Mon, Sat, Sun");
+  });
+
+  it("lists a range with a gap", () => {
+    expect(formatRepeats([1, 2, 3, 5])).toBe("Repeats Mon, Tue, Wed, Fri");
   });
 });

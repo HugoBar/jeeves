@@ -1,4 +1,5 @@
 import type { CategorySeedKey } from "@/core/food-categories";
+import type { Weekday } from "@/core/meal-series";
 import type { MealTypeSeedKey } from "@/core/meal-types";
 import type { Week } from "@/core/planner";
 import type { PackSize } from "@/core/products";
@@ -210,4 +211,23 @@ export function mealPanelLabel(date: string, week: Week, action: "adding" | "edi
     date: `${dayPart(date, { day: "numeric" })} ${dayPart(date, { month: "short" })}`,
   };
   return t(`planner.panel.${action}${week === "next" ? "Next" : "This"}`, params);
+}
+
+// A weekday's short name: "Mon". 1 to 7 January 2024 ran Monday to Sunday.
+export function weekdayName(weekday: Weekday): string {
+  return dayPart(`2024-01-0${weekday}`, { weekday: "short" });
+}
+
+// A Meal Series' days, as its Meals' "Repeats" label shows them: "Repeats
+// daily" for all seven, "Repeats Mon to Fri" for three or more in a row,
+// "Repeats Mon, Wed, Fri" otherwise. Weeks run Monday to Sunday, so a run
+// never goes on past Sunday. `weekdays` come Monday first.
+export function formatRepeats(weekdays: readonly Weekday[]): string {
+  if (weekdays.length === 7) return t("planner.repeatsDaily");
+  const first = weekdays[0]!;
+  const last = weekdays.at(-1)!;
+  if (weekdays.length >= 3 && last - first === weekdays.length - 1) {
+    return t("planner.repeatsRange", { first: weekdayName(first), last: weekdayName(last) });
+  }
+  return t("planner.repeatsDays", { days: weekdays.map(weekdayName).join(", ") });
 }

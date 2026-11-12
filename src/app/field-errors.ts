@@ -31,6 +31,8 @@ export const MEAL_ERROR_FIELDS = {
   invalidHour: "hour",
   noMealType: "mealType",
   unavailableMealType: "mealType",
+  pastMealRepeat: "repeatOn",
+  invalidWeekday: "repeatOn",
 } as const satisfies Record<MealFieldError, string>;
 
 export const MEAL_SLOT_ERROR_FIELDS = {
