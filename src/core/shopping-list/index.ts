@@ -68,6 +68,54 @@ export function datedShortfalls(
   return [...byKey.values()];
 }
 
+// A day some Meal's need for a Product can't be worked out (no Density, or a
+// unit that can't convert), so what it is short of that day is unknown.
+export interface DatedUnknown {
+  productId: string;
+  date: string;
+}
+
+// Each day some Meal's need for a Product can't be worked out, once per
+// Product and day, as the Planner works them out. `meals` are as
+// datedShortfalls takes them.
+export function datedUnknowns(
+  meals: readonly ProjectedMeal[],
+  products: ReadonlyMap<string, ProjectedProduct>,
+): DatedUnknown[] {
+  const projection = projectStock(meals, products);
+  const byKey = new Map<string, DatedUnknown>();
+  for (const meal of meals) {
+    for (const slot of meal.slots) {
+      for (const productId of projection.get(slot.id)?.unprojectable ?? []) {
+        byKey.set(`${meal.date} ${productId}`, { productId, date: meal.date });
+      }
+    }
+  }
+  return [...byKey.values()];
+}
+
+// What the Meals before `range` are short of, by Product id, in Default
+// Units, added up over every earlier day, for the Products Generate over
+// `range` asks for too: short in `range`, and worked out there, as
+// shortfallsBetween keeps them. Buying what Generate asks for fills these
+// earlier gaps first. `shortfalls` are as datedShortfalls gives them and
+// `unknown` as datedUnknowns does, in any order.
+export function earlierShortfalls(
+  shortfalls: readonly DatedShortfall[],
+  unknown: readonly DatedUnknown[],
+  range: DateRange,
+): Map<string, number> {
+  const inRange = (date: string) => date >= range.from && date <= range.to;
+  const generated = new Set(shortfalls.filter((each) => inRange(each.date)).map((each) => each.productId));
+  for (const each of unknown) if (inRange(each.date)) generated.delete(each.productId);
+  const earlier = new Map<string, number>();
+  for (const { productId, date, amount } of shortfalls) {
+    if (date >= range.from || !generated.has(productId)) continue;
+    earlier.set(productId, roundForColumn((earlier.get(productId) ?? 0) + amount, AMOUNT_COLUMN));
+  }
+  return earlier;
+}
+
 // Why a Product is running low: none in Stock, or short for a Meal, by
 // `amount` on `date`, the first day in range it is short.
 export type RunningLowReason = { kind: "outOfStock" } | { kind: "short"; date: string; amount: number };

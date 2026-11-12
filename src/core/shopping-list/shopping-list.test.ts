@@ -4,6 +4,8 @@ import {
   chosenRange,
   currentChoice,
   datedShortfalls,
+  datedUnknowns,
+  earlierShortfalls,
   generatePresets,
   isGenerateRange,
   packsAmount,
@@ -14,6 +16,7 @@ import {
   planUntick,
   planUntickAll,
   restockStart,
+  shortfallsBetween,
   runningLow,
   stepItemAmount,
   stockUncertainty,
@@ -421,6 +424,111 @@ describe("datedShortfalls", () => {
     const meals = [takes("lunch", "2026-11-10", "rice", 800, { untracked: true })];
 
     expect(datedShortfalls(meals, stocked)).toEqual([]);
+  });
+});
+
+describe("earlierShortfalls", () => {
+  // The weekend of 21-22 Nov.
+  const weekend = { from: "2026-11-21", to: "2026-11-22" };
+
+  it("adds up what earlier Meals are short of, for a Product short in the range too", () => {
+    // Stock 2 Garlic: the week before needs 8, the weekend 3.
+    const shortfalls = [
+      { productId: "garlic", date: "2026-11-16", amount: 2 },
+      { productId: "garlic", date: "2026-11-18", amount: 4 },
+      { productId: "garlic", date: "2026-11-21", amount: 3 },
+    ];
+
+    expect(earlierShortfalls(shortfalls, [], weekend)).toEqual(new Map([["garlic", 6]]));
+  });
+
+  it("follows Restock, while Generate keeps asking for the same", () => {
+    // Garlic in pieces. A past Meal, still Unconfirmed, and one the week
+    // before need 8 between them; the weekend needs 3.
+    const meals = [
+      takes("past", "2026-11-05", "garlic", 2),
+      takes("week", "2026-11-18", "garlic", 6),
+      takes("weekend", "2026-11-21", "garlic", 3),
+    ];
+    const garlic = (stock: number) => new Map<string, ProjectedProduct>([["garlic", { defaultUnit: "pc", density: null, stock }]]);
+    const note = (stock: number) =>
+      earlierShortfalls(datedShortfalls(meals, garlic(stock)), datedUnknowns(meals, garlic(stock)), weekend);
+
+    expect(note(2)).toEqual(new Map([["garlic", 6]]));
+    expect(shortfallsBetween(meals, garlic(2), weekend.from, weekend.to)).toEqual(new Map([["garlic", 3]]));
+    // Restocking the 3 Generate asked for.
+    expect(note(5)).toEqual(new Map([["garlic", 3]]));
+    expect(shortfallsBetween(meals, garlic(5), weekend.from, weekend.to)).toEqual(new Map([["garlic", 3]]));
+  });
+
+  it("names only Products short both before and within the range", () => {
+    const shortfalls = [
+      { productId: "onion", date: "2026-11-16", amount: 2 },
+      { productId: "basil", date: "2026-11-21", amount: 20 },
+      { productId: "garlic", date: "2026-11-10", amount: 1 },
+      { productId: "garlic", date: "2026-11-22", amount: 3 },
+    ];
+
+    expect(earlierShortfalls(shortfalls, [], weekend)).toEqual(new Map([["garlic", 1]]));
+  });
+
+  it("leaves out a Product whose need can't be worked out in the range, as Generate does", () => {
+    const shortfalls = [
+      { productId: "flour", date: "2026-11-16", amount: 200 },
+      { productId: "flour", date: "2026-11-21", amount: 100 },
+    ];
+    const unknown = [{ productId: "flour", date: "2026-11-22" }];
+
+    expect(earlierShortfalls(shortfalls, unknown, weekend)).toEqual(new Map());
+  });
+
+  it("still names a Product whose need is unknown only before the range", () => {
+    const shortfalls = [
+      { productId: "flour", date: "2026-11-16", amount: 200 },
+      { productId: "flour", date: "2026-11-21", amount: 100 },
+    ];
+    const unknown = [{ productId: "flour", date: "2026-11-17" }];
+
+    expect(earlierShortfalls(shortfalls, unknown, weekend)).toEqual(new Map([["flour", 200]]));
+  });
+
+  it("names nothing when nothing is short before the range", () => {
+    expect(earlierShortfalls([{ productId: "garlic", date: "2026-11-21", amount: 3 }], [], weekend)).toEqual(new Map());
+  });
+});
+
+describe("datedUnknowns", () => {
+  // Flour in grams with no Density, so a cup of it can't be worked out.
+  const withFlour = new Map<string, ProjectedProduct>([
+    ...stocked,
+    ["flour", { defaultUnit: "g", density: null, stock: 0 }],
+  ]);
+  const bakes = (id: string, date: string, fields: Partial<ProjectedMeal> = {}): ProjectedMeal => ({
+    ...takes(id, date, "flour", 0),
+    slots: [
+      {
+        id: `${id}-slot`,
+        content: "recipe",
+        portions: 2,
+        recipe: { portions: 2, ingredients: [{ productId: "flour", amount: 1, unit: "cup" }] },
+      },
+    ],
+    ...fields,
+  });
+
+  it("gives each day a Meal's need for a Product can't be worked out, once", () => {
+    const meals = [bakes("lunch", "2026-11-10"), bakes("dinner", "2026-11-10", { hour: "19:30" }), bakes("next", "2026-11-12")];
+
+    expect(datedUnknowns(meals, withFlour)).toEqual([
+      { productId: "flour", date: "2026-11-10" },
+      { productId: "flour", date: "2026-11-12" },
+    ]);
+  });
+
+  it("leaves out Untracked Meals and needs that can be worked out", () => {
+    const meals = [bakes("lunch", "2026-11-10", { untracked: true }), takes("rice", "2026-11-10", "rice", 800)];
+
+    expect(datedUnknowns(meals, withFlour)).toEqual([]);
   });
 });
 
