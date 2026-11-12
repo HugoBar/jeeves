@@ -1,5 +1,6 @@
 import { eq } from "drizzle-orm";
 import { beforeAll, beforeEach, describe, expect, it } from "vitest";
+import { restockStart } from "@/core/shopping-list";
 import { createProduct } from "./products";
 import { products, shoppingListItems } from "./schema";
 import {
@@ -8,7 +9,9 @@ import {
   removeShoppingListItem,
   restockTickedItems,
   setAllShoppingListItemsTicked,
+  setShoppingListItemQuantity,
   setShoppingListItemTicked,
+  shoppingListItemPackAmount,
 } from "./shopping-list";
 import { listStockMovements } from "./stock-movements";
 import { createTestDb } from "./test-database";
@@ -211,6 +214,88 @@ describe("setShoppingListItemTicked", () => {
 
   it("does nothing to an item gone meanwhile", async () => {
     await expect(setShoppingListItemTicked(db, "00000000-0000-4000-8000-000000000000", true)).resolves.toBeUndefined();
+  });
+});
+
+describe("setShoppingListItemQuantity", () => {
+  const anItem = async (name: string, quantity: number | null, ticked = false) => {
+    const product = await aProduct(name, { name: "bag", amount: 500 });
+    const [item] = await db
+      .insert(shoppingListItems)
+      .values({ productId: product.id, quantity, source: "shortfall", ticked })
+      .returning({ id: shoppingListItems.id });
+    return item!.id;
+  };
+  const stored = async (id: string) =>
+    (await listShoppingList(db))
+      .filter((item) => item.id === id)
+      .map(({ quantity, source, ticked }) => ({ quantity, source, ticked }))[0];
+
+  it("sets an unticked item's amount, which then counts as added by hand", async () => {
+    const id = await anItem("Brown rice", 100);
+
+    expect(await setShoppingListItemQuantity(db, id, 1000)).toBe(true);
+
+    expect(await stored(id)).toEqual({ quantity: 1000, source: "manual", ticked: false });
+  });
+
+  it("gives an amount to an item with none", async () => {
+    const id = await anItem("Rolled oats", null);
+
+    await setShoppingListItemQuantity(db, id, 600);
+
+    expect((await stored(id))?.quantity).toBe(600);
+  });
+
+  it("refuses a ticked item and leaves it as it is", async () => {
+    const id = await anItem("Red lentils", 100, true);
+
+    expect(await setShoppingListItemQuantity(db, id, 1000)).toBe(false);
+
+    expect(await stored(id)).toEqual({ quantity: 100, source: "shortfall", ticked: true });
+  });
+
+  it("refuses an amount of 0 or below", async () => {
+    const id = await anItem("Couscous", 100);
+
+    await expect(setShoppingListItemQuantity(db, id, 0)).rejects.toThrow();
+    await expect(setShoppingListItemQuantity(db, id, -500)).rejects.toThrow();
+
+    expect((await stored(id))?.quantity).toBe(100);
+  });
+
+  it("does nothing to an item gone meanwhile", async () => {
+    expect(await setShoppingListItemQuantity(db, "00000000-0000-4000-8000-000000000000", 500)).toBe(false);
+  });
+
+  it("is where Restock ticked items starts from, once ticked", async () => {
+    const id = await anItem("Bulgur", 100);
+    await setShoppingListItemQuantity(db, id, 1500);
+    await setShoppingListItemTicked(db, id, true);
+
+    const [item] = (await listShoppingList(db)).filter((found) => found.id === id);
+    expect(restockStart(item!.quantity, item!.product.packSize!.amount)).toBe(1500);
+  });
+});
+
+describe("shoppingListItemPackAmount", () => {
+  it("is the amount of the item's Pack Size, or null without one", async () => {
+    const bagged = await aProduct("Quinoa", { name: "bag", amount: 500 });
+    const loose = await aProduct("Barley");
+    const [withPack, withoutPack] = await db
+      .insert(shoppingListItems)
+      .values([
+        { productId: bagged.id, quantity: 100, source: "shortfall" },
+        { productId: loose.id, quantity: 100, source: "shortfall" },
+      ])
+      .returning({ id: shoppingListItems.id });
+
+    expect(await shoppingListItemPackAmount(db, withPack!.id)).toEqual({ packAmount: 500 });
+    expect(await shoppingListItemPackAmount(db, withoutPack!.id)).toEqual({ packAmount: null });
+  });
+
+  it("is null for an item gone meanwhile", async () => {
+    expect(await shoppingListItemPackAmount(db, "00000000-0000-4000-8000-000000000000")).toBeNull();
   });
 });
 

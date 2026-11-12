@@ -88,9 +88,13 @@ function inSentence(name: string): string {
 
 // Whole packs of a Pack Size: "1 bag", "2 cartons", "3 boxes".
 export function formatPacks(count: number, name: string): string {
+  return t("shopping.packs", { count: quantityFormat.format(count), name: formatPackName(count, name) });
+}
+
+// A Pack Size's name for `count` packs, without the count: "bag", "boxes".
+export function formatPackName(count: number, name: string): string {
   const lower = inSentence(name);
-  const plural = count === 1 ? lower : /(s|x|z|ch|sh)$/i.test(lower) ? `${lower}es` : `${lower}s`;
-  return t("shopping.packs", { count: quantityFormat.format(count), name: plural });
+  return count === 1 ? lower : /(s|x|z|ch|sh)$/i.test(lower) ? `${lower}es` : `${lower}s`;
 }
 
 // A Recipe's Portions in running text: "1 portion", "1,800 portions".

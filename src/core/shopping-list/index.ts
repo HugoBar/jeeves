@@ -1,7 +1,9 @@
-import { AMOUNT_COLUMN, roundForColumn } from "@/core/amounts";
+import { AMOUNT_COLUMN, maxForColumn, parseWholeAboveZero, roundForColumn } from "@/core/amounts";
 import { isUnconfirmed, type MealStatus } from "@/core/meals";
 import { isDate, plannerWeeks } from "@/core/planner";
 import { projectStock, type ProjectedMeal, type ProjectedProduct } from "@/core/projected-stock";
+import { parseStockAmount, type QuantityError } from "@/core/stock";
+import type { DefaultUnit } from "@/core/units";
 
 // Where a Shopping List item came from: Generate, from a Shortfall, or added
 // by hand (data-model T7).
@@ -151,6 +153,54 @@ export function packsCovering(quantity: number, packAmount: number): number {
 export function restockStart(quantity: number | null, packAmount: number | null): number | null {
   if (quantity === null || packAmount === null) return quantity;
   return roundForColumn(packsCovering(quantity, packAmount) * packAmount, AMOUNT_COLUMN);
+}
+
+// `packs` whole packs, in the Product's Default Unit, as `packAmount` is,
+// rounded as the column keeps it. packsCovering reads it back as `packs`.
+export function packsAmount(packs: number, packAmount: number): number {
+  return roundForColumn(packs * packAmount, AMOUNT_COLUMN);
+}
+
+// How far one step changes an amount set on the list without a Pack Size.
+const AMOUNT_STEPS: Record<DefaultUnit, number> = { g: 100, ml: 100, pc: 1 };
+
+// The amount an item's stepper sets on one press, `by` 1 for + and -1 for
+// −, in the Product's Default Unit; null when it can't go lower. With a Pack
+// Size it moves a whole pack from the packs shown, and never below 1 pack;
+// without one it moves a step of its unit, and never below one step. An item
+// with no amount starts at 1 pack or one step.
+export function stepItemAmount(
+  quantity: number | null,
+  packAmount: number | null,
+  unit: DefaultUnit,
+  by: 1 | -1,
+): number | null {
+  if (packAmount !== null) {
+    const packs = (quantity === null ? 0 : packsCovering(quantity, packAmount)) + by;
+    return packs < 1 ? null : packsAmount(packs, packAmount);
+  }
+  const step = AMOUNT_STEPS[unit];
+  if (by === 1) return roundForColumn((quantity ?? 0) + step, AMOUNT_COLUMN);
+  if (quantity === null || quantity <= step) return null;
+  return Math.max(step, roundForColumn(quantity - step, AMOUNT_COLUMN));
+}
+
+// Why an amount typed on the list was refused: as Restock refuses one, or,
+// with a Pack Size, not a whole number of packs above 0 that the list holds.
+export type ItemAmountError = QuantityError | "notWholePacks";
+
+export type ParsedItemAmount = { ok: true; quantity: number } | { ok: false; error: ItemAmountError };
+
+// An amount typed on the list (spec "Shopping List"), in the Product's
+// Default Unit: whole packs with a Pack Size, whose amount is `packAmount`;
+// without one, an amount read as Restock reads it.
+export function parseItemAmount(text: string, packAmount: number | null): ParsedItemAmount {
+  if (packAmount === null) return parseStockAmount("restock", text);
+  const packs = parseWholeAboveZero(text.trim());
+  const quantity = packs === null ? null : packsAmount(packs, packAmount);
+  return quantity === null || quantity > maxForColumn(AMOUNT_COLUMN)
+    ? { ok: false, error: "notWholePacks" }
+    : { ok: true, quantity };
 }
 
 // What adding a Product by hand changes: a new item, its unticked item

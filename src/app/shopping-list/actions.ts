@@ -2,7 +2,7 @@
 
 import { refresh } from "next/cache";
 import { isDate } from "@/core/planner";
-import { isGenerateRange, type DateRange } from "@/core/shopping-list";
+import { isGenerateRange, parseItemAmount, type DateRange, type ItemAmountError } from "@/core/shopping-list";
 import { parseStockAmount, type QuantityError } from "@/core/stock";
 import { getDb } from "@/db";
 import {
@@ -11,7 +11,9 @@ import {
   removeShoppingListItem,
   restockTickedItems,
   setAllShoppingListItemsTicked,
+  setShoppingListItemQuantity,
   setShoppingListItemTicked,
+  shoppingListItemPackAmount,
 } from "@/db/shopping-list";
 
 // Generate from the Shortfalls of the Meals in `range`, which lies in the
@@ -41,6 +43,24 @@ export async function addProductByHandAction(productId: string): Promise<string 
 export async function setShoppingListItemTickedAction(id: string, ticked: boolean): Promise<void> {
   await setShoppingListItemTicked(getDb(), id, ticked);
   refresh();
+}
+
+// Sets an unticked item's amount, typed as whole packs with a Pack Size or
+// in its Product's Default Unit without one, as the stepper sends it too.
+// Returns why the amount was refused, or null; an item ticked or gone
+// meanwhile is left as it is.
+export async function setShoppingListItemAmountAction(id: string, typed: string): Promise<ItemAmountError | null> {
+  const db = getDb();
+  const item = await shoppingListItemPackAmount(db, id);
+  if (!item) {
+    refresh();
+    return null;
+  }
+  const parsed = parseItemAmount(typed, item.packAmount);
+  if (!parsed.ok) return parsed.error;
+  await setShoppingListItemQuantity(db, id, parsed.quantity);
+  refresh();
+  return null;
 }
 
 // Ticks every item, or unticks every item; Stock doesn't change.
