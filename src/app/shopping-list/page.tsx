@@ -1,7 +1,7 @@
 import { connection } from "next/server";
 import { sortByName } from "@/core/names";
 import { plannerRange, unconfirmedBefore } from "@/core/planner";
-import { datedShortfalls } from "@/core/shopping-list";
+import { datedShortfalls, datedUnknowns } from "@/core/shopping-list";
 import { getDb } from "@/db";
 import { listActiveProducts } from "@/db/products";
 import { loadStockProjection } from "@/db/projected-stock";
@@ -37,6 +37,8 @@ export default async function ShoppingListPage() {
       products={addable}
       candidates={candidates}
       shortfalls={datedShortfalls(projection.meals, projection.products)}
+      unknownNeeds={datedUnknowns(projection.meals, projection.products)}
+      shortfallProducts={[...projection.products].map(([id, { name, defaultUnit }]) => ({ id, name, defaultUnit }))}
     />
   );
 }

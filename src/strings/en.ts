@@ -361,6 +361,7 @@ export const en = {
   "shopping.useDates": "Use these dates",
   "shopping.generate": "Generate",
   "shopping.generateKeeps": "Keeps items added by hand and anything already on the list, with its tick.",
+  "shopping.earlierShort": "Earlier Meals are short too: {products}",
   "shopping.addByHand": "Add a Product by hand",
   "shopping.addPackSize": "Pack Size · {name}, {quantity}",
   "shopping.addNoPackSize": "No Pack Size",
