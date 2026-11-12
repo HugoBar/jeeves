@@ -1,27 +1,32 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useOptimistic, useRef, useState, useTransition } from "react";
+import { useEffect, useOptimistic, useRef, useState, useTransition, type FormEvent } from "react";
 import {
   chosenRange,
   currentChoice,
   packsCovering,
+  parseItemAmount,
+  stepItemAmount,
   stockUncertainty,
   type DatedShortfall,
   type DatesChoice,
+  type ItemAmountError,
   type UncertainCandidate,
 } from "@/core/shopping-list";
 import type { ShoppingListItem } from "@/db/shopping-list";
-import { formatPacks, formatQuantity, formatShoppingCount, t } from "@/strings";
-import { WarningIcon } from "../form-error";
+import { formatPackName, formatPacks, formatQuantity, formatShoppingCount, t } from "@/strings";
+import { useFieldErrors, WarningIcon } from "../form-error";
 import { productHref } from "../products/origin";
 import { ConfirmSheet } from "../sheet";
+import { StepIcon } from "../stepper";
 import { NEEDS_CONFIRMATION_PATH } from "../unconfirmed-alerts";
 import { useViewerNow } from "../viewer-clock";
 import {
   generateShoppingListAction,
   removeShoppingListItemAction,
   setAllShoppingListItemsTickedAction,
+  setShoppingListItemAmountAction,
   setShoppingListItemTickedAction,
 } from "./actions";
 import { AddByHand, type HandAddProduct } from "./add-by-hand";
@@ -177,16 +182,26 @@ function TickAll({ ticked, total, onTick }: { ticked: number; total: number; onT
 // strikes its name through, at once, before the list comes back. Removing is
 // quick and an item is easy to add again, so ✕ asks only for a ticked item:
 // it is bought, and once removed, Restock won't add it to Stock.
-// `fresh` marks it just added or changed by hand; `uncertain` flags a
-// Product an Unconfirmed Meal uses.
+// An unticked item's amount opens, on the item, a way to set it; a ticked
+// one's is what was bought, entered at Restock. The amount shows changed in
+// place, with no highlight. `fresh` marks it just added by hand; `uncertain`
+// flags a Product an Unconfirmed Meal uses.
 function ShoppingItemRow({ item, fresh, uncertain }: { item: ShoppingListItem; fresh: boolean; uncertain: boolean }) {
+  const [editing, setEditing] = useState(false);
+  const closeEditor = () => setEditing(false);
   const [asking, setAsking] = useState(false);
   const [removing, startRemoving] = useTransition();
   const [, startTicking] = useTransition();
   const [ticked, setTicked] = useOptimistic(item.ticked);
   const { name } = item.product;
   const remove = () => removeShoppingListItemAction(item.id);
-  const classes = ["list-row", "shopping-item", ticked && "shopping-item-ticked", fresh && "shopping-item-fresh"];
+  const classes = [
+    "list-row",
+    "shopping-item",
+    ticked && "shopping-item-ticked",
+    editing && "shopping-item-editing",
+    fresh && "shopping-item-fresh",
+  ];
   return (
     <li className={classes.filter(Boolean).join(" ")}>
       <input
@@ -209,19 +224,39 @@ function ShoppingItemRow({ item, fresh, uncertain }: { item: ShoppingListItem; f
           </Link>
           {uncertain && <span className="shopping-uncertain-pill">{t("shopping.uncertain")}</span>}
         </span>
-        <ShoppingAmount item={item} />
+        {ticked ? (
+          <ShoppingAmount item={item} />
+        ) : editing ? (
+          <AmountEditor item={item} onClose={closeEditor} />
+        ) : (
+          <button
+            type="button"
+            className="shopping-amount-button"
+            aria-label={t("shopping.changeAmount", { name })}
+            onClick={() => setEditing(true)}
+          >
+            {item.quantity === null ? t("shopping.setAmount") : <ShoppingAmount item={item} />}
+          </button>
+        )}
       </div>
-      <button
-        type="button"
-        className="shopping-item-remove"
-        aria-label={t("shopping.remove", { name })}
-        disabled={removing}
-        onClick={() => (ticked ? setAsking(true) : startRemoving(remove))}
-      >
-        <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-          <path d="M6 6l12 12M18 6L6 18" />
-        </svg>
-      </button>
+      {editing && !ticked ? (
+        // Leaving the number sets what was typed before it closes.
+        <button type="button" className="button-primary shopping-item-done" onClick={closeEditor}>
+          {t("shopping.amountDone")}
+        </button>
+      ) : (
+        <button
+          type="button"
+          className="shopping-item-remove"
+          aria-label={t("shopping.remove", { name })}
+          disabled={removing}
+          onClick={() => (ticked ? setAsking(true) : startRemoving(remove))}
+        >
+          <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+            <path d="M6 6l12 12M18 6L6 18" />
+          </svg>
+        </button>
+      )}
       {asking && (
         <ConfirmSheet
           eyebrow={t("shopping.title")}
@@ -237,9 +272,9 @@ function ShoppingItemRow({ item, fresh, uncertain }: { item: ShoppingListItem; f
   );
 }
 
-// What to buy: the whole packs that cover the amount, with the amount needed,
-// as in "1 bag (100 g needed)", or only the amount without a Pack Size. An
-// item added by hand without an amount shows none.
+// What to buy: the whole packs that cover the amount, with the amount, as in
+// "2 bags (1,000 g)", or only the amount without a Pack Size. An item added
+// by hand without an amount shows none.
 function ShoppingAmount({ item }: { item: ShoppingListItem }) {
   const { quantity, product } = item;
   if (quantity === null) return null;
@@ -250,12 +285,129 @@ function ShoppingAmount({ item }: { item: ShoppingListItem }) {
       {packSize ? (
         <>
           <strong>{formatPacks(packsCovering(quantity, packSize.amount), packSize.name)}</strong>{" "}
-          {t("shopping.needed", { quantity: amount })}
+          {t("shopping.amountBesidePacks", { quantity: amount })}
         </>
       ) : (
         <strong>{amount}</strong>
       )}
     </span>
+  );
+}
+
+// Sets an unticked item's amount, in place of it on the item: whole packs
+// with a Pack Size, or an amount in its Default Unit without one, above 0.
+// − and + step it, and the number between them can be typed over, set on
+// Enter or on leaving it; its unit follows +, then, with a Pack Size, the
+// amount it comes to. Each change is set at once; it stays open for the
+// next, until the row's Done or Escape. An item with no amount shows an empty number, and + starts it at
+// 1 pack, or one step.
+function AmountEditor({
+  item,
+  onClose,
+}: {
+  item: ShoppingListItem;
+  onClose: () => void;
+}) {
+  const { name, defaultUnit, packSize } = item.product;
+  const packAmount = packSize?.amount ?? null;
+  // A change shows at once, before the list comes back.
+  const [quantity, setQuantity] = useOptimistic(item.quantity);
+  // What is typed over the number, until it is set; null shows the amount.
+  const [draft, setDraft] = useState<string | null>(null);
+  const [error, setError] = useState<ItemAmountError | null>(null);
+  const [, startSetting] = useTransition();
+  const { invalid, messages } = useFieldErrors(
+    error ? [error] : [],
+    () => "amount" as const,
+    (found) => t(`quantity.error.${found}`),
+  );
+
+  // The number as the action reads it: whole packs with a Pack Size, else
+  // the amount; empty for none.
+  const asText = (amount: number | null) =>
+    amount === null ? "" : String(packAmount === null ? amount : packsCovering(amount, packAmount));
+  const set = (next: number) =>
+    startSetting(async () => {
+      setQuantity(next);
+      const result = await setShoppingListItemAmountAction(item.id, asText(next));
+      if (result) setError(result);
+    });
+  // A step's press, or null when it can't go that way.
+  const step = (by: 1 | -1) => {
+    const next = stepItemAmount(quantity, packAmount, defaultUnit, by);
+    if (next === null) return null;
+    return () => {
+      setDraft(null);
+      setError(null);
+      set(next);
+    };
+  };
+  const less = step(-1);
+  const more = step(1);
+
+  // Sets what was typed, read as the action reads it, unless it is the
+  // amount already there.
+  function setTyped() {
+    if (draft === null || draft.trim() === asText(quantity)) {
+      setDraft(null);
+      return;
+    }
+    const parsed = parseItemAmount(draft, packAmount);
+    if (!parsed.ok) {
+      setError(parsed.error);
+      return;
+    }
+    setDraft(null);
+    set(parsed.quantity);
+  }
+
+  function submit(event: FormEvent) {
+    event.preventDefault();
+    setTyped();
+  }
+
+  const shown = draft ?? asText(quantity);
+  return (
+    <div
+      className="amount-editor"
+      onKeyDown={(event) => {
+        if (event.key === "Escape") onClose();
+      }}
+    >
+      <form className="amount-stepper" onSubmit={submit}>
+        <button type="button" aria-label={t("shopping.less", { name })} disabled={!less} onClick={less ?? undefined}>
+          <span className="amount-step">
+            <StepIcon step="less" />
+          </span>
+        </button>
+        <input
+          inputMode={packSize ? "numeric" : "decimal"}
+          autoComplete="off"
+          aria-label={t("shopping.amountField", { name })}
+          value={shown}
+          onChange={(event) => {
+            setDraft(event.target.value);
+            setError(null);
+          }}
+          onBlur={setTyped}
+          {...invalid("amount")}
+        />
+        <button type="button" aria-label={t("shopping.more", { name })} disabled={!more} onClick={more ?? undefined}>
+          <span className="amount-step">
+            <StepIcon step="more" />
+          </span>
+        </button>
+        <span className="amount-stepper-unit">
+          {packSize ? formatPackName(shown.trim() === "1" ? 1 : 2, packSize.name) : t(`unit.${defaultUnit}`)}
+        </span>
+        {packSize && quantity !== null && (
+          <span className="shopping-amount">
+            {t("shopping.amountBesidePacks", { quantity: formatQuantity(quantity, defaultUnit) })}
+          </span>
+        )}
+      </form>
+      {messages("amount")}
+    </div>
   );
 }
 

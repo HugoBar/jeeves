@@ -63,9 +63,10 @@ describe("the Shopping List with items", () => {
     expect(text(one)).toContain("1 item");
   });
 
-  it("shows the whole packs that cover an amount, with the amount needed", () => {
-    expect(text(html)).toContain("Spinach 1 bag (100 g needed)");
-    expect(text(html)).toContain("Whole milk 2 cartons (1,400 ml needed)");
+  it("shows the whole packs that cover an amount, with the amount, and never says needed", () => {
+    expect(text(html)).toContain("Spinach 1 bag (100 g)");
+    expect(text(html)).toContain("Whole milk 2 cartons (1,400 ml)");
+    expect(text(html)).not.toContain("needed");
   });
 
   it("shows only the amount for a Product with no Pack Size", () => {

@@ -4809,7 +4809,7 @@ body:has(.needs-confirmation-locked) :is(.top-menu, .bottom-menu, a.app-badge) {
   font-weight: 600;
 }
 
-/* "1 bag" stands out from "(100 g needed)". */
+/* "2 bags" stands out from "(1,000 g)". */
 .shopping-amount {
   color: var(--color-ink-muted);
   font-size: var(--text-meta);
@@ -4818,6 +4818,152 @@ body:has(.needs-confirmation-locked) :is(.top-menu, .bottom-menu, a.app-badge) {
 .shopping-amount strong {
   color: var(--color-ink);
   font-weight: 600;
+}
+
+/* An unticked item's amount, tapped to set it: it reads as the amount, with
+   a dotted underline to show it can be changed. */
+.shopping-amount-button {
+  --button-bg: transparent;
+  --button-line: transparent;
+  --button-ink: var(--color-ink-muted);
+  min-height: 44px;
+  padding: 0;
+  font-size: var(--text-meta);
+  text-align: left;
+  text-decoration: underline dotted;
+  text-underline-offset: 3px;
+}
+
+/* Setting the amount: the row opens, tinted and outlined, as the board has
+   it. − and + are round, with the number underlined between them, then its
+   unit and the amount it comes to. Done takes the place of ✕. */
+.shopping-list > .shopping-item-editing {
+  margin: 4px -8px;
+  padding: 8px;
+  border-top-color: transparent;
+  border-radius: 14px;
+  background: var(--color-open-row);
+  box-shadow: inset 0 0 0 1px var(--color-open-row-border);
+}
+
+.shopping-list > .shopping-item-editing + li {
+  border-top-color: transparent;
+}
+
+.shopping-item-editing .shopping-item-tick {
+  align-self: flex-start;
+  margin-top: 2px;
+}
+
+.shopping-item-done {
+  flex: none;
+  align-self: flex-end;
+  padding: 0 12px;
+  font-size: var(--text-meta);
+}
+
+.amount-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.amount-stepper {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px 4px;
+}
+
+/* A 44 px target round a 28 px circle. */
+.amount-stepper button {
+  --button-bg: transparent;
+  --button-line: transparent;
+  flex: none;
+  width: 44px;
+  height: 44px;
+  margin: 0 -8px;
+  padding: 0;
+}
+
+.amount-stepper button:hover:not(:disabled) {
+  background: transparent;
+}
+
+.amount-step {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: 1px solid var(--color-line-strong);
+  border-radius: 999px;
+  background: var(--color-surface);
+  color: var(--color-ink);
+}
+
+.amount-stepper button:hover:not(:disabled) .amount-step {
+  background: var(--color-inset);
+}
+
+.amount-stepper button:disabled .amount-step {
+  border-color: var(--color-line-disabled);
+  color: var(--color-control-off);
+}
+
+.amount-stepper input:not([type="checkbox"]) {
+  width: 36px;
+  height: 32px;
+  min-height: 0;
+  padding: 0 2px;
+  border: 0;
+  border-bottom: 1.5px solid var(--color-link);
+  border-radius: 0;
+  background: transparent;
+  font-size: 15px;
+  font-weight: 700;
+  text-align: center;
+}
+
+.amount-stepper input:not([type="checkbox"]):focus-visible {
+  outline: 0;
+  border-bottom-width: 2px;
+}
+
+.amount-stepper input[aria-invalid="true"] {
+  border-bottom-color: var(--color-danger);
+}
+
+.amount-stepper-unit {
+  margin-left: 4px;
+  color: var(--color-ink-soft);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.amount-stepper .shopping-amount {
+  margin-left: 4px;
+}
+
+@media (min-width: 768px) {
+  .shopping-item-done {
+    min-height: 32px;
+  }
+
+  .amount-stepper button {
+    width: 32px;
+    height: 32px;
+    margin: 0 -4px;
+  }
+
+  .amount-step {
+    width: 24px;
+    height: 24px;
+  }
+
+  .amount-stepper input:not([type="checkbox"]) {
+    height: 28px;
+  }
 }
 
 .shopping-item-remove {
