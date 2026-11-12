@@ -12,6 +12,7 @@ import {
   asksForAnotherFood,
   blockedByArchivedFood,
   parseMealChanges,
+  parseMealSlotChanges,
   parseMealSlotCategory,
   parseNewMeal,
   parseMealSlotFill,
@@ -415,6 +416,75 @@ describe("parseMealChanges", () => {
 
   it("rejects an hour that is not a time of day", () => {
     expect(parseMealChanges({ hour: "", name: "Lunch", untracked: false })).toEqual({ ok: false, errors: ["invalidHour"] });
+  });
+});
+
+describe("parseMealSlotChanges", () => {
+  // The Meal's slots as stored, in order, and the non-Archived Food
+  // Categories, in these tests.
+  const current = [
+    { id: "main", slotCategoryId: "main-dish" },
+    { id: "veg", slotCategoryId: "vegetables" },
+    { id: "fruit", slotCategoryId: "fruit" },
+  ];
+  const pickable = new Set(["main-dish", "vegetables", "fruit", "fish"]);
+  const changed = (...slots: [string, string][]) => slots.map(([slotId, slotCategoryId]) => ({ slotId, slotCategoryId }));
+
+  it("keeps the slots in the order sent, removing the ones removed", () => {
+    expect(
+      parseMealSlotChanges({ order: ["fruit", "main"], removed: ["veg"], slotCategories: [] }, current, pickable),
+    ).toEqual({ ok: true, changes: { removed: ["veg"], order: ["fruit", "main"], slotCategories: [] } });
+  });
+
+  it("keeps the order as stored when nothing was sent", () => {
+    expect(parseMealSlotChanges({ order: [], removed: [], slotCategories: [] }, current, pickable)).toEqual({
+      ok: true,
+      changes: { removed: [], order: ["main", "veg", "fruit"], slotCategories: [] },
+    });
+  });
+
+  it("changes the Slot Categories sent", () => {
+    const sent = { order: [], removed: [], slotCategories: changed(["main", "fish"]) };
+    expect(parseMealSlotChanges(sent, current, pickable)).toEqual({
+      ok: true,
+      changes: { removed: [], order: ["main", "veg", "fruit"], slotCategories: [{ slotId: "main", slotCategoryId: "fish" }] },
+    });
+  });
+
+  // Changed to Fish on the form, then changed elsewhere to Fish meanwhile,
+  // or set back on the form to what it was.
+  it("writes nothing for a Slot Category sent that is already stored", () => {
+    const sent = { order: [], removed: [], slotCategories: changed(["veg", "vegetables"]) };
+    expect(parseMealSlotChanges(sent, current, pickable)).toMatchObject({ ok: true, changes: { slotCategories: [] } });
+  });
+
+  // Archived since Edit Meal opened, or a crafted id.
+  it("refuses a Slot Category changed to one that is Archived or gone, or none", () => {
+    const sent = { order: [], removed: [], slotCategories: changed(["main", "archived"], ["veg", " "]) };
+    expect(parseMealSlotChanges(sent, current, pickable)).toEqual({
+      ok: false,
+      errors: [
+        { slotId: "main", code: "unavailableSlotCategory" },
+        { slotId: "veg", code: "noSlotCategory" },
+      ],
+    });
+  });
+
+  it("ignores a Slot Category sent for a slot removed on the form", () => {
+    const sent = { order: [], removed: ["main"], slotCategories: changed(["main", "archived"]) };
+    expect(parseMealSlotChanges(sent, current, pickable)).toEqual({
+      ok: true,
+      changes: { removed: ["main"], order: ["veg", "fruit"], slotCategories: [] },
+    });
+  });
+
+  it("leaves out a slot removed meanwhile, and puts one added meanwhile last", () => {
+    const now = [...current.filter((slot) => slot.id !== "veg"), { id: "added", slotCategoryId: "fish" }];
+    const sent = { order: ["fruit", "veg", "main"], removed: ["gone"], slotCategories: changed(["veg", "fish"]) };
+    expect(parseMealSlotChanges(sent, now, pickable)).toEqual({
+      ok: true,
+      changes: { removed: [], order: ["fruit", "main", "added"], slotCategories: [] },
+    });
   });
 });
 

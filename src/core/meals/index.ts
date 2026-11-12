@@ -265,6 +265,64 @@ export function parseMealChanges(input: { hour: string; name: string; untracked:
   return { ok: true, changes: { hour, name: input.name.trim() || null, untracked: input.untracked } };
 }
 
+// A slot given a new Slot Category on Edit Meal.
+export interface SlotCategoryChange {
+  slotId: string;
+  slotCategoryId: string;
+}
+
+// What Edit Meal sends of its slots on Save: the slots kept, in the order
+// shown, the ones removed on the form, and the ones given a new Slot
+// Category there. A slot whose Slot Category was not changed on the form is
+// not sent one, so a change made elsewhere meanwhile stays.
+export interface MealSlotChangesInput {
+  order: readonly string[];
+  removed: readonly string[];
+  slotCategories: readonly SlotCategoryChange[];
+}
+
+// What Save writes to a Meal's slots: the ones to remove, every other one in
+// its new order, and the Slot Categories changed.
+export interface MealSlotChanges {
+  removed: string[];
+  order: string[];
+  slotCategories: SlotCategoryChange[];
+}
+
+// A slot whose new Slot Category was refused.
+export type MealSlotChangeError = { slotId: string; code: MealSlotCategoryError };
+
+export type MealSlotChangesResult =
+  | { ok: true; changes: MealSlotChanges }
+  | { ok: false; errors: MealSlotChangeError[] };
+
+// `current` is the Meal's slots as stored now, in order. A slot sent that is
+// gone was removed meanwhile, so it is left out; one added meanwhile, sent
+// neither kept nor removed, goes after the kept ones. A Slot Category sent
+// that differs from the stored one must be in `pickable`, the non-Archived
+// ones.
+export function parseMealSlotChanges(
+  input: MealSlotChangesInput,
+  current: readonly { id: string; slotCategoryId: string }[],
+  pickable: ReadonlySet<string>,
+): MealSlotChangesResult {
+  const stored = new Map(current.map((slot) => [slot.id, slot.slotCategoryId]));
+  const removed = new Set(input.removed.filter((id) => stored.has(id)));
+  const kept = (id: string) => stored.has(id) && !removed.has(id);
+  const order = [...new Set(input.order.filter(kept))];
+  for (const { id } of current) if (kept(id) && !order.includes(id)) order.push(id);
+  const slotCategories: SlotCategoryChange[] = [];
+  const errors: MealSlotChangeError[] = [];
+  for (const { slotId, slotCategoryId } of input.slotCategories) {
+    if (!kept(slotId) || slotCategoryId === stored.get(slotId)) continue;
+    const parsed = parseMealSlotCategory(slotCategoryId, pickable);
+    if (parsed.ok) slotCategories.push({ slotId, slotCategoryId: parsed.slotCategoryId });
+    else errors.push({ slotId, code: parsed.error });
+  }
+  if (errors.length) return { ok: false, errors };
+  return { ok: true, changes: { removed: [...removed], order, slotCategories } };
+}
+
 // A day's Meals by hour; "HH:MM" text sorts as time does. Ties go to the Meal
 // created first, as Projected Stock orders them (spec "Projected Stock").
 export function sortMeals<T extends { hour: string; createdAt: Date }>(meals: readonly T[]): T[] {
