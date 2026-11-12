@@ -25,6 +25,7 @@ import {
   type NewMealSlotRowError,
   type NewMealSlotsResult,
 } from "@/core/meals";
+import { parseRepeatOn, type RepeatOnResult } from "@/core/meal-series";
 import { isDate, plannerRange } from "@/core/planner";
 import { fillEmptySlots, type SlotFill } from "@/core/suggestions";
 import { getDb, type Db } from "@/db";
@@ -37,6 +38,7 @@ import {
   type RefusedMeal,
 } from "@/db/confirmation";
 import { listActiveCategories } from "@/db/food-categories";
+import { createDueRepeats } from "@/db/meal-series";
 import { listMealTemplates, listPickableMealTypes, listPickableSlotCategories } from "@/db/meal-templates";
 import {
   addMealSlot,
@@ -53,11 +55,14 @@ import {
 import { fillEmptyMealSlots, loadSuggestionContext, undoFill } from "@/db/suggestions";
 import { foodCategoryLabel } from "@/strings";
 
+// "Repeat on" as a Meal form sends it: each ticked weekday's number.
+type RepeatOnValues = { repeatOn: string[] };
+
 // `values` refills the form after a rejected submit, which React resets. The
 // slots are the ones added on the form, before the Meal exists.
-export type NewMealFormValues = Omit<NewMealInput, "date"> & { slots: NewMealSlotInput[] };
+export type NewMealFormValues = Omit<NewMealInput, "date"> & { slots: NewMealSlotInput[] } & RepeatOnValues;
 export type NewMealFormState = { errors: MealFieldError[]; slotErrors: NewMealSlotRowError[]; values: NewMealFormValues };
-export type MealChangesFormValues = Pick<NewMealInput, "hour" | "name" | "untracked">;
+export type MealChangesFormValues = Pick<NewMealInput, "hour" | "name" | "untracked"> & RepeatOnValues;
 // `slotErrors` are the slots whose new Slot Category was refused.
 export type MealChangesFormState = {
   errors: MealFieldError[];
@@ -137,9 +142,18 @@ async function writeWithSlots<T>(
   }
 }
 
+// A Meal form also sends the viewer's date as they submitted, which "Repeat
+// on" is checked against: only a Meal dated today or later can repeat.
+function submittedToday(formData: FormData): string {
+  const today = String(formData.get("today") ?? "");
+  if (!isDate(today)) throw new Error("Not a date");
+  return today;
+}
+
 // `date` is the planner day the form was opened on. The form is New Meal from
-// scratch or from a Meal Template, which only fills it in. The Meal and the
-// slots on the form are written together, or not at all.
+// scratch or from a Meal Template, which only fills it in. The Meal, the
+// slots on the form and, if "Repeat on" has days ticked, its Meal Series are
+// written together, or not at all; the series' repeats due now follow.
 export async function createMealAction(
   date: string,
   _state: NewMealFormState,
@@ -153,17 +167,31 @@ export async function createMealAction(
     name: String(formData.get("name") ?? ""),
     untracked: formData.get("untracked") === "on",
     slots: newSlotInputs(formData),
+    repeatOn: formData.getAll("repeatOn").map(String),
   };
+  const today = submittedToday(formData);
   const parsed = parseNewMeal({ date, ...values }, pickable.mealTypes);
+  const repeatOn = parseRepeatOn(values.repeatOn, date, today);
   const slots = await parseFormSlots(db, values.slots, pickable.emptySlotCategories);
-  if (!parsed.ok || !slots.ok) {
-    return { errors: parsed.ok ? [] : parsed.errors, slotErrors: slots.ok ? [] : slots.errors, values };
+  if (!parsed.ok || !repeatOn.ok || !slots.ok) {
+    const errors = [...(parsed.ok ? [] : parsed.errors), ...(repeatOn.ok ? [] : [repeatOn.error])];
+    return { errors, slotErrors: slots.ok ? [] : slots.errors, values };
   }
-  const written = await writeWithSlots(db, values.slots, () => createMeal(db, parsed.fields, slots.slots));
+  const written = await writeWithSlots(db, values.slots, () =>
+    createMeal(db, parsed.fields, slots.slots, repeatOn.weekdays),
+  );
   if (!written.ok) return { errors: [], slotErrors: written.errors, values };
+  if (repeatOn.weekdays.length > 0) await createDueRepeats(db, today);
   refresh();
-  return { errors: [], slotErrors: [], values: { mealTypeId: "", hour: "", name: "", untracked: false, slots: [] } };
+  return {
+    errors: [],
+    slotErrors: [],
+    values: { mealTypeId: "", hour: "", name: "", untracked: false, slots: [], repeatOn: [] },
+  };
 }
+
+// "Repeat on" left alone: no days to start a Meal Series with.
+const NO_REPEAT = { ok: true, weekdays: [] } as const satisfies RepeatOnResult;
 
 // The ids of the non-Archived Food Categories: what a slot can be changed to.
 async function activeCategoryIds(db: Db): Promise<Set<string>> {
@@ -184,9 +212,11 @@ function slotChangesInput(formData: FormData): MealSlotChangesInput | null {
   };
 }
 
-// Hour, name, Untracked and the slot changes kept on the form are written
-// together, or not at all. Nothing changes if the Meal was Confirmed or
-// Skipped; the refresh shows the planner it was.
+// Hour, name, Untracked, the slot changes kept on the form and, for a Meal in
+// no Meal Series, a series if "Repeat on" has days ticked, are written
+// together, or not at all; the series' repeats due now follow. A Meal already
+// in one shows its days but can't change them here. Nothing changes if the
+// Meal was Confirmed or Skipped; the refresh shows the planner it was.
 export async function editMealAction(
   id: string,
   _state: MealChangesFormState,
@@ -197,22 +227,32 @@ export async function editMealAction(
   if (!meal) throw new Error("Meal not found");
   if (!canChangeMeal(meal)) {
     refresh();
-    return { errors: [], slotErrors: [], values: { hour: meal.hour, name: meal.name ?? "", untracked: meal.untracked } };
+    const repeatOn = (meal.repeats ?? []).map(String);
+    return {
+      errors: [],
+      slotErrors: [],
+      values: { hour: meal.hour, name: meal.name ?? "", untracked: meal.untracked, repeatOn },
+    };
   }
   const values = {
     hour: String(formData.get("hour") ?? ""),
     name: String(formData.get("name") ?? ""),
     untracked: formData.get("untracked") === "on",
+    repeatOn: meal.repeats ? meal.repeats.map(String) : formData.getAll("repeatOn").map(String),
   };
+  const today = submittedToday(formData);
   const parsed = parseMealChanges(values);
+  const repeatOn = meal.repeats ? NO_REPEAT : parseRepeatOn(values.repeatOn, meal.date, today);
   const input = slotChangesInput(formData);
   const slots = input
     ? parseMealSlotChanges(input, meal.slots, await activeCategoryIds(db))
     : null;
-  if (!parsed.ok || (slots && !slots.ok)) {
-    return { errors: parsed.ok ? [] : parsed.errors, slotErrors: slots && !slots.ok ? slots.errors : [], values };
+  if (!parsed.ok || !repeatOn.ok || (slots && !slots.ok)) {
+    const errors = [...(parsed.ok ? [] : parsed.errors), ...(repeatOn.ok ? [] : [repeatOn.error])];
+    return { errors, slotErrors: slots && !slots.ok ? slots.errors : [], values };
   }
-  await updateMeal(db, id, parsed.changes, slots?.changes);
+  const saved = await updateMeal(db, id, parsed.changes, slots?.changes, repeatOn.weekdays);
+  if (saved && repeatOn.weekdays.length > 0) await createDueRepeats(db, today);
   refresh();
   return { errors: [], slotErrors: [], values };
 }
@@ -341,6 +381,14 @@ export async function emptyMealSlotAction(slotId: string): Promise<void> {
   const slot = await getMealSlotContext(db, slotId);
   if (slot && canChangeMeal(slot.meal)) await fillMealSlot(db, slotId, { content: "empty" });
   refresh();
+}
+
+// Creates the Meal Series repeats due on `today`, the viewer's date (spec
+// "Meal Series"). Every screen that shows or uses Meals asks first. It
+// refreshes only when it created some, so asking again changes nothing.
+export async function createDueRepeatsAction(today: string): Promise<void> {
+  if (!isDate(today)) throw new Error("Not a date");
+  if ((await createDueRepeats(getDb(), today)) > 0) refresh();
 }
 
 // `today` is the viewer's date when they submitted. Null once Confirmed;

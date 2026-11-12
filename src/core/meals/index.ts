@@ -1,5 +1,6 @@
 import { AMOUNT_COLUMN, parsePositive, parseWholeAboveZero } from "@/core/amounts";
 import type { CategoryKind } from "@/core/food-categories";
+import type { RepeatOnError } from "@/core/meal-series";
 import { addDays, isDate, mondayOf } from "@/core/planner";
 
 // A Meal's stored status (data-model Q3). Unconfirmed is never stored.
@@ -43,7 +44,7 @@ export function isHour(text: string): boolean {
   return HOUR.test(text);
 }
 
-export type MealFieldError = "invalidDate" | "invalidHour" | "noMealType" | "unavailableMealType";
+export type MealFieldError = "invalidDate" | "invalidHour" | "noMealType" | "unavailableMealType" | RepeatOnError;
 
 export type NewMealResult = { ok: true; fields: NewMealFields } | { ok: false; errors: MealFieldError[] };
 

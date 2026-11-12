@@ -5,6 +5,7 @@ import { isDate } from "@/core/planner";
 import { isGenerateRange, parseItemAmount, type DateRange, type ItemAmountError } from "@/core/shopping-list";
 import { parseStockAmount, type QuantityError } from "@/core/stock";
 import { getDb } from "@/db";
+import { createDueRepeats } from "@/db/meal-series";
 import {
   addProductByHand,
   generateShoppingList,
@@ -18,10 +19,13 @@ import {
 
 // Generate from the Shortfalls of the Meals in `range`, which lies in the
 // Planner's two weeks. `today` is the viewer's date, which decides those
-// weeks (spec "Platform").
+// weeks (spec "Platform"). The Meal Series repeats due on it are created
+// first, so their Meals count too.
 export async function generateShoppingListAction(today: string, range: DateRange): Promise<void> {
   if (!isDate(today) || !isGenerateRange(today, range)) throw new Error("Not dates Generate can use");
-  await generateShoppingList(getDb(), range.from, range.to);
+  const db = getDb();
+  await createDueRepeats(db, today);
+  await generateShoppingList(db, range.from, range.to);
   refresh();
 }
 

@@ -41,6 +41,7 @@ export async function toPlannerMeals(db: Db, meals: Meal[], to: string): Promise
     allowsLeftovers: meal.mealType.allowsLeftovers,
     status: meal.status,
     untracked: meal.untracked,
+    repeats: meal.repeats,
     slots: meal.slots.map((slot) => ({
       id: slot.id,
       slotCategoryId: slot.slotCategoryId,

@@ -44,6 +44,8 @@ import {
   type TemplateOption,
   type Week,
   UnconfirmedIcon,
+  useIsPastDay,
+  withViewerToday,
 } from "./meal-card";
 import { ChevronIcon } from "./slot-picker";
 import { recordFills, SuggestionsProvider, suggestionsBySlot, type FilledMeal } from "./suggestions";
@@ -706,13 +708,14 @@ function AddMealForm({
   onDone: () => void;
 }) {
   const [state, action, pending] = useActionState(
-    async ({ submits, ...previous }: Submitted<NewMealFormState>, formData: FormData) => {
+    withViewerToday(async ({ submits, ...previous }: Submitted<NewMealFormState>, formData: FormData) => {
       const next = await createMealAction(date, previous, formData);
       if (next.errors.length === 0 && next.slotErrors.length === 0) onDone();
       return { ...next, submits: submits + 1 };
-    },
+    }),
     { errors: [], slotErrors: [], values: template ? valuesFrom(template) : NO_VALUES, submits: 0 },
   );
+  const past = useIsPastDay(date);
   // An Archived Meal Type is offered only as the template's, which the Meal
   // keeps unless another is picked.
   const mealTypes = template?.mealType.archived ? [...pickers.mealTypes, template.mealType] : pickers.mealTypes;
@@ -724,6 +727,7 @@ function AddMealForm({
         errors={state.errors}
         slotErrors={state.slotErrors}
         values={state.values}
+        repeat={{ past, locked: false }}
         mealTypes={mealTypes}
         mealTypeHint={template && t("planner.mealTypeFromTemplate", { template: template.label })}
         slotsCard={
@@ -742,7 +746,7 @@ function AddMealForm({
   );
 }
 
-const NO_VALUES: NewMealFormValues = { mealTypeId: "", hour: "", name: "", untracked: false, slots: [] };
+const NO_VALUES: NewMealFormValues = { mealTypeId: "", hour: "", name: "", untracked: false, slots: [], repeatOn: [] };
 
 // New Meal filled in from a Meal Template: its slots empty, with no food.
 function valuesFrom(template: TemplateOption): NewMealFormValues {
@@ -752,5 +756,6 @@ function valuesFrom(template: TemplateOption): NewMealFormValues {
     name: template.label,
     untracked: false,
     slots: template.slots.map(({ slotCategoryId }) => ({ food: "", amount: "", slotCategoryId })),
+    repeatOn: [],
   };
 }
