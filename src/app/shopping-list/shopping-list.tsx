@@ -152,7 +152,8 @@ export function ShoppingListView({
 }
 
 // Stock is uncertain while Meals are Unconfirmed: until they are Confirmed
-// or Skipped, they count as eaten as planned. Review opens Needs confirmation.
+// or Skipped, they count as eaten as planned. Review opens Needs confirmation,
+// and Generate again catches the list up once they are.
 function UncertainBanner({ unconfirmed }: { unconfirmed: number }) {
   return (
     <div className="banner shopping-uncertain">
@@ -161,6 +162,7 @@ function UncertainBanner({ unconfirmed }: { unconfirmed: number }) {
         <strong>{t("shopping.uncertainTitle")}</strong>{" "}
         {unconfirmed === 1 ? t("shopping.uncertainBodyOne") : t("shopping.uncertainBody", { count: unconfirmed })}{" "}
         <Link href={NEEDS_CONFIRMATION_PATH}>{t("shopping.uncertainReview")}</Link>
+        {t("shopping.uncertainThen")}
       </p>
     </div>
   );

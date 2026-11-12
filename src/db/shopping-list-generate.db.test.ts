@@ -1,4 +1,4 @@
-import { inArray } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 import { beforeEach, describe, expect, it } from "vitest";
 import type { NewMealSlot } from "@/core/meals";
 import { listActiveCategories } from "./food-categories";
@@ -93,7 +93,7 @@ describe("generateShoppingList", () => {
     expect(await summary()).toEqual([{ name: "Eggs", quantity: 100, source: "shortfall", ticked: false }]);
   });
 
-  it("tops up what is on the list and keeps ticked and hand-added items", async () => {
+  it("never changes a ticked item, and generating again changes nothing", async () => {
     const spinach = await aProduct("Spinach");
     const salt = await aProduct("Salt");
     const oats = await aProduct("Oats");
@@ -102,6 +102,7 @@ describe("generateShoppingList", () => {
       { productId: spinach.id, quantity: 100, source: "shortfall", ticked: true },
       { productId: oats.id, quantity: null, source: "manual" },
       { productId: salt.id, quantity: null, source: "manual" },
+      { productId: salt.id, quantity: 50, source: "shortfall", ticked: true },
     ]);
 
     await generateShoppingList(db, WEEK.from, WEEK.to);
@@ -110,6 +111,7 @@ describe("generateShoppingList", () => {
 
     expect(once).toEqual([
       { name: "Oats", quantity: 250, source: "manual", ticked: false },
+      { name: "Salt", quantity: 50, source: "shortfall", ticked: true },
       { name: "Salt", quantity: null, source: "manual", ticked: false },
       { name: "Spinach", quantity: 100, source: "shortfall", ticked: true },
       { name: "Spinach", quantity: 150, source: "shortfall", ticked: false },
@@ -117,7 +119,7 @@ describe("generateShoppingList", () => {
     expect(await summary()).toEqual(once);
   });
 
-  it("treats a pack added by hand like any other item: raised if short, never lowered", async () => {
+  it("raises an item added by hand below its Shortfall, and never lowers one", async () => {
     const rice = await aProduct("Rice");
     const pasta = await aProduct("Pasta");
     await db.update(products).set({ packSizeName: "bag", packSizeAmount: 500 }).where(inArray(products.id, [rice.id, pasta.id]));
@@ -131,6 +133,53 @@ describe("generateShoppingList", () => {
       { name: "Pasta", quantity: 500, source: "manual", ticked: false },
       { name: "Rice", quantity: 800, source: "manual", ticked: false },
     ]);
+  });
+
+  it("sets items from Shortfalls to what is short over the chosen dates, lowering and removing them", async () => {
+    const spinach = await aProduct("Spinach");
+    const oats = await aProduct("Oats");
+    await aMeal("2026-11-10", eats(spinach.id, 250));
+    await aMeal("2026-11-17", eats(spinach.id, 300), eats(oats.id, 200));
+
+    // Both weeks, then this week only.
+    await generateShoppingList(db, WEEK.from, "2026-11-22");
+    await generateShoppingList(db, WEEK.from, WEEK.to);
+
+    expect(await summary()).toEqual([{ name: "Spinach", quantity: 250, source: "shortfall", ticked: false }]);
+  });
+
+  it("removes an item from Shortfalls once its Meal is Skipped, but keeps one added to by hand", async () => {
+    const rice = await aProduct("Rice");
+    const pasta = await aProduct("Pasta");
+    await db.update(products).set({ packSizeName: "bag", packSizeAmount: 500 }).where(eq(products.id, pasta.id));
+    const lunch = await aMeal("2026-11-10", eats(rice.id, 300), eats(pasta.id, 200));
+    await generateShoppingList(db, WEEK.from, WEEK.to);
+    await addProductByHand(db, pasta.id);
+
+    await skipMeal(db, lunch, "2026-11-11");
+    await generateShoppingList(db, WEEK.from, WEEK.to);
+
+    expect(await summary()).toEqual([{ name: "Pasta", quantity: 700, source: "manual", ticked: false }]);
+  });
+
+  it("leaves an item from Shortfalls as it is when its Product's need can't be worked out", async () => {
+    // In grams with no Density, so a cup of it can't be converted.
+    const rice = await aProduct("Rice");
+    const recipe = await createRecipe(db, {
+      name: "Rice bowl",
+      portions: 2,
+      steps: "Boil",
+      prepTimeMinutes: 20,
+      sourceUrl: null,
+      ingredients: [{ productId: rice.id, amount: 1, unit: "cup", minor: false }],
+      categoryOverrides: [],
+    });
+    await db.insert(shoppingListItems).values({ productId: rice.id, quantity: 300, source: "shortfall" });
+    await aMeal("2026-11-11", { content: "recipe", recipeId: recipe.id, portions: 2 });
+
+    await generateShoppingList(db, WEEK.from, WEEK.to);
+
+    expect(await summary()).toEqual([{ name: "Rice", quantity: 300, source: "shortfall", ticked: false }]);
   });
 });
 

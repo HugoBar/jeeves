@@ -69,8 +69,9 @@ export async function listShoppingList(db: Db): Promise<ShoppingListItem[]> {
   }));
 }
 
-// Generate: tops the list up to what the Meals from `from` to `to` are short
-// of (spec "Shopping List"), never lowering an item or touching a ticked one.
+// Generate: keeps items from Shortfalls in step with what the Meals from
+// `from` to `to` are short of (spec "Shopping List"), raising, lowering and
+// removing them, raises items added by hand, and never touches a ticked one.
 // The list is locked meanwhile, so two at once can't both add the same
 // Product.
 export async function generateShoppingList(db: Db, from: string, to: string): Promise<void> {
@@ -84,9 +85,10 @@ export async function generateShoppingList(db: Db, from: string, to: string): Pr
     if (plan.add.length > 0) {
       await tx.insert(shoppingListItems).values(plan.add.map((item) => ({ ...item, source: "shortfall" as const })));
     }
-    for (const { id, quantity } of plan.raise) {
+    for (const { id, quantity } of plan.set) {
       await tx.update(shoppingListItems).set({ quantity }).where(eq(shoppingListItems.id, id));
     }
+    if (plan.remove.length > 0) await tx.delete(shoppingListItems).where(inArray(shoppingListItems.id, plan.remove));
   });
 }
 
