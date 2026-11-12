@@ -3,6 +3,7 @@ import { and, asc, desc, eq, gt, gte, inArray, lt, lte, max, sql } from "drizzle
 import {
   type MealChanges,
   type MealFormSlot,
+  type MealSlotChanges,
   type MealSlotContent,
   type MealSlotFill,
   type MealStatus,
@@ -187,9 +188,54 @@ export async function createMeal(
 // write itself so a Meal Confirmed meanwhile is left alone.
 const changeable = (id: string) => and(eq(meals.id, id), eq(meals.status, "planned"));
 
-// Its Meal Type never changes. Nothing if the Meal is Confirmed or Skipped.
-export async function updateMeal(db: Db, id: string, changes: MealChanges): Promise<void> {
-  await db.update(meals).set(changes).where(changeable(id));
+// Its Meal Type never changes. `slots`, Edit Meal's slot changes, must
+// already be checked by core's parseMealSlotChanges; they are written with
+// the rest, or not at all. False, changing nothing, if the Meal is gone,
+// Confirmed or Skipped.
+export async function updateMeal(db: Db, id: string, changes: MealChanges, slots?: MealSlotChanges): Promise<boolean> {
+  return db.transaction(async (tx) => {
+    // Holds the Meal, so its Confirmation, another save, or a slot added or
+    // removed elsewhere waits.
+    const [meal] = await tx.select({ id: meals.id }).from(meals).where(changeable(id)).for("update");
+    if (!meal) return false;
+    await tx.update(meals).set(changes).where(eq(meals.id, id));
+    if (slots) await changeMealSlots(tx, id, slots);
+    return true;
+  });
+}
+
+// The slots removed, given their new Slot Categories, and renumbered in
+// `order` (data-model T5). A slot added since `order` was read goes after
+// the others. The unique (meal, position) index is checked row by row, so
+// every slot steps aside to a negative position first.
+async function changeMealSlots(db: Db, mealId: string, { removed, order, slotCategories }: MealSlotChanges) {
+  const ofMeal = (slotId: string) => and(eq(mealSlots.mealId, mealId), eq(mealSlots.id, slotId));
+  if (removed.length > 0) {
+    await db.delete(mealSlots).where(and(eq(mealSlots.mealId, mealId), inArray(mealSlots.id, removed)));
+  }
+  for (const { slotId, slotCategoryId } of slotCategories) {
+    await db.update(mealSlots).set({ slotCategoryId }).where(ofMeal(slotId));
+  }
+  const left = await db
+    .select({ id: mealSlots.id })
+    .from(mealSlots)
+    .where(eq(mealSlots.mealId, mealId))
+    .orderBy(asc(mealSlots.position));
+  const place = (id: string) => (order.includes(id) ? order.indexOf(id) : order.length);
+  // A stable sort, so slots added meanwhile keep their own order.
+  const ids = left.map((slot) => slot.id).sort((a, b) => place(a) - place(b));
+  for (const [index, slotId] of ids.entries()) {
+    await db.update(mealSlots).set({ position: -1 - index }).where(ofMeal(slotId));
+  }
+  for (const [index, slotId] of ids.entries()) {
+    await db.update(mealSlots).set({ position: index }).where(ofMeal(slotId));
+  }
+}
+
+// Holds the Meal until the transaction ends, so changes to its slot
+// positions (adding, removing, Edit Meal's Save) wait for each other.
+async function lockMeal(db: Db, mealId: string): Promise<void> {
+  await db.select({ id: meals.id }).from(meals).where(eq(meals.id, mealId)).for("update");
 }
 
 // Every food column of a slot cleared, as an empty slot has them.
@@ -208,6 +254,7 @@ export async function fillMealSlot(db: Db, slotId: string, fill: MealSlotFill): 
 // parseNewMealSlot, or parseNewMealSlots on the Meal form.
 export async function addMealSlot(db: Db, mealId: string, { slotCategoryId, fill }: MealFormSlot): Promise<void> {
   await db.transaction(async (tx) => {
+    await lockMeal(tx, mealId);
     const [last] = await tx
       .select({ position: max(mealSlots.position) })
       .from(mealSlots)
@@ -222,6 +269,9 @@ export async function addMealSlot(db: Db, mealId: string, { slotCategoryId, fill
 // (meal, position) index is checked row by row. Nothing if the slot is gone.
 export async function removeMealSlot(db: Db, slotId: string): Promise<void> {
   await db.transaction(async (tx) => {
+    const [slot] = await tx.select({ mealId: mealSlots.mealId }).from(mealSlots).where(eq(mealSlots.id, slotId));
+    if (!slot) return;
+    await lockMeal(tx, slot.mealId);
     const [removed] = await tx
       .delete(mealSlots)
       .where(eq(mealSlots.id, slotId))

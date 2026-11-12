@@ -751,6 +751,99 @@ describe("updateMeal", () => {
   });
 });
 
+describe("updateMeal with slot changes", () => {
+  // A Meal with one empty slot of each given Slot Category.
+  async function aMealWithSlots(slotCategoryIds: string[]) {
+    const meal = await createMeal(
+      db,
+      { date: "2026-11-16", hour: "12:00", name: "Saving", mealTypeId: await seededMealTypeId("lunch") },
+      emptySlots(slotCategoryIds),
+    );
+    return (await getMeal(db, meal.id))!;
+  }
+  const positions = (mealId: string) =>
+    db
+      .select({ slotCategoryId: mealSlots.slotCategoryId, position: mealSlots.position })
+      .from(mealSlots)
+      .where(eq(mealSlots.mealId, mealId))
+      .orderBy(mealSlots.position);
+
+  it("writes the hour, name and Untracked with the slots removed, reordered and given new Slot Categories", async () => {
+    const [grains, vegetables, fruit, fish] = await Promise.all([
+      seededCategoryId("grains"),
+      seededCategoryId("vegetables"),
+      seededCategoryId("fruit"),
+      seededCategoryId("fish"),
+    ]);
+    const meal = await aMealWithSlots([grains, vegetables, fruit]);
+    const [first, second, third] = meal.slots.map((slot) => slot.id);
+
+    expect(
+      await updateMeal(
+        db,
+        meal.id,
+        { hour: "13:00", name: "Saved", untracked: true },
+        { removed: [second!], order: [third!, first!], slotCategories: [{ slotId: first!, slotCategoryId: fish }] },
+      ),
+    ).toBe(true);
+
+    expect(await getMeal(db, meal.id)).toMatchObject({ hour: "13:00", name: "Saved", untracked: true });
+    expect(await positions(meal.id)).toEqual([
+      { slotCategoryId: fruit, position: 0 },
+      { slotCategoryId: fish, position: 1 },
+    ]);
+  });
+
+  it("puts a slot added since the changes were read after the others", async () => {
+    const [grains, fruit] = await Promise.all([seededCategoryId("grains"), seededCategoryId("fruit")]);
+    const meal = await aMealWithSlots([grains, fruit]);
+    const [first, second] = meal.slots.map((slot) => slot.id);
+    const apple = await aProduct("Apple Added While Saving", [fruit]);
+    await addMealSlot(db, meal.id, { slotCategoryId: fruit, fill: { content: "product", productId: apple.id, quantity: 1 } });
+
+    await updateMeal(db, meal.id, { hour: "12:00", name: "Saving", untracked: false }, {
+      removed: [],
+      order: [second!, first!],
+      slotCategories: [],
+    });
+
+    expect(await positions(meal.id)).toEqual([
+      { slotCategoryId: fruit, position: 0 },
+      { slotCategoryId: grains, position: 1 },
+      { slotCategoryId: fruit, position: 2 },
+    ]);
+    expect((await getMeal(db, meal.id))!.slots[2]).toMatchObject({ content: "product", productId: apple.id });
+  });
+
+  it("changes nothing on a Meal Confirmed or Skipped meanwhile", async () => {
+    const [grains, fruit, fish] = await Promise.all([
+      seededCategoryId("grains"),
+      seededCategoryId("fruit"),
+      seededCategoryId("fish"),
+    ]);
+    const confirmed = await aMealWithSlots([grains, fruit]);
+    await confirmMeal(db, confirmed.id, { untracked: false, today: "2026-11-16" });
+    const skipped = await aMealWithSlots([grains, fruit]);
+    await skipMeal(db, skipped.id, "2026-11-16");
+
+    for (const meal of [confirmed, skipped]) {
+      const [first, second] = meal.slots.map((slot) => slot.id);
+      expect(
+        await updateMeal(db, meal.id, { hour: "20:00", name: "Changed", untracked: true }, {
+          removed: [first!],
+          order: [second!],
+          slotCategories: [{ slotId: second!, slotCategoryId: fish }],
+        }),
+      ).toBe(false);
+      expect(await getMeal(db, meal.id)).toMatchObject({ hour: "12:00", name: "Saving", untracked: false });
+      expect(await positions(meal.id)).toEqual([
+        { slotCategoryId: grains, position: 0 },
+        { slotCategoryId: fruit, position: 1 },
+      ]);
+    }
+  });
+});
+
 describe("deleteMeal", () => {
   it("removes the Meal with its slots", async () => {
     const meal = await createMeal(
