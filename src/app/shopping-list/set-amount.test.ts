@@ -64,7 +64,7 @@ const submit = (input: HTMLElement | null) =>
   });
 
 const show = (items: ShoppingListItem[]) =>
-  act(() => root.render(createElement(ShoppingListView, { items, today: "2026-11-11", products: [], candidates: [], shortfalls: [] })));
+  act(() => root.render(createElement(ShoppingListView, { items, today: "2026-11-11", products: [], candidates: [], shortfalls: [], unknownNeeds: [], shortfallProducts: [] })));
 
 beforeEach(() => {
   setAmount.mockReset().mockResolvedValue(null);

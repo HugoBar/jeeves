@@ -5,15 +5,19 @@ import { useEffect, useOptimistic, useRef, useState, useTransition, type FormEve
 import {
   chosenRange,
   currentChoice,
+  earlierShortfalls,
   packsCovering,
   parseItemAmount,
   stepItemAmount,
   stockUncertainty,
   type DatedShortfall,
+  type DatedUnknown,
   type DatesChoice,
   type ItemAmountError,
   type UncertainCandidate,
 } from "@/core/shopping-list";
+import { sortByName } from "@/core/names";
+import type { DefaultUnit } from "@/core/units";
 import type { ShoppingListItem } from "@/db/shopping-list";
 import { formatPackName, formatPacks, formatQuantity, formatShoppingCount, t } from "@/strings";
 import { useFieldErrors, WarningIcon } from "../form-error";
@@ -40,11 +44,15 @@ export function ShoppingList({
   products,
   candidates,
   shortfalls,
+  unknownNeeds,
+  shortfallProducts,
 }: {
   items: ShoppingListItem[];
   products: HandAddProduct[];
   candidates: UncertainCandidate[];
   shortfalls: DatedShortfall[];
+  unknownNeeds: DatedUnknown[];
+  shortfallProducts: ShortfallProduct[];
 }) {
   return (
     <ShoppingListView
@@ -53,6 +61,8 @@ export function ShoppingList({
       products={products}
       candidates={candidates}
       shortfalls={shortfalls}
+      unknownNeeds={unknownNeeds}
+      shortfallProducts={shortfallProducts}
     />
   );
 }
@@ -63,19 +73,25 @@ export function ShoppingList({
 // `products` are the ones that can be added by hand, A to Z. `candidates` are
 // the Meals that could be Unconfirmed: while some are on `today`, a banner
 // says Stock is uncertain and the items their Products are on are flagged.
-// `shortfalls` are each day's Shortfalls, for Running low in the add field.
+// `shortfalls` are each day's Shortfalls, for Running low in the add field
+// and, with `unknownNeeds`, for what earlier Meals are short of on the
+// Generate card, which names them from `shortfallProducts`.
 export function ShoppingListView({
   items,
   today,
   products,
   candidates,
   shortfalls,
+  unknownNeeds,
+  shortfallProducts,
 }: {
   items: ShoppingListItem[];
   today: string | null;
   products: HandAddProduct[];
   candidates: UncertainCandidate[];
   shortfalls: DatedShortfall[];
+  unknownNeeds: DatedUnknown[];
+  shortfallProducts: ShortfallProduct[];
 }) {
   const uncertainty = today ? stockUncertainty(candidates, today) : null;
   // The item just added or changed by hand, shown with a fading highlight.
@@ -91,7 +107,12 @@ export function ShoppingListView({
       <h1 className="shopping-title">{t("shopping.title")}</h1>
       {uncertainty && uncertainty.unconfirmed > 0 && <UncertainBanner unconfirmed={uncertainty.unconfirmed} />}
       <div className="shopping-columns">
-        <FromShortfalls today={today} />
+        <FromShortfalls
+          today={today}
+          shortfalls={shortfalls}
+          unknownNeeds={unknownNeeds}
+          shortfallProducts={shortfallProducts}
+        />
         <div className="card shopping-items">
           {items.length > 0 && <h2 className="shopping-count">{formatShoppingCount(items.length)}</h2>}
           <AddByHand
@@ -411,14 +432,39 @@ function AmountEditor({
   );
 }
 
+// A Product a Meal up to the end of the Planner's two weeks is short of, as
+// the Generate card names it. Archived ones too: a Meal keeps them.
+export interface ShortfallProduct {
+  id: string;
+  name: string;
+  defaultUnit: DefaultUnit;
+}
+
 // Generate over the chosen dates, which start as the planned week each time
 // the page opens. Choosing them and Generate wait for the viewer's date,
-// which decides the Planner's weeks.
-function FromShortfalls({ today }: { today: string | null }) {
+// which decides the Planner's weeks. Meals before the dates take Stock first,
+// so under it a note names what they are short of, for the Products Generate
+// asks for too: buying those fills the earlier gaps first. It follows the
+// dates as they change.
+function FromShortfalls({
+  today,
+  shortfalls,
+  unknownNeeds,
+  shortfallProducts,
+}: {
+  today: string | null;
+  shortfalls: DatedShortfall[];
+  unknownNeeds: DatedUnknown[];
+  shortfallProducts: ShortfallProduct[];
+}) {
   const [pending, startTransition] = useTransition();
   const [choice, setChoice] = useState<DatesChoice>({ preset: "planned" });
   const [choosing, setChoosing] = useState(false);
   const current = today ? currentChoice(choice, today) : choice;
+  const earlier = today ? earlierShortfalls(shortfalls, unknownNeeds, chosenRange(current, today)) : new Map<string, number>();
+  const named = sortByName(shortfallProducts.filter((product) => earlier.has(product.id)))
+    .map(({ id, name, defaultUnit }) => `${name} ${formatQuantity(earlier.get(id)!, defaultUnit)}`)
+    .join(", ");
   return (
     <div className="card shopping-generate">
       <h2>{t("shopping.fromShortfalls")}</h2>
@@ -450,6 +496,7 @@ function FromShortfalls({ today }: { today: string | null }) {
         {t("shopping.generate")}
       </button>
       <p>{t("shopping.generateKeeps")}</p>
+      {named && <p className="shopping-earlier">{t("shopping.earlierShort", { products: named })}</p>}
     </div>
   );
 }

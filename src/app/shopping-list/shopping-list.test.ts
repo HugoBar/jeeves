@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 import { ShoppingListView } from "./shopping-list";
 
 // Wednesday 11 Nov 2026, for the viewer: the Planner's week runs 9-15 Nov.
-const render = (today: string | null) => renderToStaticMarkup(createElement(ShoppingListView, { items: [], today, products: [], candidates: [], shortfalls: [] }));
+const render = (today: string | null) => renderToStaticMarkup(createElement(ShoppingListView, { items: [], today, products: [], candidates: [], shortfalls: [], unknownNeeds: [], shortfallProducts: [] }));
 const text = (html: string) => html.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ");
 
 describe("the empty Shopping List", () => {
@@ -55,11 +55,11 @@ describe("the Shopping List with items", () => {
     item("Whole milk", 1400, "ml", { name: "Carton", amount: 1000 }),
     item("Salmon fillet", 150, "g"),
   ];
-  const html = renderToStaticMarkup(createElement(ShoppingListView, { items, today: "2026-11-11", products: [], candidates: [], shortfalls: [] }));
+  const html = renderToStaticMarkup(createElement(ShoppingListView, { items, today: "2026-11-11", products: [], candidates: [], shortfalls: [], unknownNeeds: [], shortfallProducts: [] }));
 
   it("shows how many items it holds", () => {
     expect(text(html)).toContain("3 items");
-    const one = renderToStaticMarkup(createElement(ShoppingListView, { items: [items[2]!], today: "2026-11-11", products: [], candidates: [], shortfalls: [] }));
+    const one = renderToStaticMarkup(createElement(ShoppingListView, { items: [items[2]!], today: "2026-11-11", products: [], candidates: [], shortfalls: [], unknownNeeds: [], shortfallProducts: [] }));
     expect(text(one)).toContain("1 item");
   });
 
@@ -102,7 +102,7 @@ describe("Stock uncertain", () => {
   });
   const items = [item("Spinach"), item("Salmon fillet")];
   const render = (candidates: ReturnType<typeof unconfirmed>[], today: string | null = "2026-11-11", listed = items) =>
-    renderToStaticMarkup(createElement(ShoppingListView, { items: listed, today, products: [], candidates, shortfalls: [] }));
+    renderToStaticMarkup(createElement(ShoppingListView, { items: listed, today, products: [], candidates, shortfalls: [], unknownNeeds: [], shortfallProducts: [] }));
 
   it("warns while Meals are Unconfirmed, with a Review link to Needs confirmation", () => {
     const html = render([unconfirmed("2026-11-09", []), unconfirmed("2026-11-10", [])]);

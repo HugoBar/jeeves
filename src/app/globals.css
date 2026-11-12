@@ -4630,6 +4630,13 @@ body:has(.needs-confirmation-locked) :is(.top-menu, .bottom-menu, a.app-badge) {
   font-size: var(--text-meta);
 }
 
+/* What earlier Meals are short of: it changes with the dates, so it reads
+   darker and bolder than the fixed line above it. */
+.shopping-generate .shopping-earlier {
+  color: var(--color-ink);
+  font-weight: 600;
+}
+
 /* The dates Generate works over, which opens Choose dates. */
 .shopping-dates {
   --button-bg: var(--color-inset);

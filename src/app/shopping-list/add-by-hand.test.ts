@@ -79,7 +79,7 @@ const render = (
 ) =>
   act(() =>
     root.render(
-      createElement(ShoppingListView, { items, today: "2026-11-11", products: shown, candidates: [], shortfalls }),
+      createElement(ShoppingListView, { items, today: "2026-11-11", products: shown, candidates: [], shortfalls, unknownNeeds: [], shortfallProducts: [] }),
     ),
   );
 
