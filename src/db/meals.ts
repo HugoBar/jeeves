@@ -9,13 +9,15 @@ import {
   type MealStatus,
   type NewMealFields,
 } from "@/core/meals";
+import type { Weekday } from "@/core/meal-series";
 import type { DefaultUnit } from "@/core/units";
 import type { FoodCategory } from "./food-categories";
 import type { Db } from "./index";
 import type { MealType } from "./meal-types";
+import { startMealSeries } from "./meal-series";
 import { listActiveProducts } from "./products";
 import { finalCategoryIdsByRecipe, listActiveRecipes } from "./recipes";
-import { foodCategories, mealSlots, meals, mealTypes, products, recipes } from "./schema";
+import { foodCategories, mealSeries, mealSlots, meals, mealTypes, products, recipes } from "./schema";
 
 // What a Meal Slot holds, with what its card needs of its Recipe or Product.
 // That Recipe or Product may be Archived: the slot keeps it.
@@ -39,11 +41,13 @@ export type MealSlot = {
 
 // A Meal as the planner shows it, with what its card needs of its Meal Type
 // and its slots in order. That Meal Type may be Archived: the Meal keeps it.
+// `repeats` are its Meal Series' days, Monday first; null if it has none.
 export interface Meal extends NewMealFields {
   id: string;
   createdAt: Date;
   status: MealStatus;
   untracked: boolean;
+  repeats: Weekday[] | null;
   mealType: Pick<MealType, "seedKey" | "name" | "allowsLeftovers"> & { archived: boolean };
   slots: MealSlot[];
 }
@@ -59,6 +63,7 @@ function selectMeals(db: Db) {
       mealTypeId: meals.mealTypeId,
       status: meals.status,
       untracked: meals.untracked,
+      repeats: mealSeries.weekdays,
       mealType: {
         seedKey: mealTypes.seedKey,
         name: mealTypes.name,
@@ -67,7 +72,8 @@ function selectMeals(db: Db) {
       },
     })
     .from(meals)
-    .innerJoin(mealTypes, eq(meals.mealTypeId, mealTypes.id));
+    .innerJoin(mealTypes, eq(meals.mealTypeId, mealTypes.id))
+    .leftJoin(mealSeries, eq(meals.seriesId, mealSeries.id));
 }
 
 // Each Meal's slots in order, by Meal id.
@@ -169,16 +175,20 @@ export async function getMeal(db: Db, id: string): Promise<Meal | undefined> {
 // `slots`, the ones on the Meal form, are added in order by addMealSlot: added
 // by hand, or copied empty from a Meal Template, which the Meal keeps no link
 // to (data-model Q5). Each must already be checked by core's
-// parseNewMealSlots. If one can't be added, nothing is written.
+// parseNewMealSlots. If one can't be added, nothing is written. `repeatOn`,
+// checked by core's parseRepeatOn, starts a Meal Series from it; none is no
+// repeat.
 export async function createMeal(
   db: Db,
   fields: Omit<NewMealFields, "untracked"> & Partial<Pick<NewMealFields, "untracked">>,
   slots: readonly MealFormSlot[] = [],
+  repeatOn: readonly Weekday[] = [],
 ): Promise<{ id: string }> {
   return db.transaction(async (tx) => {
     const [row] = await tx.insert(meals).values(fields).returning({ id: meals.id });
     // One after another, so each goes after the one before.
     for (const slot of slots) await addMealSlot(tx, row!.id, slot);
+    if (repeatOn.length > 0) await startMealSeries(tx, row!.id, repeatOn);
     return row!;
   });
 }
@@ -189,9 +199,16 @@ const changeable = (id: string) => and(eq(meals.id, id), eq(meals.status, "plann
 
 // Its Meal Type never changes. `slots`, Edit Meal's slot changes, must
 // already be checked by core's parseMealSlotChanges; they are written with
-// the rest, or not at all. False, changing nothing, if the Meal is gone,
-// Confirmed or Skipped.
-export async function updateMeal(db: Db, id: string, changes: MealChanges, slots?: MealSlotChanges): Promise<boolean> {
+// the rest, or not at all. `repeatOn`, checked by core's parseRepeatOn,
+// starts a Meal Series from the Meal as saved, unless it is already in one.
+// False, changing nothing, if the Meal is gone, Confirmed or Skipped.
+export async function updateMeal(
+  db: Db,
+  id: string,
+  changes: MealChanges,
+  slots?: MealSlotChanges,
+  repeatOn: readonly Weekday[] = [],
+): Promise<boolean> {
   return db.transaction(async (tx) => {
     // Holds the Meal, so its Confirmation, another save, or a slot added or
     // removed elsewhere waits.
@@ -199,6 +216,7 @@ export async function updateMeal(db: Db, id: string, changes: MealChanges, slots
     if (!meal) return false;
     await tx.update(meals).set(changes).where(eq(meals.id, id));
     if (slots) await changeMealSlots(tx, id, slots);
+    if (repeatOn.length > 0) await startMealSeries(tx, id, repeatOn);
     return true;
   });
 }

@@ -134,6 +134,13 @@
       "when": 1794262997775,
       "tag": "0018_shopping_list_items",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1794514481085,
+      "tag": "0019_meal_series",
+      "breakpoints": true
     }
   ]
 }
