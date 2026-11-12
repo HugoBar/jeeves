@@ -159,6 +159,7 @@ export interface ListedItem {
   productId: string;
   quantity: number | null;
   ticked: boolean;
+  source: ShoppingListSource;
 }
 
 // What Generate changes: new unticked items, and unticked items raised to a
@@ -272,23 +273,30 @@ export function planAddByHand(packAmount: number | null, items: readonly ListedI
 }
 
 // What unticking an item changes: just its tick, or, when its Product
-// already has an unticked item, that item takes its amount and it goes.
-export type UntickPlan = { kind: "untick" } | { kind: "merge"; into: string; quantity: number | null };
+// already has an unticked item, that item takes its amount and source, and it
+// goes.
+export type UntickPlan =
+  | { kind: "untick" }
+  | { kind: "merge"; into: string; quantity: number | null; source: ShoppingListSource };
 
 // A Product has at most one unticked item (data-model T7), so unticking one
 // beside it adds the two together, counting no amount as 0; with neither
-// holding one the sum has none either. `items` are its Product's items.
+// holding one the sum has none either. Part of the sum was chosen if either
+// was added by hand, so it then counts as added by hand. `items` are its
+// Product's items.
 export function planUntick(id: string, items: readonly ListedItem[]): UntickPlan {
   const unticked = items.find((item) => !item.ticked && item.id !== id);
   if (!unticked) return { kind: "untick" };
   const own = items.filter((item) => item.id === id);
-  return { kind: "merge", into: unticked.id, quantity: sumAmounts([...own, unticked]) };
+  const merged = [...own, unticked];
+  return { kind: "merge", into: unticked.id, quantity: sumAmounts(merged), source: mergedSource(merged) };
 }
 
 // What unticking every item changes: the items left, each its Product's one
-// unticked item with the amount it now holds, and the items that go.
+// unticked item with the amount and source it now holds, and the items that
+// go.
 export interface UntickAllPlan {
-  keep: { id: string; quantity: number | null }[];
+  keep: { id: string; quantity: number | null; source: ShoppingListSource }[];
   remove: string[];
 }
 
@@ -301,10 +309,16 @@ export function planUntickAll(items: readonly ListedItem[]): UntickAllPlan {
   const plan: UntickAllPlan = { keep: [], remove: [] };
   for (const own of byProduct.values()) {
     const kept = own.find((item) => !item.ticked) ?? own[0]!;
-    plan.keep.push({ id: kept.id, quantity: sumAmounts(own) });
+    plan.keep.push({ id: kept.id, quantity: sumAmounts(own), source: mergedSource(own) });
     plan.remove.push(...own.filter((item) => item !== kept).map((item) => item.id));
   }
   return plan;
+}
+
+// Where items added together came from: by hand if any was, as part of the
+// sum was then chosen, else from Shortfalls.
+function mergedSource(items: readonly ListedItem[]): ShoppingListSource {
+  return items.some((item) => item.source === "manual") ? "manual" : "shortfall";
 }
 
 // Items' amounts added together, counting no amount as 0; none if none has one.

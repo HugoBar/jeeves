@@ -30,6 +30,15 @@ export interface ShoppingListItem {
   product: { id: string; name: string; defaultUnit: DefaultUnit; packSize: PackSize | null };
 }
 
+// What the core planners read of each item.
+const listedItem = {
+  id: shoppingListItems.id,
+  productId: shoppingListItems.productId,
+  quantity: shoppingListItems.quantity,
+  ticked: shoppingListItems.ticked,
+  source: shoppingListItems.source,
+};
+
 // The one current Shopping List, by Product name.
 export async function listShoppingList(db: Db): Promise<ShoppingListItem[]> {
   const rows = await db
@@ -69,12 +78,7 @@ export async function generateShoppingList(db: Db, from: string, to: string): Pr
     await tx.execute(sql`lock table ${shoppingListItems} in exclusive mode`);
     const { meals, products } = await loadStockProjection(tx, to);
     const items = await tx
-      .select({
-        id: shoppingListItems.id,
-        productId: shoppingListItems.productId,
-        quantity: shoppingListItems.quantity,
-        ticked: shoppingListItems.ticked,
-      })
+      .select(listedItem)
       .from(shoppingListItems);
     const plan = planGenerate(shortfallsBetween(meals, products, from, to), items);
     if (plan.add.length > 0) {
@@ -102,12 +106,7 @@ export async function addProductByHand(
       .where(and(eq(products.id, productId), isNull(products.archivedAt)));
     if (!product) return { ok: false, error: "unavailable" } as const;
     const items = await tx
-      .select({
-        id: shoppingListItems.id,
-        productId: shoppingListItems.productId,
-        quantity: shoppingListItems.quantity,
-        ticked: shoppingListItems.ticked,
-      })
+      .select(listedItem)
       .from(shoppingListItems)
       .where(eq(shoppingListItems.productId, productId));
     const plan = planAddByHand(toPackSize(product)?.amount ?? null, items);
@@ -157,9 +156,10 @@ export async function removeShoppingListItem(db: Db, id: string): Promise<void> 
 }
 
 // Ticks an item as bought, or unticks it. Neither changes Stock. Unticked
-// beside its Product's unticked item, it adds its amount to that one and
-// goes, as a Product has one unticked item at most. The list is locked
-// meanwhile, like Generate. Gone already is fine: there is nothing to tick.
+// beside its Product's unticked item, it adds its amount to that one, which
+// counts as added by hand if either was, and goes, as a Product has one
+// unticked item at most. The list is locked meanwhile, like Generate. Gone
+// already is fine: there is nothing to tick.
 export async function setShoppingListItemTicked(db: Db, id: string, ticked: boolean): Promise<void> {
   await db.transaction(async (tx) => {
     await tx.execute(sql`lock table ${shoppingListItems} in exclusive mode`);
@@ -173,12 +173,7 @@ export async function setShoppingListItemTicked(db: Db, id: string, ticked: bool
       return;
     }
     const items = await tx
-      .select({
-        id: shoppingListItems.id,
-        productId: shoppingListItems.productId,
-        quantity: shoppingListItems.quantity,
-        ticked: shoppingListItems.ticked,
-      })
+      .select(listedItem)
       .from(shoppingListItems)
       .where(eq(shoppingListItems.productId, item.productId));
     const plan = planUntick(id, items);
@@ -187,13 +182,16 @@ export async function setShoppingListItemTicked(db: Db, id: string, ticked: bool
       return;
     }
     await tx.delete(shoppingListItems).where(eq(shoppingListItems.id, id));
-    await tx.update(shoppingListItems).set({ quantity: plan.quantity }).where(eq(shoppingListItems.id, plan.into));
+    await tx
+      .update(shoppingListItems)
+      .set({ quantity: plan.quantity, source: plan.source })
+      .where(eq(shoppingListItems.id, plan.into));
   });
 }
 
 // Ticks every item, or unticks every item. Neither changes Stock. Unticked,
-// a Product's items are added into one, as unticking one does. The list is
-// locked meanwhile, like Generate.
+// a Product's items are added into one, as unticking one does, added by hand
+// if any was. The list is locked meanwhile, like Generate.
 export async function setAllShoppingListItemsTicked(db: Db, ticked: boolean): Promise<void> {
   await db.transaction(async (tx) => {
     await tx.execute(sql`lock table ${shoppingListItems} in exclusive mode`);
@@ -202,18 +200,13 @@ export async function setAllShoppingListItemsTicked(db: Db, ticked: boolean): Pr
       return;
     }
     const items = await tx
-      .select({
-        id: shoppingListItems.id,
-        productId: shoppingListItems.productId,
-        quantity: shoppingListItems.quantity,
-        ticked: shoppingListItems.ticked,
-      })
+      .select(listedItem)
       .from(shoppingListItems);
     const plan = planUntickAll(items);
     // The items that go first, so no Product has two unticked items meanwhile.
     if (plan.remove.length > 0) await tx.delete(shoppingListItems).where(inArray(shoppingListItems.id, plan.remove));
-    for (const { id, quantity } of plan.keep) {
-      await tx.update(shoppingListItems).set({ ticked, quantity }).where(eq(shoppingListItems.id, id));
+    for (const { id, quantity, source } of plan.keep) {
+      await tx.update(shoppingListItems).set({ ticked, quantity, source }).where(eq(shoppingListItems.id, id));
     }
   });
 }

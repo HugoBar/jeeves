@@ -30,7 +30,13 @@ describe("planGenerate", () => {
     expect(planGenerate(short, [])).toEqual({ add: [{ productId: "spinach", quantity: 250 }], raise: [] });
   });
 
-  const item = (id: string, quantity: number | null, ticked = false) => ({ id, productId: "spinach", quantity, ticked });
+  const item = (id: string, quantity: number | null, ticked = false) => ({
+    id,
+    productId: "spinach",
+    quantity,
+    ticked,
+    source: "shortfall" as const,
+  });
   const nothing = { add: [], raise: [] };
 
   it("raises a smaller unticked item to the Shortfall", () => {
@@ -79,7 +85,7 @@ describe("planGenerate", () => {
   it("changes nothing when run again on what it made", () => {
     const once = planGenerate(new Map([["spinach", 250], ["rice", 80]]), [item("a", 100)]);
     expect(once).toEqual({ add: [{ productId: "rice", quantity: 80 }], raise: [{ id: "a", quantity: 250 }] });
-    const after = [item("a", 250), { id: "r", productId: "rice", quantity: 80, ticked: false }];
+    const after = [item("a", 250), { id: "r", productId: "rice", quantity: 80, ticked: false, source: "shortfall" as const }];
     expect(planGenerate(new Map([["spinach", 250], ["rice", 80]]), after)).toEqual(nothing);
   });
 });
@@ -99,7 +105,13 @@ describe("packsCovering", () => {
 describe("planAddByHand", () => {
   // Coffee beans, sold in 250 g bags.
   const bag = 250;
-  const item = (id: string, quantity: number | null, ticked = false) => ({ id, productId: "coffee", quantity, ticked });
+  const item = (id: string, quantity: number | null, ticked = false) => ({
+    id,
+    productId: "coffee",
+    quantity,
+    ticked,
+    source: "shortfall" as const,
+  });
 
   it("puts one pack on a new item when the Product isn't on the list", () => {
     expect(planAddByHand(bag, [])).toEqual({ kind: "add", quantity: 250 });
@@ -235,34 +247,71 @@ describe("parseItemAmount", () => {
 });
 
 describe("planUntick", () => {
-  const item = (id: string, quantity: number | null, ticked = false) => ({ id, productId: "spinach", quantity, ticked });
+  const item = (id: string, quantity: number | null, ticked = false, source: "shortfall" | "manual" = "shortfall") => ({
+    id,
+    productId: "spinach",
+    quantity,
+    ticked,
+    source,
+  });
 
   it("unticks the item when its Product has no other unticked item", () => {
     expect(planUntick("a", [item("a", 100, true), item("b", 50, true)])).toEqual({ kind: "untick" });
   });
 
   it("adds it to the Product's unticked item, so the Product still has one", () => {
-    expect(planUntick("a", [item("a", 100, true), item("b", 150)])).toEqual({ kind: "merge", into: "b", quantity: 250 });
+    expect(planUntick("a", [item("a", 100, true), item("b", 150)])).toEqual({
+      kind: "merge",
+      into: "b",
+      quantity: 250,
+      source: "shortfall",
+    });
+  });
+
+  it("leaves the item it adds into added by hand if either was", () => {
+    expect(planUntick("a", [item("a", 100, true, "manual"), item("b", 150)])).toMatchObject({ source: "manual" });
+    expect(planUntick("a", [item("a", 100, true), item("b", 150, false, "manual")])).toMatchObject({ source: "manual" });
   });
 
   it("counts no amount as 0", () => {
-    expect(planUntick("a", [item("a", null, true), item("b", 150)])).toEqual({ kind: "merge", into: "b", quantity: 150 });
-    expect(planUntick("a", [item("a", 100, true), item("b", null)])).toEqual({ kind: "merge", into: "b", quantity: 100 });
+    expect(planUntick("a", [item("a", null, true), item("b", 150)])).toEqual({
+      kind: "merge",
+      into: "b",
+      quantity: 150,
+      source: "shortfall",
+    });
+    expect(planUntick("a", [item("a", 100, true), item("b", null)])).toEqual({
+      kind: "merge",
+      into: "b",
+      quantity: 100,
+      source: "shortfall",
+    });
   });
 
   it("leaves no amount when neither has one", () => {
-    expect(planUntick("a", [item("a", null, true), item("b", null)])).toEqual({ kind: "merge", into: "b", quantity: null });
+    expect(planUntick("a", [item("a", null, true), item("b", null)])).toEqual({
+      kind: "merge",
+      into: "b",
+      quantity: null,
+      source: "shortfall",
+    });
   });
 });
 
 describe("planUntickAll", () => {
-  const item = (id: string, productId: string, quantity: number | null, ticked: boolean) => ({ id, productId, quantity, ticked });
+  const item = (
+    id: string,
+    productId: string,
+    quantity: number | null,
+    ticked: boolean,
+    source: "shortfall" | "manual" = "shortfall",
+  ) => ({ id, productId, quantity, ticked, source });
 
   it("unticks every item whose Product has only that one", () => {
-    expect(planUntickAll([item("a", "rice", 100, true), item("b", "oats", null, true)])).toEqual({
+    expect(planUntickAll([item("a", "rice", 100, true), item("b", "oats", null, true, "manual")])).toEqual({
       keep: [
-        { id: "a", quantity: 100 },
-        { id: "b", quantity: null },
+        { id: "a", quantity: 100, source: "shortfall" },
+        { id: "b", quantity: null, source: "manual" },
       ],
       remove: [],
     });
@@ -271,19 +320,31 @@ describe("planUntickAll", () => {
   it("adds a Product's items into its unticked one, so it has one item", () => {
     expect(
       planUntickAll([item("a", "spinach", 100, true), item("b", "spinach", 150, false), item("c", "spinach", 50, true)]),
-    ).toEqual({ keep: [{ id: "b", quantity: 300 }], remove: ["a", "c"] });
+    ).toEqual({ keep: [{ id: "b", quantity: 300, source: "shortfall" }], remove: ["a", "c"] });
+  });
+
+  it("leaves the item kept added by hand if any of its Product's items was", () => {
+    expect(
+      planUntickAll([item("a", "spinach", 100, true, "manual"), item("b", "spinach", 150, false), item("c", "oats", 50, true)]),
+    ).toEqual({
+      keep: [
+        { id: "b", quantity: 250, source: "manual" },
+        { id: "c", quantity: 50, source: "shortfall" },
+      ],
+      remove: ["a"],
+    });
   });
 
   it("adds ticked items into the first of them when none is unticked, counting no amount as 0", () => {
     expect(planUntickAll([item("a", "eggs", 6, true), item("b", "eggs", null, true)])).toEqual({
-      keep: [{ id: "a", quantity: 6 }],
+      keep: [{ id: "a", quantity: 6, source: "shortfall" }],
       remove: ["b"],
     });
   });
 
   it("leaves no amount when none of a Product's items has one", () => {
     expect(planUntickAll([item("a", "salt", null, true), item("b", "salt", null, true)])).toEqual({
-      keep: [{ id: "a", quantity: null }],
+      keep: [{ id: "a", quantity: null, source: "shortfall" }],
       remove: ["b"],
     });
   });
