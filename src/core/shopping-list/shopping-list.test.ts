@@ -6,13 +6,16 @@ import {
   datedShortfalls,
   generatePresets,
   isGenerateRange,
+  packsAmount,
   packsCovering,
+  parseItemAmount,
   planAddByHand,
   planGenerate,
   planUntick,
   planUntickAll,
   restockStart,
   runningLow,
+  stepItemAmount,
   stockUncertainty,
 } from "./index";
 
@@ -56,6 +59,18 @@ describe("planGenerate", () => {
 
   it("leaves an item whose Product is no longer short as it is", () => {
     expect(planGenerate(new Map(), [item("a", 100)])).toEqual(nothing);
+  });
+
+  it("keeps an amount set by hand above the Shortfall", () => {
+    // 2 bags of 500 g set by hand, 250 g short.
+    expect(planGenerate(short, [item("a", 1000)])).toEqual(nothing);
+  });
+
+  it("raises an amount set by hand below the Shortfall", () => {
+    expect(planGenerate(new Map([["spinach", 1200]]), [item("a", 1000)])).toEqual({
+      add: [],
+      raise: [{ id: "a", quantity: 1200 }],
+    });
   });
 
   it("changes nothing when run again on what it made", () => {
@@ -134,6 +149,85 @@ describe("restockStart", () => {
 
   it("keeps the 2 decimals Stock holds", () => {
     expect(restockStart(0.25, 0.1)).toBe(0.3);
+  });
+
+  it("starts at the packs set on the list", () => {
+    expect(restockStart(packsAmount(3, 500), 500)).toBe(1500);
+    expect(restockStart(packsAmount(3, 0.1), 0.1)).toBe(0.3);
+  });
+});
+
+describe("packsAmount", () => {
+  it("is the packs times the Pack Size amount", () => {
+    expect(packsAmount(2, 500)).toBe(1000);
+  });
+
+  it("keeps the 2 decimals Stock holds, and reads back as the same packs", () => {
+    expect(packsAmount(3, 0.1)).toBe(0.3);
+    expect(packsCovering(packsAmount(3, 0.1), 0.1)).toBe(3);
+    expect(packsCovering(packsAmount(7, 0.33), 0.33)).toBe(7);
+  });
+});
+
+describe("stepItemAmount", () => {
+  it("adds or takes off a whole pack, from the packs shown", () => {
+    // 100 g shows as 1 bag of 500 g.
+    expect(stepItemAmount(100, 500, "g", 1)).toBe(1000);
+    expect(stepItemAmount(1400, 1000, "ml", -1)).toBe(1000);
+  });
+
+  it("never goes below 1 pack", () => {
+    expect(stepItemAmount(500, 500, "g", -1)).toBeNull();
+    expect(stepItemAmount(100, 500, "g", -1)).toBeNull();
+  });
+
+  it("starts at 1 pack for an item with no amount", () => {
+    expect(stepItemAmount(null, 500, "g", 1)).toBe(500);
+    expect(stepItemAmount(null, 500, "g", -1)).toBeNull();
+  });
+
+  it("steps by 100 g or ml, or by 1 pc, without a Pack Size", () => {
+    expect(stepItemAmount(150, null, "g", 1)).toBe(250);
+    expect(stepItemAmount(600, null, "ml", -1)).toBe(500);
+    expect(stepItemAmount(3, null, "pc", 1)).toBe(4);
+  });
+
+  it("never goes below a single step without a Pack Size", () => {
+    expect(stepItemAmount(150, null, "g", -1)).toBe(100);
+    expect(stepItemAmount(100, null, "g", -1)).toBeNull();
+    expect(stepItemAmount(1, null, "pc", -1)).toBeNull();
+  });
+
+  it("starts at one step for an item with no amount, without a Pack Size", () => {
+    expect(stepItemAmount(null, null, "g", 1)).toBe(100);
+    expect(stepItemAmount(null, null, "pc", -1)).toBeNull();
+  });
+});
+
+describe("parseItemAmount", () => {
+  it("reads whole packs with a Pack Size, stored in the Default Unit", () => {
+    expect(parseItemAmount(" 2 ", 500)).toEqual({ ok: true, quantity: 1000 });
+  });
+
+  it("refuses packs that are not whole or not above 0", () => {
+    for (const typed of ["0", "-1", "1.5", "", "two"]) {
+      expect(parseItemAmount(typed, 500)).toEqual({ ok: false, error: "notWholePacks" });
+    }
+  });
+
+  it("refuses more packs than the list can hold", () => {
+    expect(parseItemAmount("1000000", 500)).toEqual({ ok: false, error: "notWholePacks" });
+  });
+
+  it("reads an amount as Restock does without a Pack Size", () => {
+    expect(parseItemAmount("600", null)).toEqual({ ok: true, quantity: 600 });
+    expect(parseItemAmount("0.255", null)).toEqual({ ok: true, quantity: 0.26 });
+  });
+
+  it("refuses an amount of 0 or below without a Pack Size", () => {
+    for (const typed of ["0", "-5", ""]) {
+      expect(parseItemAmount(typed, null)).toEqual({ ok: false, error: "notAboveZero" });
+    }
   });
 });
 
