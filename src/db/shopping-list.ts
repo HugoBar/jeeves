@@ -1,5 +1,6 @@
 import "server-only";
 import { and, eq, inArray, isNull, lt, sql } from "drizzle-orm";
+import { AMOUNT_COLUMN, roundForColumn } from "@/core/amounts";
 import { productsInSlotOrder } from "@/core/confirmation";
 import { sortByName } from "@/core/names";
 import type { PackSize } from "@/core/products";
@@ -121,6 +122,32 @@ export async function addProductByHand(
       .returning({ id: shoppingListItems.id });
     return { ok: true, itemId: added!.id } as const;
   });
+}
+
+// Sets an unticked item's amount by hand (spec "Shopping List"), in its
+// Product's Default Unit; false, changing nothing, for an item ticked or gone
+// meanwhile, as what was bought is entered at Restock. Part of it was then
+// chosen, so it counts as added by hand. Removing it is ✕'s job, so an
+// amount of 0 or below is a mistake.
+export async function setShoppingListItemQuantity(db: Db, id: string, quantity: number): Promise<boolean> {
+  if (!(quantity > 0)) throw new Error("A Shopping List amount must be above 0");
+  const set = await db
+    .update(shoppingListItems)
+    .set({ quantity: roundForColumn(quantity, AMOUNT_COLUMN), source: "manual" })
+    .where(and(eq(shoppingListItems.id, id), eq(shoppingListItems.ticked, false)))
+    .returning({ id: shoppingListItems.id });
+  return set.length > 0;
+}
+
+// The amount of an item's Pack Size, null without one, which a typed amount
+// is read with; null for an item gone.
+export async function shoppingListItemPackAmount(db: Db, id: string): Promise<{ packAmount: number | null } | null> {
+  const [row] = await db
+    .select({ packSizeName: products.packSizeName, packSizeAmount: products.packSizeAmount })
+    .from(shoppingListItems)
+    .innerJoin(products, eq(shoppingListItems.productId, products.id))
+    .where(eq(shoppingListItems.id, id));
+  return row ? { packAmount: toPackSize(row)?.amount ?? null } : null;
 }
 
 // Takes an item off the list. Stock doesn't change, and Generate adds it back
