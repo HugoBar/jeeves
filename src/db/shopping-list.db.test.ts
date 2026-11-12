@@ -129,7 +129,7 @@ describe("addProductByHand", () => {
     expect(await itemsOf(cod.id)).toEqual([{ id: expect.any(String), quantity: null, source: "manual", ticked: false }]);
   });
 
-  it("adds the pack to the Product's unticked item, which keeps where it came from", async () => {
+  it("adds the pack to the Product's unticked item, which then counts as added by hand", async () => {
     const coffee = await aProduct("Coffee beans", { name: "bag", amount: 250 });
     const [made] = await db
       .insert(shoppingListItems)
@@ -139,7 +139,7 @@ describe("addProductByHand", () => {
     const result = await addProductByHand(db, coffee.id);
 
     expect(result).toEqual({ ok: true, itemId: made!.id });
-    expect(await itemsOf(coffee.id)).toEqual([{ id: made!.id, quantity: 350, source: "shortfall", ticked: false }]);
+    expect(await itemsOf(coffee.id)).toEqual([{ id: made!.id, quantity: 350, source: "manual", ticked: false }]);
   });
 
   it("puts the pack on a new item when the Product's only item is ticked", async () => {
@@ -154,7 +154,7 @@ describe("addProductByHand", () => {
     ]);
   });
 
-  it("leaves the unticked item of a Product without a Pack Size as it is", async () => {
+  it("leaves the amount of a Product without a Pack Size as it is, now counted as added by hand", async () => {
     const salmon = await aProduct("Salmon fillet");
     const [made] = await db
       .insert(shoppingListItems)
@@ -162,7 +162,7 @@ describe("addProductByHand", () => {
       .returning({ id: shoppingListItems.id });
 
     expect(await addProductByHand(db, salmon.id)).toEqual({ ok: true, itemId: made!.id });
-    expect(await itemsOf(salmon.id)).toEqual([{ id: made!.id, quantity: 150, source: "shortfall", ticked: false }]);
+    expect(await itemsOf(salmon.id)).toEqual([{ id: made!.id, quantity: 150, source: "manual", ticked: false }]);
   });
 
   it("refuses an Archived Product, and adds nothing", async () => {

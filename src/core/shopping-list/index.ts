@@ -253,7 +253,9 @@ export function parseItemAmount(text: string, packAmount: number | null): Parsed
 }
 
 // What adding a Product by hand changes: a new item, its unticked item
-// raised, or, with no pack to add, its unticked item kept as it is.
+// raised, or, with no pack to add, its unticked item's amount kept as it is.
+// An unticked item it lands on, raised or kept, then counts as added by hand,
+// as part of it was chosen (spec "Shopping List").
 export type HandAddPlan =
   | { kind: "add"; quantity: number | null }
   | { kind: "raise"; id: string; quantity: number }

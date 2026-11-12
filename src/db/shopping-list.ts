@@ -91,9 +91,10 @@ export async function generateShoppingList(db: Db, from: string, to: string): Pr
 }
 
 // Adds one pack of a Product by hand (spec "Shopping List"): to its unticked
-// item, or on a new one. `itemId` is the item added or changed. A Product
-// Archived or gone meanwhile is unavailable. The list is locked meanwhile, like
-// Generate, so the Product never gets two unticked items.
+// item, or on a new one. `itemId` is the item added or changed, which counts
+// as added by hand. A Product Archived or gone meanwhile is unavailable. The
+// list is locked meanwhile, like Generate, so the Product never gets two
+// unticked items.
 export async function addProductByHand(
   db: Db,
   productId: string,
@@ -110,9 +111,12 @@ export async function addProductByHand(
       .from(shoppingListItems)
       .where(eq(shoppingListItems.productId, productId));
     const plan = planAddByHand(toPackSize(product)?.amount ?? null, items);
-    if (plan.kind === "keep") return { ok: true, itemId: plan.id } as const;
-    if (plan.kind === "raise") {
-      await tx.update(shoppingListItems).set({ quantity: plan.quantity }).where(eq(shoppingListItems.id, plan.id));
+    if (plan.kind !== "add") {
+      const quantity = plan.kind === "raise" ? { quantity: plan.quantity } : {};
+      await tx
+        .update(shoppingListItems)
+        .set({ ...quantity, source: "manual" })
+        .where(eq(shoppingListItems.id, plan.id));
       return { ok: true, itemId: plan.id } as const;
     }
     const [added] = await tx
