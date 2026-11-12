@@ -129,7 +129,7 @@ describe("addProductByHand", () => {
     expect(await itemsOf(cod.id)).toEqual([{ id: expect.any(String), quantity: null, source: "manual", ticked: false }]);
   });
 
-  it("adds the pack to the Product's unticked item, which keeps where it came from", async () => {
+  it("adds the pack to the Product's unticked item, which then counts as added by hand", async () => {
     const coffee = await aProduct("Coffee beans", { name: "bag", amount: 250 });
     const [made] = await db
       .insert(shoppingListItems)
@@ -139,7 +139,7 @@ describe("addProductByHand", () => {
     const result = await addProductByHand(db, coffee.id);
 
     expect(result).toEqual({ ok: true, itemId: made!.id });
-    expect(await itemsOf(coffee.id)).toEqual([{ id: made!.id, quantity: 350, source: "shortfall", ticked: false }]);
+    expect(await itemsOf(coffee.id)).toEqual([{ id: made!.id, quantity: 350, source: "manual", ticked: false }]);
   });
 
   it("puts the pack on a new item when the Product's only item is ticked", async () => {
@@ -154,7 +154,7 @@ describe("addProductByHand", () => {
     ]);
   });
 
-  it("leaves the unticked item of a Product without a Pack Size as it is", async () => {
+  it("leaves the amount of a Product without a Pack Size as it is, now counted as added by hand", async () => {
     const salmon = await aProduct("Salmon fillet");
     const [made] = await db
       .insert(shoppingListItems)
@@ -162,7 +162,7 @@ describe("addProductByHand", () => {
       .returning({ id: shoppingListItems.id });
 
     expect(await addProductByHand(db, salmon.id)).toEqual({ ok: true, itemId: made!.id });
-    expect(await itemsOf(salmon.id)).toEqual([{ id: made!.id, quantity: 150, source: "shortfall", ticked: false }]);
+    expect(await itemsOf(salmon.id)).toEqual([{ id: made!.id, quantity: 150, source: "manual", ticked: false }]);
   });
 
   it("refuses an Archived Product, and adds nothing", async () => {
@@ -178,7 +178,7 @@ describe("setShoppingListItemTicked", () => {
   const itemsOf = async (productId: string) =>
     (await listShoppingList(db))
       .filter((item) => item.product.id === productId)
-      .map(({ id, quantity, ticked }) => ({ id, quantity, ticked }))
+      .map(({ id, quantity, source, ticked }) => ({ id, quantity, source, ticked }))
       .sort((a, b) => Number(b.ticked) - Number(a.ticked));
 
   it("ticks an item and unticks it again, leaving Stock as it is", async () => {
@@ -189,10 +189,10 @@ describe("setShoppingListItemTicked", () => {
       .returning({ id: shoppingListItems.id });
 
     await setShoppingListItemTicked(db, item!.id, true);
-    expect(await itemsOf(lentils.id)).toEqual([{ id: item!.id, quantity: 400, ticked: true }]);
+    expect(await itemsOf(lentils.id)).toEqual([{ id: item!.id, quantity: 400, source: "shortfall", ticked: true }]);
 
     await setShoppingListItemTicked(db, item!.id, false);
-    expect(await itemsOf(lentils.id)).toEqual([{ id: item!.id, quantity: 400, ticked: false }]);
+    expect(await itemsOf(lentils.id)).toEqual([{ id: item!.id, quantity: 400, source: "shortfall", ticked: false }]);
     const [after] = await db.select({ stock: products.stock }).from(products).where(eq(products.id, lentils.id));
     expect(after!.stock).toBe(0);
   });
@@ -209,7 +209,22 @@ describe("setShoppingListItemTicked", () => {
 
     await setShoppingListItemTicked(db, ticked!.id, false);
 
-    expect(await itemsOf(spinach.id)).toEqual([{ id: unticked!.id, quantity: 250, ticked: false }]);
+    expect(await itemsOf(spinach.id)).toEqual([{ id: unticked!.id, quantity: 250, source: "shortfall", ticked: false }]);
+  });
+
+  it("leaves the item it adds into added by hand when the unticked one was", async () => {
+    const kale = await aProduct("Kale");
+    const [ticked, unticked] = await db
+      .insert(shoppingListItems)
+      .values([
+        { productId: kale.id, quantity: 100, source: "manual", ticked: true },
+        { productId: kale.id, quantity: 150, source: "shortfall" },
+      ])
+      .returning({ id: shoppingListItems.id });
+
+    await setShoppingListItemTicked(db, ticked!.id, false);
+
+    expect(await itemsOf(kale.id)).toEqual([{ id: unticked!.id, quantity: 250, source: "manual", ticked: false }]);
   });
 
   it("does nothing to an item gone meanwhile", async () => {
@@ -369,7 +384,7 @@ describe("setAllShoppingListItemsTicked", () => {
 
   const summary = async () =>
     (await listShoppingList(db))
-      .map(({ product, quantity, ticked }) => ({ name: product.name, quantity, ticked }))
+      .map(({ product, quantity, source, ticked }) => ({ name: product.name, quantity, source, ticked }))
       .sort((a, b) => a.name.localeCompare(b.name) || Number(b.ticked) - Number(a.ticked));
 
   it("ticks every item", async () => {
@@ -383,25 +398,29 @@ describe("setAllShoppingListItemsTicked", () => {
     await setAllShoppingListItemsTicked(db, true);
 
     expect(await summary()).toEqual([
-      { name: "Green tea", quantity: 100, ticked: true },
-      { name: "Honey", quantity: 300, ticked: true },
+      { name: "Green tea", quantity: 100, source: "shortfall", ticked: true },
+      { name: "Honey", quantity: 300, source: "shortfall", ticked: true },
     ]);
   });
 
-  it("unticks every item, adding a Product's items into one", async () => {
+  it("unticks every item, adding a Product's items into one, added by hand if any was", async () => {
     const yoghurt = await aProduct("Greek yoghurt");
     const bread = await aProduct("Rye bread");
+    const tofu = await aProduct("Tofu");
     await db.insert(shoppingListItems).values([
-      { productId: yoghurt.id, quantity: 500, source: "shortfall", ticked: true },
+      { productId: yoghurt.id, quantity: 500, source: "manual", ticked: true },
       { productId: yoghurt.id, quantity: 250, source: "shortfall" },
       { productId: bread.id, quantity: null, source: "manual", ticked: true },
+      { productId: tofu.id, quantity: 200, source: "shortfall", ticked: true },
+      { productId: tofu.id, quantity: 100, source: "shortfall" },
     ]);
 
     await setAllShoppingListItemsTicked(db, false);
 
     expect(await summary()).toEqual([
-      { name: "Greek yoghurt", quantity: 750, ticked: false },
-      { name: "Rye bread", quantity: null, ticked: false },
+      { name: "Greek yoghurt", quantity: 750, source: "manual", ticked: false },
+      { name: "Rye bread", quantity: null, source: "manual", ticked: false },
+      { name: "Tofu", quantity: 300, source: "shortfall", ticked: false },
     ]);
   });
 });

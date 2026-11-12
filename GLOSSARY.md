@@ -63,7 +63,7 @@ The amount by which Projected Stock falls short of what a Meal Slot needs.
 _Avoid_: Missing stock, deficit
 
 **Shopping List**:
-The single, current list of Products to buy, filled from Shortfalls or by hand. Ticking an item marks it as bought without changing Stock; Restocking the ticked items adds them to Stock and removes them from the list.
+The single, current list of Products to buy, filled from Shortfalls or by hand. Ticking an item marks it as bought without changing Stock; Restocking the ticked items adds them to Stock and removes them from the list. An item from Shortfalls holds only what was worked out; once someone adds to it, sets its amount or merges it with an item added by hand, it counts as added by hand, since part of it was chosen.
 _Avoid_: Grocery list, cart
 
 ## Recipes

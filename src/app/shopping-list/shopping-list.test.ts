@@ -20,7 +20,7 @@ describe("the empty Shopping List", () => {
 
   it("offers Generate for the Planner's current week, and says what Generate keeps", () => {
     expect(text(html)).toContain("From Shortfalls Planned week · 9–15 Nov Generate");
-    expect(text(html)).toContain("Keeps items added by hand and anything already on the list, with its tick.");
+    expect(text(html)).toContain("Sets items from Shortfalls to what is short over these dates. Keeps ticked items, and never lowers items added by hand.");
   });
 
   it("shows the week across two months", () => {
@@ -104,16 +104,16 @@ describe("Stock uncertain", () => {
   const render = (candidates: ReturnType<typeof unconfirmed>[], today: string | null = "2026-11-11", listed = items) =>
     renderToStaticMarkup(createElement(ShoppingListView, { items: listed, today, products: [], candidates, shortfalls: [], unknownNeeds: [], shortfallProducts: [] }));
 
-  it("warns while Meals are Unconfirmed, with a Review link to Needs confirmation", () => {
+  it("warns while Meals are Unconfirmed, with a Review link to Needs confirmation, then Generate again", () => {
     const html = render([unconfirmed("2026-11-09", []), unconfirmed("2026-11-10", [])]);
-    expect(text(html)).toContain("Stock uncertain. 2 Meals are Unconfirmed, so some amounts may change. Review");
-    expect(html).toMatch(/<a[^>]*href="\/needs-confirmation"[^>]*>Review<\/a>/);
+    expect(text(html)).toContain("Stock uncertain. 2 Meals are Unconfirmed, so some amounts may change. Review them");
+    expect(html).toMatch(/<a[^>]*href="\/needs-confirmation"[^>]*>Review them<\/a>, then Generate again\./);
   });
 
   it("says 1 Meal is for one", () => {
-    expect(text(render([unconfirmed("2026-11-10", [], true)]))).toContain(
-      "Stock uncertain. 1 Meal is Unconfirmed, so some amounts may change.",
-    );
+    const html = render([unconfirmed("2026-11-10", [], true)]);
+    expect(text(html)).toContain("Stock uncertain. 1 Meal is Unconfirmed, so some amounts may change. Review them");
+    expect(html).toMatch(/Review them<\/a>, then Generate again\./);
   });
 
   it("works out Unconfirmed with the viewer's today", () => {

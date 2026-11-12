@@ -11,19 +11,26 @@ export const SHOPPING_LIST_SOURCES = ["shortfall", "manual"] as const;
 
 export type ShoppingListSource = (typeof SHOPPING_LIST_SOURCES)[number];
 
+// What Meals over a range of dates are short of, by Product id, in Default
+// Units, and the Products whose need there can't be worked out.
+export interface RangeShortfalls {
+  short: ReadonlyMap<string, number>;
+  unknown: ReadonlySet<string>;
+}
+
 // What the Meals from `from` to `to` are short of, by Product id, in Default
 // Units, summed over their slots. Meals before `from` take Stock first, as
 // the Planner's Shortfalls do, so `meals` holds every Meal up to `to`. A
-// Product whose need can't be worked out in any of these slots is left out:
-// part of what it needs is unknown.
+// Product whose need can't be worked out in any of these slots is left out
+// of `short`, as part of what it needs is unknown, and named in `unknown`.
 export function shortfallsBetween(
   meals: readonly ProjectedMeal[],
   products: ReadonlyMap<string, ProjectedProduct>,
   from: string,
   to: string,
-): Map<string, number> {
+): RangeShortfalls {
   const projection = projectStock(meals, products);
-  const totals = new Map<string, number>();
+  const short = new Map<string, number>();
   const unknown = new Set<string>();
   for (const meal of meals) {
     if (meal.date < from || meal.date > to) continue;
@@ -31,13 +38,13 @@ export function shortfallsBetween(
       const slotProjection = projection.get(slot.id);
       if (!slotProjection) continue;
       for (const { productId, amount } of slotProjection.shortfalls) {
-        totals.set(productId, roundForColumn((totals.get(productId) ?? 0) + amount, AMOUNT_COLUMN));
+        short.set(productId, roundForColumn((short.get(productId) ?? 0) + amount, AMOUNT_COLUMN));
       }
       for (const productId of slotProjection.unprojectable) unknown.add(productId);
     }
   }
-  for (const productId of unknown) totals.delete(productId);
-  return totals;
+  for (const productId of unknown) short.delete(productId);
+  return { short, unknown };
 }
 
 // What a Product is short of on one day, in its Default Unit.
@@ -159,30 +166,41 @@ export interface ListedItem {
   productId: string;
   quantity: number | null;
   ticked: boolean;
+  source: ShoppingListSource;
 }
 
-// What Generate changes: new unticked items, and unticked items raised to a
-// larger quantity. It never lowers, removes or touches a ticked item.
+// What Generate changes: new unticked items, unticked items set to a new
+// quantity, and unticked items that go. It never touches a ticked item.
 export interface GeneratePlan {
   add: { productId: string; quantity: number }[];
-  raise: { id: string; quantity: number }[];
+  set: { id: string; quantity: number }[];
+  remove: string[];
 }
 
-// Tops the list up to what is short (spec "Shopping List"). Ticked items
-// count as already covered, so each Product's unticked item becomes the
-// larger of what it already holds and the Shortfall less its ticked items. An
-// item with no quantity counts as 0. `shortfalls` is by Product id, in
-// Default Units.
-export function planGenerate(shortfalls: ReadonlyMap<string, number>, items: readonly ListedItem[]): GeneratePlan {
-  const plan: GeneratePlan = { add: [], raise: [] };
-  for (const [productId, shortfall] of shortfalls) {
+// Keeps the list in step with what is short over the chosen dates (spec
+// "Shopping List"). Ticked items count as already covered, so a Product needs
+// its Shortfall less its ticked items. Its unticked item from Shortfalls is
+// set to that, and goes when nothing is needed; one added by hand is raised to
+// it, never lowered. An item with no quantity counts as 0. A Product whose
+// need can't be worked out is left as it is.
+export function planGenerate({ short, unknown }: RangeShortfalls, items: readonly ListedItem[]): GeneratePlan {
+  const plan: GeneratePlan = { add: [], set: [], remove: [] };
+  const productIds = new Set([...short.keys(), ...items.map((item) => item.productId)]);
+  for (const productId of productIds) {
+    if (unknown.has(productId)) continue;
     const own = items.filter((item) => item.productId === productId);
     const ticked = own.filter((item) => item.ticked).reduce((sum, item) => sum + (item.quantity ?? 0), 0);
     const unticked = own.find((item) => !item.ticked);
-    const needed = roundForColumn(shortfall - ticked, AMOUNT_COLUMN);
-    if (needed <= (unticked?.quantity ?? 0)) continue;
-    if (unticked) plan.raise.push({ id: unticked.id, quantity: needed });
-    else plan.add.push({ productId, quantity: needed });
+    const needed = roundForColumn((short.get(productId) ?? 0) - ticked, AMOUNT_COLUMN);
+    if (!unticked) {
+      if (needed > 0) plan.add.push({ productId, quantity: needed });
+    } else if (unticked.source === "manual") {
+      if (needed > (unticked.quantity ?? 0)) plan.set.push({ id: unticked.id, quantity: needed });
+    } else if (needed <= 0) {
+      plan.remove.push(unticked.id);
+    } else if (needed !== unticked.quantity) {
+      plan.set.push({ id: unticked.id, quantity: needed });
+    }
   }
   return plan;
 }
@@ -252,7 +270,9 @@ export function parseItemAmount(text: string, packAmount: number | null): Parsed
 }
 
 // What adding a Product by hand changes: a new item, its unticked item
-// raised, or, with no pack to add, its unticked item kept as it is.
+// raised, or, with no pack to add, its unticked item's amount kept as it is.
+// An unticked item it lands on, raised or kept, then counts as added by hand,
+// as part of it was chosen (spec "Shopping List").
 export type HandAddPlan =
   | { kind: "add"; quantity: number | null }
   | { kind: "raise"; id: string; quantity: number }
@@ -272,23 +292,30 @@ export function planAddByHand(packAmount: number | null, items: readonly ListedI
 }
 
 // What unticking an item changes: just its tick, or, when its Product
-// already has an unticked item, that item takes its amount and it goes.
-export type UntickPlan = { kind: "untick" } | { kind: "merge"; into: string; quantity: number | null };
+// already has an unticked item, that item takes its amount and source, and it
+// goes.
+export type UntickPlan =
+  | { kind: "untick" }
+  | { kind: "merge"; into: string; quantity: number | null; source: ShoppingListSource };
 
 // A Product has at most one unticked item (data-model T7), so unticking one
 // beside it adds the two together, counting no amount as 0; with neither
-// holding one the sum has none either. `items` are its Product's items.
+// holding one the sum has none either. Part of the sum was chosen if either
+// was added by hand, so it then counts as added by hand. `items` are its
+// Product's items.
 export function planUntick(id: string, items: readonly ListedItem[]): UntickPlan {
   const unticked = items.find((item) => !item.ticked && item.id !== id);
   if (!unticked) return { kind: "untick" };
   const own = items.filter((item) => item.id === id);
-  return { kind: "merge", into: unticked.id, quantity: sumAmounts([...own, unticked]) };
+  const merged = [...own, unticked];
+  return { kind: "merge", into: unticked.id, quantity: sumAmounts(merged), source: mergedSource(merged) };
 }
 
 // What unticking every item changes: the items left, each its Product's one
-// unticked item with the amount it now holds, and the items that go.
+// unticked item with the amount and source it now holds, and the items that
+// go.
 export interface UntickAllPlan {
-  keep: { id: string; quantity: number | null }[];
+  keep: { id: string; quantity: number | null; source: ShoppingListSource }[];
   remove: string[];
 }
 
@@ -301,10 +328,16 @@ export function planUntickAll(items: readonly ListedItem[]): UntickAllPlan {
   const plan: UntickAllPlan = { keep: [], remove: [] };
   for (const own of byProduct.values()) {
     const kept = own.find((item) => !item.ticked) ?? own[0]!;
-    plan.keep.push({ id: kept.id, quantity: sumAmounts(own) });
+    plan.keep.push({ id: kept.id, quantity: sumAmounts(own), source: mergedSource(own) });
     plan.remove.push(...own.filter((item) => item !== kept).map((item) => item.id));
   }
   return plan;
+}
+
+// Where items added together came from: by hand if any was, as part of the
+// sum was then chosen, else from Shortfalls.
+function mergedSource(items: readonly ListedItem[]): ShoppingListSource {
+  return items.some((item) => item.source === "manual") ? "manual" : "shortfall";
 }
 
 // Items' amounts added together, counting no amount as 0; none if none has one.
