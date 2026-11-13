@@ -1,6 +1,6 @@
 import { AMOUNT_COLUMN, parsePositive, parseWholeAboveZero } from "@/core/amounts";
 import type { CategoryKind } from "@/core/food-categories";
-import type { RepeatOnError } from "@/core/meal-series";
+import type { RepeatOnError, Weekday } from "@/core/meal-series";
 import { addDays, isDate, mondayOf } from "@/core/planner";
 
 // A Meal's stored status (data-model Q3). Unconfirmed is never stored.
@@ -264,6 +264,22 @@ export function parseMealChanges(input: { hour: string; name: string; untracked:
   const hour = input.hour.trim();
   if (!isHour(hour)) return { ok: false, errors: ["invalidHour"] };
   return { ok: true, changes: { hour, name: input.name.trim() || null, untracked: input.untracked } };
+}
+
+// Whether Save on Edit Meal first asks which Meals of its Meal Series a
+// change applies to: only when the Meal is in one and its hour, name or
+// Untracked, as Save would write them, differ from `meal`'s (spec "Meal
+// Series"). An hour Save refuses doesn't ask, so its error shows straight
+// away.
+export function asksWhichMeals(
+  meal: MealChanges & { repeats: readonly Weekday[] | null },
+  input: { hour: string; name: string; untracked: boolean },
+): boolean {
+  if (meal.repeats === null) return false;
+  const parsed = parseMealChanges(input);
+  if (!parsed.ok) return false;
+  const { hour, name, untracked } = parsed.changes;
+  return hour !== meal.hour || name !== meal.name || untracked !== meal.untracked;
 }
 
 // A slot given a new Slot Category on Edit Meal.
