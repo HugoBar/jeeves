@@ -141,6 +141,13 @@
       "when": 1794514481085,
       "tag": "0019_meal_series",
       "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1794581250826,
+      "tag": "0020_meal_series_ended",
+      "breakpoints": true
     }
   ]
 }

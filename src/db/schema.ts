@@ -236,7 +236,9 @@ export const mealTemplates = pgTable(
 // (Monday) to 7 (Sunday). `generated_through` is the last day repeats were
 // created through, first the starting Meal's day; it only moves forward. A
 // Meal Type a series uses cannot be deleted, so removing it Archives it, and
-// the series then creates no new repeats.
+// the series then creates no new repeats. An ended series (`ended_at`) creates
+// none either; its earlier Meals keep it, and it is deleted once no Meal
+// belongs to it.
 export const mealSeries = pgTable(
   "meal_series",
   {
@@ -250,6 +252,7 @@ export const mealSeries = pgTable(
     untracked: boolean("untracked").notNull().default(false),
     weekdays: smallint("weekdays").array().$type<Weekday[]>().notNull(),
     generatedThrough: date("generated_through", { mode: "string" }).notNull(),
+    endedAt: timestamp("ended_at", { withTimezone: true }),
   },
   (table) => [
     check(
