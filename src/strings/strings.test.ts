@@ -9,6 +9,7 @@ import {
   formatPackSize,
   formatPackSizeNote,
   formatRepeats,
+  pluralName,
   formatDateRange,
   mealPanelLabel,
   mealTypeLabel,
@@ -199,5 +200,26 @@ describe("formatRepeats", () => {
 
   it("lists a range with a gap", () => {
     expect(formatRepeats([1, 2, 3, 5])).toBe("Repeats Mon, Tue, Wed, Fri");
+  });
+});
+
+describe("pluralName", () => {
+  it("adds s", () => {
+    expect(pluralName("Weeknight Dinner")).toBe("Weeknight Dinners");
+  });
+
+  it("adds es after ch, sh, s-like endings", () => {
+    expect(pluralName("Weekday Lunch")).toBe("Weekday Lunches");
+    expect(pluralName("Fish")).toBe("Fishes");
+    expect(pluralName("Detox")).toBe("Detoxes");
+  });
+
+  it("turns a consonant's y into ies, but not a vowel's", () => {
+    expect(pluralName("Party")).toBe("Parties");
+    expect(pluralName("Sunday")).toBe("Sundays");
+  });
+
+  it("keeps a name already ending in s", () => {
+    expect(pluralName("Brunch Days")).toBe("Brunch Days");
   });
 });
