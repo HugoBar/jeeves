@@ -17,7 +17,7 @@ export function Sheet({
   onClose,
   children,
 }: {
-  eyebrow?: string;
+  eyebrow?: ReactNode;
   title: string;
   // Which screen it shows, when screens share a title, as Add a slot's do.
   screen?: string;

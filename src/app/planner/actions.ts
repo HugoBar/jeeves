@@ -25,7 +25,7 @@ import {
   type NewMealSlotRowError,
   type NewMealSlotsResult,
 } from "@/core/meals";
-import { parseRepeatOn, type RepeatOnResult } from "@/core/meal-series";
+import { parseRepeatOn, type RepeatOnResult, type SeriesScope } from "@/core/meal-series";
 import { isDate, plannerRange } from "@/core/planner";
 import { fillEmptySlots, type SlotFill } from "@/core/suggestions";
 import { getDb, type Db } from "@/db";
@@ -431,7 +431,9 @@ export async function reopenMealAction(id: string): Promise<void> {
   refresh();
 }
 
-export async function removeMealAction(id: string): Promise<void> {
-  await deleteMeal(getDb(), id);
+// `scope` only matters for a Meal of a Meal Series. It comes from the
+// browser, so anything but "following" deletes that Meal alone.
+export async function removeMealAction(id: string, scope: SeriesScope = "this"): Promise<void> {
+  await deleteMeal(getDb(), id, scope === "following" ? "following" : "this");
   refresh();
 }
