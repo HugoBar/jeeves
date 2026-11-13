@@ -3639,15 +3639,18 @@ body:has(.needs-confirmation-locked) :is(.top-menu, .bottom-menu, a.app-badge) {
   font-size: var(--text-meta);
 }
 
-/* Deleting a Meal of a Meal Series: "Only this one" or "This and all
-   following", red as the Delete they lead to. */
+/* Deleting or changing a Meal of a Meal Series: "Only this one" or "This
+   and all following", under the series' name and days. */
 .sheet-eyebrow:has(svg) {
   display: inline-flex;
   align-items: center;
   gap: 6px;
 }
 
-.delete-scopes {
+/* Red when deleting; the week's accent when changing. */
+.series-scopes {
+  --scope-accent: var(--week-accent, var(--color-accent));
+  --scope-picked: var(--week-selected, var(--color-selected));
   display: flex;
   flex: none;
   flex-direction: column;
@@ -3658,7 +3661,7 @@ body:has(.needs-confirmation-locked) :is(.top-menu, .bottom-menu, a.app-badge) {
   border: 0;
 }
 
-.delete-scope {
+.series-scope {
   display: flex;
   flex-direction: row;
   align-items: flex-start;
@@ -3670,42 +3673,47 @@ body:has(.needs-confirmation-locked) :is(.top-menu, .bottom-menu, a.app-badge) {
   cursor: pointer;
 }
 
-.delete-scope:has(input:checked) {
-  border-color: var(--color-danger);
-  background: var(--color-danger-card);
+.series-scopes-delete {
+  --scope-accent: var(--color-danger);
+  --scope-picked: var(--color-danger-card);
 }
 
-.delete-scope:has(input:focus-visible) {
-  outline: 2px solid var(--color-danger);
+.series-scope:has(input:checked) {
+  border-color: var(--scope-accent);
+  background: var(--scope-picked);
+}
+
+.series-scope:has(input:focus-visible) {
+  outline: 2px solid var(--scope-accent);
   outline-offset: 2px;
 }
 
-.delete-scope input {
+.series-scope input {
   flex: none;
   width: 20px;
   height: 20px;
   margin: 1px 0 0;
-  accent-color: var(--color-danger);
+  accent-color: var(--scope-accent);
 }
 
-.delete-scope-text {
+.series-scope-text {
   display: flex;
   flex-direction: column;
   gap: 3px;
 }
 
-.delete-scope-name {
+.series-scope-name {
   color: var(--color-ink);
   font-size: var(--text-item);
   font-weight: 600;
 }
 
-.delete-scope-hint {
+.series-scope-hint {
   color: var(--color-ink-soft);
   font-size: var(--text-meta);
 }
 
-.delete-scope-note {
+.series-scope-note {
   display: flex;
   align-items: flex-start;
   gap: 8px;
@@ -3714,7 +3722,7 @@ body:has(.needs-confirmation-locked) :is(.top-menu, .bottom-menu, a.app-badge) {
   font-size: var(--text-meta);
 }
 
-.delete-scope-note svg {
+.series-scope-note svg {
   flex: none;
   width: 15px;
   height: 15px;

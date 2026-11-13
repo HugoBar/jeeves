@@ -215,8 +215,10 @@ function slotChangesInput(formData: FormData): MealSlotChangesInput | null {
 // Hour, name, Untracked, the slot changes kept on the form and, for a Meal in
 // no Meal Series, a series if "Repeat on" has days ticked, are written
 // together, or not at all; the series' repeats due now follow. A Meal already
-// in one shows its days but can't change them here. Nothing changes if the
-// Meal was Confirmed or Skipped; the refresh shows the planner it was.
+// in one shows its days but can't change them here; its hour, name and
+// Untracked change on it alone, or on it and all following when
+// "seriesScope" says so. Nothing changes if the Meal was Confirmed or
+// Skipped; the refresh shows the planner it was.
 export async function editMealAction(
   id: string,
   _state: MealChangesFormState,
@@ -251,7 +253,8 @@ export async function editMealAction(
     const errors = [...(parsed.ok ? [] : parsed.errors), ...(repeatOn.ok ? [] : [repeatOn.error])];
     return { errors, slotErrors: slots && !slots.ok ? slots.errors : [], values };
   }
-  const saved = await updateMeal(db, id, parsed.changes, slots?.changes, repeatOn.weekdays);
+  const scope: SeriesScope = formData.get("seriesScope") === "following" ? "following" : "this";
+  const saved = await updateMeal(db, id, parsed.changes, slots?.changes, repeatOn.weekdays, scope);
   if (saved && repeatOn.weekdays.length > 0) await createDueRepeats(db, today);
   refresh();
   return { errors: [], slotErrors: [], values };

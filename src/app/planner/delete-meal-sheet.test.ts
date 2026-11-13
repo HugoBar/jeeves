@@ -31,7 +31,7 @@ const render = (overrides: Partial<PlannerMeal> = {}) =>
   );
 
 const options = (html: string) =>
-  [...html.matchAll(/<label class="delete-scope">(.*?)<\/label>/g)].map((option) => ({
+  [...html.matchAll(/<label class="series-scope">(.*?)<\/label>/g)].map((option) => ({
     text: text(option[1]!),
     checked: /<input[^>]*checked=""/.test(option[1]!),
   }));

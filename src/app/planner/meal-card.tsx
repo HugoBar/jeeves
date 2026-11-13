@@ -3,6 +3,7 @@
 import { useActionState, useEffect, useId, useRef, useState, useTransition, type ReactNode } from "react";
 import {
   asksForAnotherFood,
+  asksWhichMeals,
   blockedByArchivedFood,
   canChangeMeal,
   canReopen,
@@ -49,6 +50,7 @@ import { SidePanel } from "../side-panel";
 import { useViewerNow, viewerMoment, viewerToday } from "../viewer-clock";
 import { AddSlotSheet } from "./add-slot";
 import { DeleteMealSheet } from "./delete-meal-sheet";
+import { SeriesScopeSheet } from "./series-scope-sheet";
 import {
   confirmMealAction,
   editMealAction,
@@ -1703,7 +1705,9 @@ function FixMessage({ count, editing }: { count: number; editing: boolean }) {
 // `slots` are the Meal's as changed on the form. Once `slotEdits` changed
 // them, Save sends their order, the ones removed and the new Slot Categories
 // only, so a slot added, removed or given a Slot Category elsewhere meanwhile
-// keeps that change.
+// keeps that change. On a Meal of a Meal Series, a changed hour, name or
+// Untracked first asks which Meals it applies to (core's asksWhichMeals),
+// then submits with the answer.
 function EditMealForm({
   meal,
   slots,
@@ -1738,37 +1742,80 @@ function EditMealForm({
     },
   );
   const past = useIsPastDay(meal.date);
+  const form = useRef<HTMLFormElement>(null);
+  const seriesScope = useRef<HTMLInputElement>(null);
+  const answered = useRef(false);
+  const [asking, setAsking] = useState(false);
   return (
-    <form action={action} className="form-cards" noValidate>
-      <MealFormFields
-        key={state.submits}
-        errors={state.errors}
-        editSlotErrors={state.slotErrors}
-        values={state.values}
-        repeat={{ past, locked: meal.repeats !== null }}
-        mealTypes={[]}
-        editing={{ mealTypeLabel: meal.mealTypeLabel, slots }}
-        onPickSlot={onPickSlot}
-        onMoveSlot={onMoveSlot}
-      />
-      {hasSlotEdits(slotEdits) && (
-        <>
-          {slots.map((slot) => (
-            <input key={slot.id} type="hidden" name="slotOrder" value={slot.id} />
-          ))}
-          {slotEdits.removed.map((slotId) => (
-            <input key={slotId} type="hidden" name="removedSlotId" value={slotId} />
-          ))}
-          {slots
-            .filter((slot) => slot.id in slotEdits.slotCategories)
-            .flatMap((slot) => [
-              <input key={`${slot.id}:id`} type="hidden" name="changedSlotId" value={slot.id} />,
-              <input key={`${slot.id}:category`} type="hidden" name="changedSlotCategoryId" value={slot.slotCategoryId} />,
-            ])}
-        </>
+    <>
+      <form
+        ref={form}
+        action={action}
+        className="form-cards"
+        noValidate
+        onSubmit={(event) => {
+          if (answered.current) {
+            answered.current = false;
+            return;
+          }
+          if (seriesScope.current) seriesScope.current.value = "this";
+          const data = new FormData(event.currentTarget);
+          const input = {
+            hour: String(data.get("hour") ?? ""),
+            name: String(data.get("name") ?? ""),
+            untracked: data.get("untracked") === "on",
+          };
+          if (asksWhichMeals(meal, input)) {
+            event.preventDefault();
+            setAsking(true);
+          }
+        }}
+      >
+        <MealFormFields
+          key={state.submits}
+          errors={state.errors}
+          editSlotErrors={state.slotErrors}
+          values={state.values}
+          repeat={{ past, locked: meal.repeats !== null }}
+          mealTypes={[]}
+          editing={{ mealTypeLabel: meal.mealTypeLabel, slots }}
+          onPickSlot={onPickSlot}
+          onMoveSlot={onMoveSlot}
+        />
+        {hasSlotEdits(slotEdits) && (
+          <>
+            {slots.map((slot) => (
+              <input key={slot.id} type="hidden" name="slotOrder" value={slot.id} />
+            ))}
+            {slotEdits.removed.map((slotId) => (
+              <input key={slotId} type="hidden" name="removedSlotId" value={slotId} />
+            ))}
+            {slots
+              .filter((slot) => slot.id in slotEdits.slotCategories)
+              .flatMap((slot) => [
+                <input key={`${slot.id}:id`} type="hidden" name="changedSlotId" value={slot.id} />,
+                <input key={`${slot.id}:category`} type="hidden" name="changedSlotCategoryId" value={slot.slotCategoryId} />,
+              ])}
+          </>
+        )}
+        {meal.repeats !== null && <input ref={seriesScope} type="hidden" name="seriesScope" defaultValue="this" />}
+        <MealPanelActions submitLabel={t("planner.save")} pending={pending} onCancel={onDone} />
+      </form>
+      {/* Outside the form, so its choices aren't sent with it. */}
+      {asking && meal.repeats !== null && (
+        <SeriesScopeSheet
+          kind="change"
+          meal={{ date: meal.date, repeats: meal.repeats }}
+          label={meal.name ?? meal.mealTypeLabel}
+          onPick={(scope) => {
+            if (seriesScope.current) seriesScope.current.value = scope;
+            answered.current = true;
+            form.current?.requestSubmit();
+          }}
+          onClose={() => setAsking(false)}
+        />
       )}
-      <MealPanelActions submitLabel={t("planner.save")} pending={pending} onCancel={onDone} />
-    </form>
+    </>
   );
 }
 
