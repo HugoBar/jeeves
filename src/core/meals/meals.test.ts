@@ -10,6 +10,7 @@ import {
   mustResolve,
   canConfirmOrSkip,
   asksForAnotherFood,
+  asksWhichMeals,
   blockedByArchivedFood,
   parseMealChanges,
   parseMealSlotChanges,
@@ -416,6 +417,28 @@ describe("parseMealChanges", () => {
 
   it("rejects an hour that is not a time of day", () => {
     expect(parseMealChanges({ hour: "", name: "Lunch", untracked: false })).toEqual({ ok: false, errors: ["invalidHour"] });
+  });
+});
+
+describe("asksWhichMeals", () => {
+  const repeat: Parameters<typeof asksWhichMeals>[0] = { repeats: [1, 2, 3, 4, 5], hour: "12:30", name: "Weekday Lunch", untracked: false };
+  const asSaved = { hour: "12:30", name: "Weekday Lunch", untracked: false };
+
+  it("asks when a repeat's hour, name or Untracked changes", () => {
+    expect(asksWhichMeals(repeat, { ...asSaved, hour: "13:00" })).toBe(true);
+    expect(asksWhichMeals(repeat, { ...asSaved, name: "Office Lunch" })).toBe(true);
+    expect(asksWhichMeals(repeat, { ...asSaved, name: "" })).toBe(true);
+    expect(asksWhichMeals(repeat, { ...asSaved, untracked: true })).toBe(true);
+  });
+
+  it("does not ask when they are as saved, once trimmed", () => {
+    expect(asksWhichMeals(repeat, { hour: " 12:30 ", name: " Weekday Lunch ", untracked: false })).toBe(false);
+    expect(asksWhichMeals({ ...repeat, name: null }, { ...asSaved, name: " " })).toBe(false);
+  });
+
+  it("does not ask for a Meal in no series, or an hour Save will refuse", () => {
+    expect(asksWhichMeals({ ...repeat, repeats: null }, { ...asSaved, hour: "13:00" })).toBe(false);
+    expect(asksWhichMeals(repeat, { ...asSaved, hour: "lunchtime" })).toBe(false);
   });
 });
 

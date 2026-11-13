@@ -230,3 +230,52 @@ describe("deleting a Meal of a Meal Series", () => {
     expect((await mealsNamed("Gap Thursday", "2026-12-06")).map((m) => m.date)).toEqual(["2026-11-12", "2026-11-26", "2026-12-03"]);
   });
 });
+
+describe("changing a Meal of a Meal Series", () => {
+  it("\"this and all following\" rewrites it and every later Planned repeat to match the series, even ones edited on their own", async () => {
+    const lunchId = await seededMealTypeId("lunch");
+    // Started on Monday the 9th, so its repeats run from the 10th to the 22nd.
+    await createMeal(db, { date: "2026-11-09", hour: "12:00", name: "Daily Change", mealTypeId: lunchId }, [], [1, 2, 3, 4, 5, 6, 7]);
+    await createDueRepeats(db, "2026-11-09");
+    const byDate = new Map((await mealsNamed("Daily Change")).map((meal) => [meal.date, meal.id]));
+    expect(await skipMeal(db, byDate.get("2026-11-10")!, TODAY)).toBe(true);
+    expect(await confirmMeal(db, byDate.get("2026-11-12")!, { untracked: true, today: TODAY })).toEqual({ ok: true });
+    await updateMeal(db, byDate.get("2026-11-14")!, { hour: "14:00", name: "Saturday Change", untracked: false });
+
+    expect(
+      await updateMeal(db, byDate.get("2026-11-11")!, { hour: "13:00", name: "Late Change", untracked: true }, undefined, [], "following"),
+    ).toBe(true);
+
+    const shown = async (date: string) => {
+      const meal = (await getMeal(db, byDate.get(date)!))!;
+      return [meal.hour, meal.name, meal.untracked, meal.status];
+    };
+    expect(await shown("2026-11-09")).toEqual(["12:00", "Daily Change", false, "planned"]);
+    expect(await shown("2026-11-10")).toEqual(["12:00", "Daily Change", false, "skipped"]);
+    expect(await shown("2026-11-11")).toEqual(["13:00", "Late Change", true, "planned"]);
+    expect(await shown("2026-11-12")).toEqual(["12:00", "Daily Change", true, "confirmed"]);
+    expect(await shown("2026-11-14")).toEqual(["13:00", "Late Change", true, "planned"]);
+    expect(await shown("2026-11-22")).toEqual(["13:00", "Late Change", true, "planned"]);
+    // New repeats copy the series as changed.
+    await createDueRepeats(db, "2026-11-23");
+    const next = (await listMeals(db, "2026-11-23", "2026-11-29")).filter((meal) => meal.name === "Late Change");
+    expect(next.map((meal) => [meal.hour, meal.untracked])).toEqual(Array(7).fill(["13:00", true]));
+  });
+
+  it("\"only this one\" changes only that Meal, and new repeats keep the series as it was", async () => {
+    const dinnerId = await seededMealTypeId("dinner");
+    await createMeal(db, { date: TODAY, hour: "19:00", name: "Thursday Dinner", mealTypeId: dinnerId }, [], [4]);
+    await createDueRepeats(db, TODAY);
+    const [first, second] = await mealsNamed("Thursday Dinner");
+
+    await updateMeal(db, first!.id, { hour: "20:00", name: "Late Thursday", untracked: false }, undefined, [], "this");
+    await createDueRepeats(db, "2026-11-23");
+
+    expect((await mealsNamed("Late Thursday", "2026-12-06")).map((m) => m.date)).toEqual([TODAY]);
+    expect((await mealsNamed("Thursday Dinner", "2026-12-06")).map((m) => [m.date, m.hour])).toEqual([
+      [second!.date, "19:00"],
+      ["2026-11-26", "19:00"],
+      ["2026-12-03", "19:00"],
+    ]);
+  });
+});

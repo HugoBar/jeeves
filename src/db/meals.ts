@@ -14,7 +14,7 @@ import type { DefaultUnit } from "@/core/units";
 import type { FoodCategory } from "./food-categories";
 import type { Db } from "./index";
 import type { MealType } from "./meal-types";
-import { endMealSeries, lockMealSeries, removeEmptyMealSeries, startMealSeries } from "./meal-series";
+import { endMealSeries, lockMealSeries, removeEmptyMealSeries, rewriteMealSeries, startMealSeries } from "./meal-series";
 import { listActiveProducts } from "./products";
 import { finalCategoryIdsByRecipe, listActiveRecipes } from "./recipes";
 import { foodCategories, mealSeries, mealSlots, meals, mealTypes, products, recipes } from "./schema";
@@ -201,20 +201,36 @@ const changeable = (id: string) => and(eq(meals.id, id), eq(meals.status, "plann
 // already be checked by core's parseMealSlotChanges; they are written with
 // the rest, or not at all. `repeatOn`, checked by core's parseRepeatOn,
 // starts a Meal Series from the Meal as saved, unless it is already in one.
-// False, changing nothing, if the Meal is gone, Confirmed or Skipped.
+// For a Meal of a Meal Series, `scope` says whether its hour, name and
+// Untracked change on only it, or on the series and it and every later
+// Planned Meal of the series too (rewriteMealSeries). False, changing
+// nothing, if the Meal is gone, Confirmed or Skipped.
 export async function updateMeal(
   db: Db,
   id: string,
   changes: MealChanges,
   slots?: MealSlotChanges,
   repeatOn: readonly Weekday[] = [],
+  scope: SeriesScope = "this",
 ): Promise<boolean> {
   return db.transaction(async (tx) => {
+    // The series is held before the Meal, as deleteMeal does, so a save and
+    // a delete in one series wait in turn instead of on each other.
+    const [found] = await tx.select({ seriesId: meals.seriesId }).from(meals).where(eq(meals.id, id));
+    if (found?.seriesId) await lockMealSeries(tx, found.seriesId);
     // Holds the Meal, so its Confirmation, another save, or a slot added or
     // removed elsewhere waits.
-    const [meal] = await tx.select({ id: meals.id }).from(meals).where(changeable(id)).for("update");
+    const [meal] = await tx
+      .select({ seriesId: meals.seriesId, date: meals.date })
+      .from(meals)
+      .where(changeable(id))
+      .for("update");
     if (!meal) return false;
-    await tx.update(meals).set(changes).where(eq(meals.id, id));
+    if (meal.seriesId !== null && scope === "following") {
+      await rewriteMealSeries(tx, { id, seriesId: meal.seriesId, date: meal.date }, changes);
+    } else {
+      await tx.update(meals).set(changes).where(eq(meals.id, id));
+    }
     if (slots) await changeMealSlots(tx, id, slots);
     if (repeatOn.length > 0) await startMealSeries(tx, id, repeatOn);
     return true;
