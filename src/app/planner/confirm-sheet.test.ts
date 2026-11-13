@@ -29,6 +29,7 @@ const meal = (overrides: Partial<PlannerMeal> = {}): PlannerMeal => ({
   status: "planned",
   untracked: false,
   repeats: null,
+  series: null,
   slots: [
     slot("main", "Main Dish", { content: "recipe", id: "salmon", label: "Grilled salmon", portions: 2, archived: false }),
     slot("veg", "Vegetables", { content: "product", id: "spinach", label: "Spinach", quantity: 250, defaultUnit: "g", archived: false }),

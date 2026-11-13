@@ -47,6 +47,7 @@ const meal = (overrides: Partial<PlannerMeal> = {}): PlannerMeal => ({
   status: "planned",
   untracked: false,
   repeats: null,
+  series: null,
   slots,
   addsBack: [],
   takes: { ok: true, products: [] },

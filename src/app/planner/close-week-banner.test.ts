@@ -30,6 +30,7 @@ const meal = (id: string, date: string, name: string | null, overrides: Partial<
   status: "planned",
   untracked: false,
   repeats: null,
+  series: null,
   slots: [],
   addsBack: [],
   takes: { ok: true, products: [] },
