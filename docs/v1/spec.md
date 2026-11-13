@@ -55,7 +55,7 @@ I want one place that knows what food is in my Pantry, what I can cook from it, 
 - Filling or changing a repeat's food, and Confirming it (including as Untracked), only affects that Meal and never asks.
 - Deleting a repeat asks the same: "only this one" leaves a gap that is never recreated; "this and all following" deletes the later Planned repeats and ends the series.
 - An ended series creates no new repeats; its earlier Meals keep their "Repeats" label. The series itself is removed once no Meal belongs to it.
-- A repeat shows a "Repeats" label with the series' days: "Repeats Mon to Fri" for days in a row, "Repeats daily" for all seven, "Repeats Mon, Wed, Fri" otherwise, "Repeats Mon" for one.
+- A repeat shows a "Repeats" label with the series' days: "Repeats Mon to Fri" for three or more days in a row, "Repeats daily" for all seven, "Repeats Mon, Wed, Fri" otherwise (two days in a row too: "Repeats Mon, Tue"), "Repeats Mon" for one. Weeks run Monday to Sunday, so a run never goes on past Sunday: Sat, Sun and Mon show as "Repeats Mon, Sat, Sun".
 
 ### Projected Stock and warnings
 - Projected Stock at a Meal = current Stock minus every Planned or Unconfirmed, non-Untracked Meal served before it. Order: date, then Meal Priority (1 first), then hour, then the Meal created first.
