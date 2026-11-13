@@ -6,7 +6,17 @@ import { createCategory, listActiveCategories, removeCategory } from "./food-cat
 import { createDueRepeats } from "./meal-series";
 import { createMealType, listActiveMealTypes, removeMealType } from "./meal-types";
 import { confirmMeal, skipMeal } from "./confirmation";
-import { addMealSlot, createMeal, deleteMeal, fillMealSlot, getMeal, listMeals, updateMeal, type Meal } from "./meals";
+import {
+  addMealSlot,
+  createMeal,
+  deleteMeal,
+  fillMealSlot,
+  getMeal,
+  listMeals,
+  setMealSlotCategory,
+  updateMeal,
+  type Meal,
+} from "./meals";
 import { createProduct } from "./products";
 import { mealSeries } from "./schema";
 import { createTestDb } from "./test-database";
@@ -413,6 +423,93 @@ describe("changing the slots of a Meal of a Meal Series", () => {
     for (const meal of meals.slice(1)) {
       expect(await slotsOf(meal.id, names)).toEqual([["soup", "empty"], ["main_dish", "empty"]]);
     }
+  });
+
+  // A daily series started on Monday the 9th with a main dish, its repeats
+  // running to the 22nd: the 10th Skipped, the 12th Confirmed, and the 14th
+  // with a fruit slot of its own.
+  async function cardSeries(name: string) {
+    const lunchId = await seededMealTypeId("lunch");
+    const categories = await seriesCategories();
+    await createMeal(
+      db,
+      { ...UNCHANGED, name, date: "2026-11-09", mealTypeId: lunchId },
+      [{ slotCategoryId: categories.ids.main_dish, fill: { content: "empty" } }],
+      [1, 2, 3, 4, 5, 6, 7],
+    );
+    await createDueRepeats(db, "2026-11-09");
+    const byDate = new Map((await mealsNamed(name)).map((meal) => [meal.date, meal]));
+    const id = (date: string) => byDate.get(date)!.id;
+    expect(await skipMeal(db, id("2026-11-10"), TODAY)).toBe(true);
+    expect(await confirmMeal(db, id("2026-11-12"), { untracked: true, today: TODAY })).toEqual({ ok: true });
+    await addMealSlot(db, id("2026-11-14"), { slotCategoryId: categories.ids.fruit, fill: { content: "empty" } });
+    return { ...categories, id, slotIds: async (date: string) => (await getMeal(db, id(date)))!.slots.map((slot) => slot.id) };
+  }
+
+  it("adding a slot \"this and all following\" adds it, with its food, to that Meal and an empty one to the series and every later Planned repeat", async () => {
+    const { ids, names, id, slotIds } = await cardSeries("Card Lunch");
+    const broth = await seriesProduct("Card Broth", ids.soup);
+
+    await addMealSlot(
+      db,
+      id("2026-11-13"),
+      { slotCategoryId: ids.soup, fill: { content: "product", productId: broth, quantity: 300 } },
+      "following",
+    );
+
+    expect(await slotsOf(id("2026-11-13"), names)).toEqual([["main_dish", "empty"], ["soup", "Card Broth"]]);
+    // A later repeat's own slot stays: only the new slot is added.
+    expect(await slotsOf(id("2026-11-14"), names)).toEqual([["main_dish", "empty"], ["fruit", "empty"], ["soup", "empty"]]);
+    expect(await slotsOf(id("2026-11-22"), names)).toEqual([["main_dish", "empty"], ["soup", "empty"]]);
+    // Earlier, Skipped and Confirmed Meals never change.
+    for (const date of ["2026-11-09", "2026-11-10", "2026-11-11", "2026-11-12"]) {
+      expect(await slotsOf(id(date), names)).toEqual([["main_dish", "empty"]]);
+    }
+    // New repeats copy it, and the added slots belong to the series: their
+    // food stays when the series is rewritten later.
+    await createDueRepeats(db, "2026-11-23");
+    const [next] = (await listMeals(db, "2026-11-23", "2026-11-23")).filter((meal) => meal.name === "Card Lunch");
+    expect(await slotsOf(next!.id, names)).toEqual([["main_dish", "empty"], ["soup", "empty"]]);
+    await fillMealSlot(db, (await slotIds("2026-11-16"))[1]!, { content: "product", productId: broth, quantity: 250 });
+    await updateMeal(db, id("2026-11-15"), { ...UNCHANGED, name: "Card Lunch", hour: "12:30" }, undefined, { scope: "following" });
+    expect(await slotsOf(id("2026-11-16"), names)).toEqual([["main_dish", "empty"], ["soup", "Card Broth"]]);
+  });
+
+  it("adding a slot \"only this one\" adds it to that Meal alone", async () => {
+    const { ids, names, id } = await cardSeries("Card Brunch");
+
+    await addMealSlot(db, id("2026-11-13"), { slotCategoryId: ids.soup, fill: { content: "empty" } }, "this");
+
+    expect(await slotsOf(id("2026-11-13"), names)).toEqual([["main_dish", "empty"], ["soup", "empty"]]);
+    expect(await slotsOf(id("2026-11-15"), names)).toEqual([["main_dish", "empty"]]);
+    await createDueRepeats(db, "2026-11-23");
+    const [next] = (await listMeals(db, "2026-11-23", "2026-11-23")).filter((meal) => meal.name === "Card Brunch");
+    expect(await slotsOf(next!.id, names)).toEqual([["main_dish", "empty"]]);
+  });
+
+  it("changing a slot's Slot Category \"this and all following\" follows Edit Meal's rules", async () => {
+    const { ids, names, id, slotIds } = await cardSeries("Card Supper");
+    const stew = await seriesProduct("Card Stew", ids.main_dish);
+    await fillMealSlot(db, (await slotIds("2026-11-14"))[0]!, { content: "product", productId: stew, quantity: 200 });
+
+    await setMealSlotCategory(db, (await slotIds("2026-11-13"))[0]!, ids.soup, "following");
+
+    expect(await slotsOf(id("2026-11-13"), names)).toEqual([["soup", "empty"]]);
+    // Food stays with its series slot; a slot of its own goes, with its food.
+    expect(await slotsOf(id("2026-11-14"), names)).toEqual([["soup", "Card Stew"]]);
+    expect(await slotsOf(id("2026-11-22"), names)).toEqual([["soup", "empty"]]);
+    for (const date of ["2026-11-09", "2026-11-10", "2026-11-11", "2026-11-12"]) {
+      expect(await slotsOf(id(date), names)).toEqual([["main_dish", "empty"]]);
+    }
+  });
+
+  it("changing a slot's Slot Category \"only this one\" changes that slot alone", async () => {
+    const { ids, names, id, slotIds } = await cardSeries("Card Tea");
+
+    await setMealSlotCategory(db, (await slotIds("2026-11-13"))[0]!, ids.soup, "this");
+
+    expect(await slotsOf(id("2026-11-13"), names)).toEqual([["soup", "empty"]]);
+    expect(await slotsOf(id("2026-11-15"), names)).toEqual([["main_dish", "empty"]]);
   });
 });
 

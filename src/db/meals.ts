@@ -14,7 +14,16 @@ import type { DefaultUnit } from "@/core/units";
 import type { FoodCategory } from "./food-categories";
 import type { Db } from "./index";
 import type { MealType } from "./meal-types";
-import { changeRepeatOn, endMealSeries, lockMealSeries, removeEmptyMealSeries, rewriteMealSeries, startMealSeries } from "./meal-series";
+import {
+  addSeriesSlot,
+  changeRepeatOn,
+  endMealSeries,
+  lockMealSeries,
+  nextPosition,
+  removeEmptyMealSeries,
+  rewriteMealSeries,
+  startMealSeries,
+} from "./meal-series";
 import { listActiveProducts } from "./products";
 import { finalCategoryIdsByRecipe, listActiveRecipes } from "./recipes";
 import { foodCategories, mealSeries, mealSlots, meals, mealTypes, products, recipes } from "./schema";
@@ -237,17 +246,7 @@ export async function updateMeal(
   { repeatOn, scope = "this" }: { repeatOn?: { weekdays: readonly Weekday[]; today: string }; scope?: SeriesScope } = {},
 ): Promise<boolean> {
   return db.transaction(async (tx) => {
-    // The series is held before the Meal, as deleteMeal does, so a save and
-    // a delete in one series wait in turn instead of on each other.
-    const [found] = await tx.select({ seriesId: meals.seriesId }).from(meals).where(eq(meals.id, id));
-    if (found?.seriesId) await lockMealSeries(tx, found.seriesId);
-    // Holds the Meal, so its Confirmation, another save, or a slot added or
-    // removed elsewhere waits.
-    const [meal] = await tx
-      .select({ seriesId: meals.seriesId, date: meals.date })
-      .from(meals)
-      .where(changeable(id))
-      .for("update");
+    const meal = await holdSeriesMeal(tx, id);
     if (!meal) return false;
     if (slots) await changeMealSlots(tx, id, slots);
     if (meal.seriesId !== null && scope === "following") {
@@ -311,17 +310,52 @@ export async function fillMealSlot(db: Db, slotId: string, fill: MealSlotFill): 
 }
 
 // A slot after the Meal's others. It must already be checked by core's
-// parseNewMealSlot, or parseNewMealSlots on the Meal form.
-export async function addMealSlot(db: Db, mealId: string, { slotCategoryId, fill }: MealFormSlot): Promise<void> {
+// parseNewMealSlot, or parseNewMealSlots on the Meal form. For a Meal of a
+// Meal Series, `scope` says whether it goes on only that Meal, or the series
+// and every later Planned Meal of it also get an empty slot of its Slot
+// Category (addSeriesSlot); then nothing is added if the Meal was Confirmed
+// or Skipped.
+export async function addMealSlot(
+  db: Db,
+  mealId: string,
+  { slotCategoryId, fill }: MealFormSlot,
+  scope: SeriesScope = "this",
+): Promise<void> {
   await db.transaction(async (tx) => {
-    await lockMeal(tx, mealId);
+    const meal = scope === "following" ? await holdSeriesMeal(tx, mealId) : undefined;
+    if (meal === null) return;
+    if (!meal) await lockMeal(tx, mealId);
     const [last] = await tx
       .select({ position: max(mealSlots.position) })
       .from(mealSlots)
       .where(eq(mealSlots.mealId, mealId));
-    const position = last?.position == null ? 0 : last.position + 1;
-    await tx.insert(mealSlots).values({ mealId, slotCategoryId, position, ...NO_FOOD, ...fill });
+    const [slot] = await tx
+      .insert(mealSlots)
+      .values({ mealId, slotCategoryId, position: nextPosition(last), ...NO_FOOD, ...fill })
+      .returning({ id: mealSlots.id });
+    if (meal?.seriesId) {
+      await addSeriesSlot(tx, { id: mealId, seriesId: meal.seriesId, date: meal.date }, { id: slot!.id, slotCategoryId });
+    }
   });
+}
+
+// Before a Meal is changed or deleted: holds its Meal Series, then the Meal,
+// so a save and a delete in one series wait in turn instead of on each
+// other, and its Confirmation, another save, or a slot added or removed
+// elsewhere waits. The Meal as it is, or null if it is gone, Confirmed or
+// Skipped.
+async function holdSeriesMeal(
+  db: Db,
+  mealId: string,
+): Promise<(MealChanges & { seriesId: string | null; date: string }) | null> {
+  const [found] = await db.select({ seriesId: meals.seriesId }).from(meals).where(eq(meals.id, mealId));
+  if (found?.seriesId) await lockMealSeries(db, found.seriesId);
+  const [meal] = await db
+    .select({ seriesId: meals.seriesId, date: meals.date, hour: meals.hour, name: meals.name, untracked: meals.untracked })
+    .from(meals)
+    .where(changeable(mealId))
+    .for("update");
+  return meal ?? null;
 }
 
 // The slots after it move up one, keeping their order (data-model T5). One at
@@ -350,9 +384,32 @@ export async function removeMealSlot(db: Db, slotId: string): Promise<void> {
 
 // The Slot Category must already be checked by core's parseMealSlotCategory.
 // What the slot holds stays, even food that does not carry the new one: only
-// what fills it from now on must.
-export async function setMealSlotCategory(db: Db, slotId: string, slotCategoryId: string): Promise<void> {
-  await db.update(mealSlots).set({ slotCategoryId }).where(eq(mealSlots.id, slotId));
+// what fills it from now on must. For a Meal of a Meal Series, `scope` says
+// whether only that slot changes, or, as Save on Edit Meal does for "this and
+// all following", the series takes the Meal's slots, hour, name and
+// Untracked, and every later Planned Meal of it is rewritten to match
+// (rewriteMealSeries); then nothing changes if the Meal was Confirmed or
+// Skipped.
+export async function setMealSlotCategory(
+  db: Db,
+  slotId: string,
+  slotCategoryId: string,
+  scope: SeriesScope = "this",
+): Promise<void> {
+  if (scope === "this") {
+    await db.update(mealSlots).set({ slotCategoryId }).where(eq(mealSlots.id, slotId));
+    return;
+  }
+  await db.transaction(async (tx) => {
+    const [slot] = await tx.select({ mealId: mealSlots.mealId }).from(mealSlots).where(eq(mealSlots.id, slotId));
+    if (!slot) return;
+    const meal = await holdSeriesMeal(tx, slot.mealId);
+    if (!meal) return;
+    await tx.update(mealSlots).set({ slotCategoryId }).where(eq(mealSlots.id, slotId));
+    if (meal.seriesId === null) return;
+    const { seriesId, date, hour, name, untracked } = meal;
+    await rewriteMealSeries(tx, { id: slot.mealId, seriesId, date }, { hour, name, untracked });
+  });
 }
 
 // What checking a change to a slot needs: its Slot Category, its Meal's
@@ -412,16 +469,7 @@ export async function listFoodsForSlots(db: Db): Promise<{ recipes: SlotRecipe[]
 // it. The series goes once no Meal belongs to it.
 export async function deleteMeal(db: Db, id: string, scope: SeriesScope = "this"): Promise<void> {
   await db.transaction(async (tx) => {
-    // The series is held before the Meal, as deleting "this and all
-    // following" holds the later Meals after it: two deletes in one series
-    // then wait in turn instead of on each other.
-    const [found] = await tx.select({ seriesId: meals.seriesId }).from(meals).where(eq(meals.id, id));
-    if (found?.seriesId) await lockMealSeries(tx, found.seriesId);
-    const [meal] = await tx
-      .select({ seriesId: meals.seriesId, date: meals.date })
-      .from(meals)
-      .where(changeable(id))
-      .for("update");
+    const meal = await holdSeriesMeal(tx, id);
     if (!meal) return;
     if (meal.seriesId !== null && scope === "following") {
       await endMealSeries(tx, { id, seriesId: meal.seriesId, date: meal.date });
