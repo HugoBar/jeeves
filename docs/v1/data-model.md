@@ -26,7 +26,7 @@ Started 2026-10-20 with `/grill-with-docs`. Resume by re-running it and pointing
   - A Meal owns its hour and optional `name` (card shows name ?? Meal Type); its Meal Type is fixed.
   - The one-Meal-per-Meal-Type-per-day rule is **dropped** (no unique `(date, meal_type_id)`). Projected Stock tie-break: date, priority, hour, then `created_at`.
   - Seeded Meal Types: Breakfast P2, Lunch P1 (Leftovers), Snack P3, Dinner P1 (Leftovers). "Morning Snack" etc. are names. No seeded templates.
-  - New in V1: **Meal Series** (repeats on chosen weekdays, no food). Behaviour in spec "Meal Series" and [#16](https://github.com/HugoBar/jeeves/issues/16). Repeating food and starting a series from a past Meal are out of scope.
+  - New: **Meal Series** (repeats on chosen weekdays, no food). Behaviour in spec "Meal Series" and [#16](https://github.com/HugoBar/jeeves/issues/16). Repeating food and starting a series from a past Meal are out of scope.
   - Tables:
     - `meal_templates(name, meal_type_id, hour)`
     - `meal_series(name?, meal_type_id, hour, untracked, weekdays smallint[] 1–7 Mon=1, generated_through date, ended_at?)`
