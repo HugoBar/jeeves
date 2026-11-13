@@ -472,13 +472,13 @@ describe("parseMealSlotChanges", () => {
   it("keeps the slots in the order sent, removing the ones removed", () => {
     expect(
       parseMealSlotChanges({ order: ["fruit", "main"], removed: ["veg"], slotCategories: [] }, current, pickable),
-    ).toEqual({ ok: true, changes: { removed: ["veg"], order: ["fruit", "main"], slotCategories: [] } });
+    ).toEqual({ ok: true, changes: { removed: ["veg"], order: ["fruit", "main"], slotCategories: [], added: [] } });
   });
 
   it("keeps the order as stored when nothing was sent", () => {
     expect(parseMealSlotChanges({ order: [], removed: [], slotCategories: [] }, current, pickable)).toEqual({
       ok: true,
-      changes: { removed: [], order: ["main", "veg", "fruit"], slotCategories: [] },
+      changes: { removed: [], order: ["main", "veg", "fruit"], slotCategories: [], added: [] },
     });
   });
 
@@ -486,7 +486,7 @@ describe("parseMealSlotChanges", () => {
     const sent = { order: [], removed: [], slotCategories: changed(["main", "fish"]) };
     expect(parseMealSlotChanges(sent, current, pickable)).toEqual({
       ok: true,
-      changes: { removed: [], order: ["main", "veg", "fruit"], slotCategories: [{ slotId: "main", slotCategoryId: "fish" }] },
+      changes: { removed: [], order: ["main", "veg", "fruit"], slotCategories: [{ slotId: "main", slotCategoryId: "fish" }], added: [] },
     });
   });
 
@@ -494,7 +494,7 @@ describe("parseMealSlotChanges", () => {
   // or set back on the form to what it was.
   it("writes nothing for a Slot Category sent that is already stored", () => {
     const sent = { order: [], removed: [], slotCategories: changed(["veg", "vegetables"]) };
-    expect(parseMealSlotChanges(sent, current, pickable)).toMatchObject({ ok: true, changes: { slotCategories: [] } });
+    expect(parseMealSlotChanges(sent, current, pickable)).toMatchObject({ ok: true, changes: { slotCategories: [], added: [] } });
   });
 
   // Archived since Edit Meal opened, or a crafted id.
@@ -513,7 +513,7 @@ describe("parseMealSlotChanges", () => {
     const sent = { order: [], removed: ["main"], slotCategories: changed(["main", "archived"]) };
     expect(parseMealSlotChanges(sent, current, pickable)).toEqual({
       ok: true,
-      changes: { removed: ["main"], order: ["veg", "fruit"], slotCategories: [] },
+      changes: { removed: ["main"], order: ["veg", "fruit"], slotCategories: [], added: [] },
     });
   });
 
@@ -522,7 +522,50 @@ describe("parseMealSlotChanges", () => {
     const sent = { order: ["fruit", "veg", "main"], removed: ["gone"], slotCategories: changed(["veg", "fish"]) };
     expect(parseMealSlotChanges(sent, now, pickable)).toEqual({
       ok: true,
-      changes: { removed: [], order: ["fruit", "main", "added"], slotCategories: [] },
+      changes: { removed: [], order: ["fruit", "main", "added"], slotCategories: [], added: [] },
+    });
+  });
+
+  // What a slot added on Edit Meal can hold, as on New Meal: Broth carries
+  // Soup only.
+  const newSlots = { recipes: new Map<string, string[]>(), products: new Map([["broth", ["soup"]]]) };
+  const brothSlot = (key: string) => ({ key, food: "product:broth", amount: "300", slotCategoryId: "soup" });
+
+  it("adds the slots added on the form, with their food, in the order shown", () => {
+    const sent = { order: ["main", "new-1", "veg", "fruit"], removed: [], slotCategories: [], added: [brothSlot("new-1")] };
+    expect(parseMealSlotChanges(sent, current, pickable, newSlots)).toEqual({
+      ok: true,
+      changes: {
+        removed: [],
+        order: ["main", "new-1", "veg", "fruit"],
+        slotCategories: [],
+        added: [{ key: "new-1", slot: { slotCategoryId: "soup", fill: { content: "product", productId: "broth", quantity: 300 } } }],
+      },
+    });
+  });
+
+  it("puts a slot added on the form and missing from the order last", () => {
+    const sent = { order: ["fruit"], removed: [], slotCategories: [], added: [brothSlot("new-1")] };
+    expect(parseMealSlotChanges(sent, current, pickable, newSlots)).toMatchObject({
+      ok: true,
+      changes: { order: ["fruit", "main", "veg", "new-1"] },
+    });
+  });
+
+  // Archived since it was added on the form, or a crafted one.
+  it("refuses a slot added on the form that New Meal would refuse", () => {
+    const sent = {
+      order: [],
+      removed: [],
+      slotCategories: [],
+      added: [brothSlot("new-1"), { ...brothSlot("new-2"), amount: "0" }, { ...brothSlot("new-3"), food: "product:gone" }],
+    };
+    expect(parseMealSlotChanges(sent, current, pickable, newSlots)).toEqual({
+      ok: false,
+      errors: [
+        { slotId: "new-2", code: "invalidQuantity" },
+        { slotId: "new-3", code: "unavailableFood" },
+      ],
     });
   });
 });

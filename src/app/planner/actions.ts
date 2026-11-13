@@ -198,17 +198,25 @@ async function activeCategoryIds(db: Db): Promise<Set<string>> {
   return new Set((await listActiveCategories(db)).map((category) => category.id));
 }
 
-// Edit Meal's slots, when they were changed on the form: each slot kept, in
-// the order shown, each removed, and each given a new Slot Category, with it
-// under the same index.
+// Edit Meal's slots, when they were changed on the form: each slot kept or
+// added, in the order shown, each removed, each given a new Slot Category,
+// with it under the same index, and each added, with its food, amount and
+// Slot Category under the same index as its key.
 function slotChangesInput(formData: FormData): MealSlotChangesInput | null {
   if (!formData.has("slotOrder") && !formData.has("removedSlotId")) return null;
   const all = (name: string) => formData.getAll(name).map(String);
   const categories = all("changedSlotCategoryId");
+  const added = { food: all("addedSlotFood"), amount: all("addedSlotAmount"), slotCategoryId: all("addedSlotCategoryId") };
   return {
     order: all("slotOrder"),
     removed: all("removedSlotId"),
     slotCategories: all("changedSlotId").map((slotId, index) => ({ slotId, slotCategoryId: categories[index] ?? "" })),
+    added: all("addedSlotKey").map((key, index) => ({
+      key,
+      food: added.food[index] ?? "",
+      amount: added.amount[index] ?? "",
+      slotCategoryId: added.slotCategoryId[index] ?? "",
+    })),
   };
 }
 
@@ -250,7 +258,12 @@ export async function editMealAction(
   const repeatOn = keepsDays ? NO_REPEAT : parseRepeatOn(values.repeatOn, meal.date, today);
   const input = slotChangesInput(formData);
   const slots = input
-    ? parseMealSlotChanges(input, meal.slots, await activeCategoryIds(db))
+    ? parseMealSlotChanges(
+        input,
+        meal.slots,
+        await activeCategoryIds(db),
+        input.added?.length ? await newSlotPickable(db) : undefined,
+      )
     : null;
   if (!parsed.ok || !repeatOn.ok || (slots && !slots.ok)) {
     const errors = [...(parsed.ok ? [] : parsed.errors), ...(repeatOn.ok ? [] : [repeatOn.error])];
@@ -272,9 +285,8 @@ function seriesScope(formData: FormData): SeriesScope {
 }
 
 // A slot can only be changed to a Food Category that is not Archived. Every
-// slot action changes only the slots of a Planned or Unconfirmed Meal. On a
-// Meal of a Meal Series, "seriesScope" says whether it changes on that slot
-// alone, or on it and all following, as Edit Meal's Save does.
+// slot action changes only the slots of a Planned or Unconfirmed Meal, and
+// on a Meal of a Meal Series only that Meal's (spec "Meal Series").
 export async function setMealSlotCategoryAction(
   slotId: string,
   _state: MealSlotCategoryFormState,
@@ -286,7 +298,7 @@ export async function setMealSlotCategoryAction(
   if (!canChangeMeal(slot.meal)) return { error: "notChangeable" };
   const parsed = parseMealSlotCategory(String(formData.get("slotCategoryId") ?? ""), await activeCategoryIds(db));
   if (!parsed.ok) return { error: parsed.error };
-  await setMealSlotCategory(db, slotId, parsed.slotCategoryId, seriesScope(formData));
+  await setMealSlotCategory(db, slotId, parsed.slotCategoryId);
   refresh();
   return { error: null };
 }
@@ -358,8 +370,6 @@ export async function undoFillAction(filled: SlotFill[]): Promise<void> {
 // A slot added by hand is filled with a non-Archived Recipe or Product and
 // takes one of its Roles, else Kinds, as its Slot Category. Blank takes the
 // first in the order the planner's chooser lists them, which it pre-selects.
-// On a Meal of a Meal Series, "seriesScope" says whether it goes on that Meal
-// alone, or the series and every later Planned Meal of it get an empty one.
 export async function addMealSlotAction(
   mealId: string,
   _state: NewMealSlotFormState,
@@ -378,7 +388,7 @@ export async function addMealSlotAction(
     await newSlotPickable(db),
   );
   if (!parsed.ok) return { error: parsed.error };
-  await addMealSlot(db, mealId, parsed.slot, seriesScope(formData));
+  await addMealSlot(db, mealId, parsed.slot);
   refresh();
   return { error: null };
 }

@@ -721,6 +721,8 @@ describe("the Meal panel with a slot picked", () => {
         onPicking: () => {},
         slotEdits: NO_SLOT_EDITS,
         onSlotEdits: () => {},
+        addingSlot: null,
+        onAddingSlot: () => {},
         onClose: () => {},
       }),
     );
@@ -741,6 +743,8 @@ describe("the Meal panel with a slot picked", () => {
         onPicking: () => {},
         slotEdits: NO_SLOT_EDITS,
         onSlotEdits: () => {},
+        addingSlot: null,
+        onAddingSlot: () => {},
         onClose: () => {},
       }),
     );
@@ -791,6 +795,7 @@ describe("Edit Meal's slot changes, kept until Save", () => {
   const slots = [slot("slot-1", "main", "Main Dish"), slot("slot-2", "veg", "Vegetables"), slot("slot-3", "fruit", "Fruit")];
   const editPickers = {
     ...pickers,
+    slotFoods: { recipes: [], products: [{ id: "broth", label: "Broth", defaultUnit: "ml" as const, categoryIds: ["veg"] }] },
     slotCategories: [
       { id: "main", label: "Main Dish", kind: "role" as const },
       { id: "veg", label: "Vegetables", kind: "kind" as const },
@@ -798,7 +803,11 @@ describe("Edit Meal's slot changes, kept until Save", () => {
       { id: "fish", label: "Fish", kind: "kind" as const },
     ],
   };
-  const renderEdit = (slotEdits: SlotEdits, picking: ComponentProps<typeof EditMealPanelView>["picking"] = null) =>
+  const renderEdit = (
+    slotEdits: SlotEdits,
+    picking: ComponentProps<typeof EditMealPanelView>["picking"] = null,
+    addingSlot: ComponentProps<typeof EditMealPanelView>["addingSlot"] = null,
+  ) =>
     renderToStaticMarkup(
       createElement(EditMealPanelView, {
         meal: meal({ slots }),
@@ -808,6 +817,8 @@ describe("Edit Meal's slot changes, kept until Save", () => {
         onPicking: () => {},
         slotEdits,
         onSlotEdits: () => {},
+        addingSlot,
+        onAddingSlot: () => {},
         onClose: () => {},
       }),
     );
@@ -858,6 +869,40 @@ describe("Edit Meal's slot changes, kept until Save", () => {
   it("goes back to the Meal when the slot picked for was removed on the form", () => {
     const html = renderEdit({ ...NO_SLOT_EDITS, removed: ["slot-1"] }, { slotId: "slot-1", screen: { kind: "pick" } });
     expect(text(/<h2 [^>]*>(.*?)<\/h2>/.exec(html)![1]!)).toBe("Edit Weekday Lunch");
+  });
+
+  // 300 ml of Broth in a new Vegetables slot.
+  const broth = { key: "new-1", input: { food: "product:broth", amount: "300", slotCategoryId: "veg" } };
+
+  it("offers Add slot under the slots", () => {
+    expect(text(/<button type="button" class="meal-form-add-slot">(.*?)<\/button>/.exec(renderEdit(NO_SLOT_EDITS))![1]!)).toBe("Add slot");
+  });
+
+  it("shows a slot added on the form after the others, with its food, and sends it", () => {
+    const html = renderEdit({ ...NO_SLOT_EDITS, added: [broth] });
+    expect(shown(html)).toEqual(["Main", "Vegetables", "Fruit", "Vegetables"]);
+    expect(text([...html.matchAll(/<li class="slot-row[^"]*">.*?<\/li>/g)][3]![0])).toMatch(/Broth/);
+    expect(hidden(html, "slotOrder")).toEqual(["slot-1", "slot-2", "slot-3", "new-1"]);
+    expect(hidden(html, "addedSlotKey")).toEqual(["new-1"]);
+    expect(hidden(html, "addedSlotFood")).toEqual(["product:broth"]);
+    expect(hidden(html, "addedSlotAmount")).toEqual(["300"]);
+    expect(hidden(html, "addedSlotCategoryId")).toEqual(["veg"]);
+  });
+
+  it("moves a slot added on the form like the others, and removes it with ×", () => {
+    const html = renderEdit({ ...NO_SLOT_EDITS, added: [broth], order: ["new-1", "slot-1", "slot-2", "slot-3"] });
+    expect(shown(html)).toEqual(["Vegetables", "Main", "Vegetables", "Fruit"]);
+    expect(hidden(html, "slotOrder")).toEqual(["new-1", "slot-1", "slot-2", "slot-3"]);
+    expect([...html.matchAll(/aria-label="(Remove [^"]*)"/g)].map((m) => m[1])).toEqual(["Remove Vegetables slot"]);
+    // Its food is picked again by adding it again: it isn't in the Meal yet.
+    expect(html.match(/<button type="button" class="slot-row-main"/g)).toHaveLength(3);
+  });
+
+  it("replaces the panel's content with Add a slot, headed Back to the Meal, keeping the form hidden behind", () => {
+    const html = renderEdit(NO_SLOT_EDITS, null, { kind: "food" });
+    expect(text(/<button [^>]*class="side-panel-back"[^>]*>(.*?)<\/button>/.exec(html)![1]!)).toBe("Back to Weekday Lunch");
+    expect(text(/<h2 [^>]*>(.*?)<\/h2>/.exec(html)![1]!)).toBe("Add a slot");
+    expect(html).toMatch(/<div class="meal-panel-content" hidden="">.*<input [^>]*name="hour"/);
   });
 });
 
@@ -1042,8 +1087,10 @@ describe("the Meal form", () => {
         ...props,
       }),
     );
+  // What Edit Meal adds to the Meal it shows: no slot added on the form.
+  const editing = (slots: PlannerMealSlot[] = []) => ({ ...meal({ slots }), added: new Set<string>(), onAddSlot: () => {}, onRemoveAdded: () => {} });
   const renderEditForm = (props: Partial<FormProps> = {}) =>
-    renderForm({ mealTypes: [], editing: meal(), values: { hour: "12:30", name: "Weekday Lunch", untracked: false, repeatOn: [] }, ...props });
+    renderForm({ mealTypes: [], editing: editing(), values: { hour: "12:30", name: "Weekday Lunch", untracked: false, repeatOn: [] }, ...props });
   const banner = (html: string) => text(/<div role="alert" class="banner banner-error">(.*?)<\/div>/.exec(html)?.[1] ?? "");
   const errorTexts = (html: string) => [...html.matchAll(/<p class="form-error">(.*?)<\/p>/g)].map((m) => text(m[1]!));
   const input = (html: string, name: string) => new RegExp(`<input [^>]*name="${name}"[^>]*>`).exec(html)?.[0] ?? "";
@@ -1189,7 +1236,7 @@ describe("the Meal form", () => {
       food: { content: "recipe", id: "r1", label: "Chicken curry", portions: 4, archived: false },
       warnings: null,
     };
-    const html = renderEditForm({ editing: meal({ slots: [slot] }) });
+    const html = renderEditForm({ editing: editing([slot]) });
     expect(text(html)).not.toContain("No slots yet");
     expect(text(html)).toMatch(/Main Dish 4 portions Chicken curry/);
   });
