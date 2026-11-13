@@ -272,9 +272,8 @@ function seriesScope(formData: FormData): SeriesScope {
 }
 
 // A slot can only be changed to a Food Category that is not Archived. Every
-// slot action changes only the slots of a Planned or Unconfirmed Meal. On a
-// Meal of a Meal Series, "seriesScope" says whether it changes on that slot
-// alone, or on it and all following, as Edit Meal's Save does.
+// slot action changes only the slots of a Planned or Unconfirmed Meal, and
+// on a Meal of a Meal Series only that Meal's (spec "Meal Series").
 export async function setMealSlotCategoryAction(
   slotId: string,
   _state: MealSlotCategoryFormState,
@@ -286,7 +285,7 @@ export async function setMealSlotCategoryAction(
   if (!canChangeMeal(slot.meal)) return { error: "notChangeable" };
   const parsed = parseMealSlotCategory(String(formData.get("slotCategoryId") ?? ""), await activeCategoryIds(db));
   if (!parsed.ok) return { error: parsed.error };
-  await setMealSlotCategory(db, slotId, parsed.slotCategoryId, seriesScope(formData));
+  await setMealSlotCategory(db, slotId, parsed.slotCategoryId);
   refresh();
   return { error: null };
 }
@@ -358,8 +357,6 @@ export async function undoFillAction(filled: SlotFill[]): Promise<void> {
 // A slot added by hand is filled with a non-Archived Recipe or Product and
 // takes one of its Roles, else Kinds, as its Slot Category. Blank takes the
 // first in the order the planner's chooser lists them, which it pre-selects.
-// On a Meal of a Meal Series, "seriesScope" says whether it goes on that Meal
-// alone, or the series and every later Planned Meal of it get an empty one.
 export async function addMealSlotAction(
   mealId: string,
   _state: NewMealSlotFormState,
@@ -378,7 +375,7 @@ export async function addMealSlotAction(
     await newSlotPickable(db),
   );
   if (!parsed.ok) return { error: parsed.error };
-  await addMealSlot(db, mealId, parsed.slot, seriesScope(formData));
+  await addMealSlot(db, mealId, parsed.slot);
   refresh();
   return { error: null };
 }

@@ -15,7 +15,6 @@ import { FormBanner } from "../form-error";
 import { Sheet } from "../sheet";
 import { addMealSlotAction, type NewMealSlotFormState } from "./actions";
 import type { PlannerMeal, SlotCategoryOption, SlotPickers } from "./meal-card";
-import { useAskWhichMeals } from "./series-scope-sheet";
 import { AmountForm, FoodList, PickedFood, toFoodOptions, type FoodOption } from "./slot-picker";
 
 // What Add a slot shows: the food to pick from, the Slot Category of the
@@ -64,27 +63,18 @@ export type AddSlot = (formData: FormData) => Promise<NewMealSlotFormState>;
 // and amount as they were read.
 export function addToMealForm(pickers: SlotPickers, deliver: (slot: NewMealSlotInput) => void): AddSlot {
   return async (formData) => {
-    const input = newSlotInput(formData);
-    const parsed = checkNewSlot(input, pickers);
+    const input = {
+      food: String(formData.get("food") ?? ""),
+      amount: String(formData.get("amount") ?? ""),
+      slotCategoryId: String(formData.get("slotCategoryId") ?? ""),
+    };
+    const { slotFoods, slotCategories } = pickers;
+    const parsed = parseNewMealSlot(input, newMealSlotPickable(slotFoods.recipes, slotFoods.products, slotCategories));
     if (!parsed.ok) return { error: parsed.error };
     const { slotCategoryId, fill } = parsed.slot;
     deliver({ food: input.food, amount: String(fill.content === "recipe" ? fill.portions : fill.quantity), slotCategoryId });
     return { error: null };
   };
-}
-
-// The new slot as Add a slot sends it.
-function newSlotInput(formData: FormData): NewMealSlotInput {
-  return {
-    food: String(formData.get("food") ?? ""),
-    amount: String(formData.get("amount") ?? ""),
-    slotCategoryId: String(formData.get("slotCategoryId") ?? ""),
-  };
-}
-
-// The new slot checked here as the server will check it.
-function checkNewSlot(input: NewMealSlotInput, { slotFoods, slotCategories }: SlotPickers) {
-  return parseNewMealSlot(input, newMealSlotPickable(slotFoods.recipes, slotFoods.products, slotCategories));
 }
 
 // "Add a slot", or "How many Portions?" and "How much?" when asking how much.
@@ -146,24 +136,20 @@ export function AddSlotSheetView({
       className="slot-picker-sheet"
       onClose={onClose}
     >
-      <AddSlotBody meal={meal} pickers={pickers} screen={screen} onScreen={onScreen} add={add} onDone={onClose} />
+      <AddSlotBody pickers={pickers} screen={screen} onScreen={onScreen} add={add} onDone={onClose} />
     </Sheet>
   );
 }
 
 // What Add a slot shows under its heading, in a sheet or in the Meal panel.
 // `add` saves the slot, and `onDone` closes it, once added or on Cancel.
-// `meal` is the Meal it is added to, once it exists: on a Meal of a Meal
-// Series, adding asks which Meals get the slot first.
 export function AddSlotBody({
-  meal,
   pickers,
   screen,
   onScreen,
   add,
   onDone,
 }: {
-  meal?: PlannerMeal;
   pickers: SlotPickers;
   screen: AddSlotScreen;
   onScreen: (screen: AddSlotScreen) => void;
@@ -177,8 +163,6 @@ export function AddSlotBody({
     const category = pickers.slotCategories.find((option) => option.id === screen.slotCategoryId);
     return (
       <AddSlotAmount
-        meal={meal}
-        accepted={(formData) => checkNewSlot(newSlotInput(formData), pickers).ok}
         food={picked}
         categoryLabel={category?.label ?? ""}
         slotCategoryId={screen.slotCategoryId}
@@ -231,12 +215,8 @@ function foodOption(food: string, pickers: SlotPickers): FoodOption | undefined 
 }
 
 // How much of the picked food goes in the new slot, starting at a Recipe's
-// own Portions. Add to slot saves it with its Slot Category, asking first
-// which Meals get it when `meal` is in a Meal Series, unless `accepted`
-// says it would be refused, so its error shows straight away.
+// own Portions. Add to slot saves it with its Slot Category.
 function AddSlotAmount({
-  meal,
-  accepted,
   food,
   categoryLabel,
   slotCategoryId,
@@ -245,8 +225,6 @@ function AddSlotAmount({
   onBack,
   onAdded,
 }: {
-  meal?: PlannerMeal;
-  accepted: (formData: FormData) => boolean;
   food: FoodOption;
   categoryLabel: string;
   slotCategoryId: string;
@@ -263,30 +241,19 @@ function AddSlotAmount({
     },
     { error: null },
   );
-  const question = useAskWhichMeals({
-    kind: "addSlot",
-    meal: meal ?? null,
-    category: categoryLabel,
-    asks: accepted,
-  });
   return (
-    <>
-      <AmountForm
-        categoryLabel={categoryLabel}
-        food={food}
-        startAmount={food.content === "recipe" ? String(food.portions) : ""}
-        error={state.error}
-        action={action}
-        pending={pending}
-        onChangeFood={onChangeFood}
-        onBack={onBack}
-        onSubmit={question.onSubmit}
-      >
-        <input type="hidden" name="slotCategoryId" value={slotCategoryId} />
-        {question.field}
-      </AmountForm>
-      {question.sheet}
-    </>
+    <AmountForm
+      categoryLabel={categoryLabel}
+      food={food}
+      startAmount={food.content === "recipe" ? String(food.portions) : ""}
+      error={state.error}
+      action={action}
+      pending={pending}
+      onChangeFood={onChangeFood}
+      onBack={onBack}
+    >
+      <input type="hidden" name="slotCategoryId" value={slotCategoryId} />
+    </AmountForm>
   );
 }
 

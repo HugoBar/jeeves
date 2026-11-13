@@ -1,5 +1,5 @@
 import "server-only";
-import { and, asc, eq, gt, inArray, isNull, lt, max, notExists, notInArray, or, sql } from "drizzle-orm";
+import { and, asc, eq, gt, inArray, isNull, lt, notExists, notInArray, or, sql } from "drizzle-orm";
 import type { MealChanges } from "@/core/meals";
 import { dueRepeatDates, repeatOnChange, repeatsThrough, weekdayOf, type Weekday } from "@/core/meal-series";
 import type { Db } from "./index";
@@ -279,51 +279,6 @@ async function matchSlotsToSeries(
       await db.insert(mealSlots).values({ mealId, slotCategoryId, position, layoutSlotId });
     }
   }
-}
-
-// A slot just added to one of a Meal Series' Meals made one of the series':
-// a new series slot after its others, which the slot is linked to, and an
-// empty slot of its Slot Category, linked to it too, after the others of
-// every later Planned Meal of the series. Every other slot stays as it is.
-// Earlier, Confirmed and Skipped Meals never change. Run inside a transaction
-// holding the series (lockMealSeries).
-export async function addSeriesSlot(
-  db: Db,
-  meal: { id: string; seriesId: string; date: string },
-  slot: { id: string; slotCategoryId: string },
-): Promise<void> {
-  const [last] = await db
-    .select({ position: max(layoutSlots.position) })
-    .from(layoutSlots)
-    .where(eq(layoutSlots.seriesId, meal.seriesId));
-  const [layoutSlot] = await db
-    .insert(layoutSlots)
-    .values({ seriesId: meal.seriesId, slotCategoryId: slot.slotCategoryId, position: nextPosition(last) })
-    .returning({ id: layoutSlots.id });
-  await db.update(mealSlots).set({ layoutSlotId: layoutSlot!.id }).where(eq(mealSlots.id, slot.id));
-  // Held, so a slot added or removed on one of them meanwhile waits.
-  const later = await db
-    .select({ id: meals.id })
-    .from(meals)
-    .where(and(eq(meals.seriesId, meal.seriesId), eq(meals.status, "planned"), gt(meals.date, meal.date)))
-    .for("update");
-  for (const repeat of later) {
-    const [lastOfMeal] = await db
-      .select({ position: max(mealSlots.position) })
-      .from(mealSlots)
-      .where(eq(mealSlots.mealId, repeat.id));
-    await db.insert(mealSlots).values({
-      mealId: repeat.id,
-      slotCategoryId: slot.slotCategoryId,
-      position: nextPosition(lastOfMeal),
-      layoutSlotId: layoutSlot!.id,
-    });
-  }
-}
-
-// The position after the highest one, or the first when there is none.
-export function nextPosition(last: { position: number | null } | undefined): number {
-  return last?.position == null ? 0 : last.position + 1;
 }
 
 // Held while its Meals are deleted or rewritten, so repeats can't be

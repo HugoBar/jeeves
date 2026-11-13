@@ -2,40 +2,27 @@
 
 import { useId, useRef, useState, useTransition, type FormEvent, type ReactNode } from "react";
 import type { SeriesScope, Weekday } from "@/core/meal-series";
-import { formatMealDate, formatRepeats, pluralName, t, type StringKey } from "@/strings";
+import { formatMealDate, formatRepeats, pluralName, t } from "@/strings";
 import { LockIcon } from "../form-error";
 import { Sheet } from "../sheet";
 
 const SCOPES: readonly SeriesScope[] = ["this", "following"];
 
-// What the question is asked before: deleting, saving a change, or adding a
-// slot.
-export type SeriesScopeKind = "delete" | "change" | "addSlot";
-
-const ACTIONS = {
-  delete: "sheet.delete",
-  change: "planner.save",
-  addSlot: "planner.addSlotRepeat.confirm",
-} as const satisfies Record<SeriesScopeKind, StringKey>;
-
-// Asks which Meals of a Meal Series deleting, changing or adding a slot to
-// one of them applies to, `label` being its name or Meal Type and
-// `category` the new slot's Slot Category: only this one, picked first, or
+// Asks which Meals of a Meal Series deleting or changing one of them applies
+// to, `label` being its name or Meal Type: only this one, picked first, or
 // it and every later Planned one (spec "Meal Series"). Delete is red; Save
-// and Add slot take the week's accent. `onPick` runs with the answer, and the sheet
+// takes the week's accent. `onPick` runs with the answer, and the sheet
 // closes once it is done. Cancel, Close and Escape change nothing.
 export function SeriesScopeSheet({
   kind,
   meal,
   label,
-  category = "",
   onPick,
   onClose,
 }: {
-  kind: SeriesScopeKind;
+  kind: "delete" | "change";
   meal: { date: string; repeats: readonly Weekday[] };
   label: string;
-  category?: string;
   onPick: (scope: SeriesScope) => void | Promise<void>;
   onClose: () => void;
 }) {
@@ -68,7 +55,7 @@ export function SeriesScopeSheet({
             />
             <span className="series-scope-text">
               <span className="series-scope-name">{t(`planner.repeatScope.${option}`)}</span>
-              <span className="series-scope-hint">{t(`planner.${kind}Repeat.${option}Hint`, { date, name: label, category })}</span>
+              <span className="series-scope-hint">{t(`planner.${kind}Repeat.${option}Hint`, { date, name: label })}</span>
             </span>
           </label>
         ))}
@@ -92,36 +79,31 @@ export function SeriesScopeSheet({
             })
           }
         >
-          {t(ACTIONS[kind])}
+          {t(kind === "delete" ? "sheet.delete" : "planner.save")}
         </button>
       </div>
     </Sheet>
   );
 }
 
-// Asks which Meals of its Meal Series a form's submit applies to before it is
+// Asks which Meals of its Meal Series saving a form applies to before it is
 // sent, then sends it with the answer as "seriesScope". It asks only on a
-// `meal` of a series (none: a Meal not saved yet, or a change kept on the
-// form until Save), and only when `asks` says the form, as it would be sent,
-// changes something. The form takes `onSubmit` and has `field` inside it;
-// `sheet` goes outside it, so the question's choices aren't sent with it.
+// `meal` of a series, and only when `asks` says the form, as it would be
+// sent, changes something. The form takes `onSubmit` and has `field` inside
+// it; `sheet` goes outside it, so the question's choices aren't sent with it.
 export function useAskWhichMeals({
-  kind,
   meal,
-  category,
-  asks = () => true,
+  asks,
 }: {
-  kind: Exclude<SeriesScopeKind, "delete">;
-  meal: { date: string; repeats: readonly Weekday[] | null; name: string | null; mealTypeLabel: string } | null;
-  category?: string;
-  asks?: (data: FormData) => boolean;
+  meal: { date: string; repeats: readonly Weekday[] | null; name: string | null; mealTypeLabel: string };
+  asks: (data: FormData) => boolean;
 }): { onSubmit: (event: FormEvent<HTMLFormElement>) => void; field: ReactNode; sheet: ReactNode } {
   const form = useRef<HTMLFormElement | null>(null);
   const scope = useRef<HTMLInputElement>(null);
   const answered = useRef(false);
   const [asking, setAsking] = useState(false);
-  const repeats = meal?.repeats ?? null;
-  if (!meal || repeats === null) return { onSubmit: () => {}, field: null, sheet: null };
+  const { repeats } = meal;
+  if (repeats === null) return { onSubmit: () => {}, field: null, sheet: null };
   return {
     onSubmit: (event) => {
       if (answered.current) {
@@ -137,10 +119,9 @@ export function useAskWhichMeals({
     field: <input ref={scope} type="hidden" name="seriesScope" defaultValue="this" />,
     sheet: asking && (
       <SeriesScopeSheet
-        kind={kind}
+        kind="change"
         meal={{ date: meal.date, repeats }}
         label={meal.name ?? meal.mealTypeLabel}
-        category={category}
         onPick={(picked) => {
           if (scope.current) scope.current.value = picked;
           answered.current = true;

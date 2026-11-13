@@ -1752,7 +1752,6 @@ function EditMealForm({
   );
   const past = useIsPastDay(meal.date);
   const question = useAskWhichMeals({
-    kind: "change",
     meal,
     asks: (data) =>
       asksWhichMeals(meal, {
