@@ -29,11 +29,11 @@ Started 2026-10-20 with `/grill-with-docs`. Resume by re-running it and pointing
   - New in V1: **Meal Series** (repeats on chosen weekdays, no food). Behaviour in spec "Meal Series" and [#16](https://github.com/HugoBar/jeeves/issues/16). Repeating food and starting a series from a past Meal are out of scope.
   - Tables:
     - `meal_templates(name, meal_type_id, hour)`
-    - `meal_series(name?, meal_type_id, hour, weekdays smallint[] 1–7 Mon=1, generated_through date)`
+    - `meal_series(name?, meal_type_id, hour, untracked, weekdays smallint[] 1–7 Mon=1, generated_through date, ended_at?)`
     - `layout_slots(position, slot_category_id, template_id?, series_id?)`, CHECK exactly one owner. A Template's or Series' slots: Slot Category only, never food.
     - `meals(date, hour, meal_type_id, name?, status, untracked, series_id? ON DELETE SET NULL, created_at)`
-    - `meal_slots` as in Q4. Created as copies of `layout_slots` (empty) when a Meal is created; the layout slots stay.
-  - Repeat generation: when the planner is opened, create repeats for ticked weekdays after `generated_through` up to next Sunday, then advance it. Only moving forward is what keeps "only this one" deletions from coming back. "This and all following" delete removes later Planned repeats, then the series row.
+    - `meal_slots` as in Q4, plus `layout_slot_id? ON DELETE SET NULL` on a repeat's slots. Created as copies of `layout_slots` (empty) when a Meal is created; the layout slots stay. The link is how "this and all following" keeps food in a slot whose series slot still exists, whatever its position; a slot with no link was added to that repeat only and is removed by the rewrite.
+  - Repeat generation: before any screen shows or uses Meals, with the viewer's date, create repeats for ticked weekdays from the later of today and the day after `generated_through`, up to next Sunday, then advance it. It never creates Meals before today, and skips ended series and series whose Meal Type is Archived. Only moving forward is what keeps "only this one" deletions from coming back. "This and all following" delete (or unticking every day) removes later Planned repeats and sets `ended_at`, so earlier Meals keep their series and its "Repeats" label; the series row is deleted once no Meal refers to it (re-evaluated in the #16 grilling, 2026-11-12).
 
 - **Table review (T1–T8)**, 2026-10-21:
   - **T1 Pack Size**: `pack_size_name?` + `pack_size_amount?` on `products`, CHECK both or neither.
@@ -60,10 +60,10 @@ Every table: `id uuid`, `created_at timestamptz`. `?` = nullable.
 - `recipe_category_overrides(recipe_id, category_id, mode)`
 - `meal_types(seed_key?, name?, priority, allows_leftovers, archived_at?)`
 - `meal_templates(name, meal_type_id, hour)`
-- `meal_series(name?, meal_type_id, hour, weekdays, generated_through)`
+- `meal_series(name?, meal_type_id, hour, untracked, weekdays, generated_through, ended_at?)`
 - `layout_slots(position, slot_category_id, template_id?, series_id?)`
 - `meals(date, hour, meal_type_id, name?, status, untracked, series_id?)`
-- `meal_slots(meal_id, position, slot_category_id, content, recipe_id?, product_id?, portions?, quantity?)`
+- `meal_slots(meal_id, position, slot_category_id, content, recipe_id?, product_id?, portions?, quantity?, layout_slot_id?)`
 
 ## Open
 
