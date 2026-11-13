@@ -1,5 +1,6 @@
 import "server-only";
 import { and, asc, eq, gt, isNull, lt, notExists, or } from "drizzle-orm";
+import type { MealChanges } from "@/core/meals";
 import { dueRepeatDates, repeatsThrough, type Weekday } from "@/core/meal-series";
 import type { Db } from "./index";
 import { layoutSlots, mealSeries, mealSlots, meals, mealTypes } from "./schema";
@@ -121,7 +122,31 @@ export async function endMealSeries(
   await db.update(mealSeries).set({ endedAt: new Date() }).where(eq(mealSeries.id, seriesId));
 }
 
-// Held while its Meals are deleted, so repeats can't be created meanwhile.
+// Changes a Meal Series' hour, name and Untracked from one of its Meals: the
+// series, so its new repeats copy them, and it and every later Planned Meal
+// of the series, even ones changed on their own (ADR 0004). Earlier,
+// Confirmed and Skipped Meals never change. Run inside a transaction holding
+// the series (lockMealSeries).
+export async function rewriteMealSeries(
+  db: Db,
+  { id: mealId, seriesId, date }: { id: string; seriesId: string; date: string },
+  changes: MealChanges,
+): Promise<void> {
+  await db.update(mealSeries).set(changes).where(eq(mealSeries.id, seriesId));
+  await db
+    .update(meals)
+    .set(changes)
+    .where(
+      and(
+        eq(meals.seriesId, seriesId),
+        eq(meals.status, "planned"),
+        or(eq(meals.id, mealId), gt(meals.date, date)),
+      ),
+    );
+}
+
+// Held while its Meals are deleted or rewritten, so repeats can't be
+// created meanwhile.
 export async function lockMealSeries(db: Db, seriesId: string): Promise<void> {
   await db.select({ id: mealSeries.id }).from(mealSeries).where(eq(mealSeries.id, seriesId)).for("update");
 }
