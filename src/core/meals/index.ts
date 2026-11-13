@@ -299,25 +299,37 @@ export interface SlotCategoryChange {
 }
 
 // What Edit Meal sends of its slots on Save: the slots kept, in the order
-// shown, the ones removed on the form, and the ones given a new Slot
-// Category there. A slot whose Slot Category was not changed on the form is
-// not sent one, so a change made elsewhere meanwhile stays.
+// shown, the ones removed on the form, the ones given a new Slot Category
+// there, and the ones added there, each under the `key` it has in `order`.
+// A slot whose Slot Category was not changed on the form is not sent one, so
+// a change made elsewhere meanwhile stays.
 export interface MealSlotChangesInput {
   order: readonly string[];
   removed: readonly string[];
   slotCategories: readonly SlotCategoryChange[];
+  added?: readonly (NewMealSlotInput & { key: string })[];
 }
 
-// What Save writes to a Meal's slots: the ones to remove, every other one in
-// its new order, and the Slot Categories changed.
+// A slot added on Edit Meal, with the key it has in `order` until it is
+// written.
+export interface AddedMealSlot {
+  key: string;
+  slot: NewMealSlot;
+}
+
+// What Save writes to a Meal's slots: the ones to remove, the ones to add,
+// every other one and the added ones in their new order, and the Slot
+// Categories changed.
 export interface MealSlotChanges {
   removed: string[];
   order: string[];
   slotCategories: SlotCategoryChange[];
+  added: AddedMealSlot[];
 }
 
-// A slot whose new Slot Category was refused.
-export type MealSlotChangeError = { slotId: string; code: MealSlotCategoryError };
+// A slot whose new Slot Category was refused, or an added one refused as
+// New Meal would refuse it, by its key.
+export type MealSlotChangeError = { slotId: string; code: MealSlotCategoryError | NewMealSlotError };
 
 export type MealSlotChangesResult =
   | { ok: true; changes: MealSlotChanges }
@@ -325,19 +337,26 @@ export type MealSlotChangesResult =
 
 // `current` is the Meal's slots as stored now, in order. A slot sent that is
 // gone was removed meanwhile, so it is left out; one added meanwhile, sent
-// neither kept nor removed, goes after the kept ones. A Slot Category sent
-// that differs from the stored one must be in `pickable`, the non-Archived
-// ones.
+// neither kept nor removed, goes after the kept ones, and the ones added on
+// the form but not placed after that. A Slot Category sent that differs
+// from the stored one must be in `pickable`, the non-Archived ones. A slot
+// added on the form is checked against `newSlots` as parseNewMealSlot does.
 export function parseMealSlotChanges(
   input: MealSlotChangesInput,
   current: readonly { id: string; slotCategoryId: string }[],
   pickable: ReadonlySet<string>,
+  newSlots: NewMealSlotPickable = { recipes: new Map(), products: new Map() },
 ): MealSlotChangesResult {
   const stored = new Map(current.map((slot) => [slot.id, slot.slotCategoryId]));
   const removed = new Set(input.removed.filter((id) => stored.has(id)));
+  // Once per key, and never under a saved slot's id.
+  const byKey = new Map((input.added ?? []).filter((slot) => !stored.has(slot.key)).map((slot) => [slot.key, slot]));
+  const addedInputs = [...byKey.values()];
+  const addedKeys = new Set(addedInputs.map((slot) => slot.key));
   const kept = (id: string) => stored.has(id) && !removed.has(id);
-  const order = [...new Set(input.order.filter(kept))];
+  const order = [...new Set(input.order.filter((id) => kept(id) || addedKeys.has(id)))];
   for (const { id } of current) if (kept(id) && !order.includes(id)) order.push(id);
+  for (const key of addedKeys) if (!order.includes(key)) order.push(key);
   const slotCategories: SlotCategoryChange[] = [];
   const errors: MealSlotChangeError[] = [];
   for (const { slotId, slotCategoryId } of input.slotCategories) {
@@ -346,8 +365,14 @@ export function parseMealSlotChanges(
     if (parsed.ok) slotCategories.push({ slotId, slotCategoryId: parsed.slotCategoryId });
     else errors.push({ slotId, code: parsed.error });
   }
+  const added: AddedMealSlot[] = [];
+  for (const { key, ...slot } of addedInputs) {
+    const parsed = parseNewMealSlot(slot, newSlots);
+    if (parsed.ok) added.push({ key, slot: parsed.slot });
+    else errors.push({ slotId: key, code: parsed.error });
+  }
   if (errors.length) return { ok: false, errors };
-  return { ok: true, changes: { removed: [...removed], order, slotCategories } };
+  return { ok: true, changes: { removed: [...removed], order, slotCategories, added } };
 }
 
 // A day's Meals by hour; "HH:MM" text sorts as time does. Ties go to the Meal

@@ -163,7 +163,7 @@ describe("a Meal Series started on Edit Meal", () => {
       db,
       meal.id,
       { hour: "08:30", name: "Weekend Breakfast", untracked: false },
-      { removed: [first!.id], order: [second!.id], slotCategories: [] },
+      { removed: [first!.id], order: [second!.id], slotCategories: [], added: [] },
       { repeatOn: { weekdays: [6, 7], today: TODAY } },
     );
     await createDueRepeats(db, TODAY);
@@ -343,7 +343,7 @@ describe("changing the slots of a Meal of a Meal Series", () => {
     await addMealSlot(db, id("2026-11-14"), { slotCategoryId: ids.fruit, fill: { content: "product", productId: apple, quantity: 100 } });
     // The 15th, on its own: grains moved first.
     const [main15, salad15, grains15] = slotIds("2026-11-15");
-    await updateMeal(db, id("2026-11-15"), UNCHANGED, { removed: [], order: [grains15!, main15!, salad15!], slotCategories: [] });
+    await updateMeal(db, id("2026-11-15"), UNCHANGED, { removed: [], order: [grains15!, main15!, salad15!], slotCategories: [], added: [] });
     // The 13th, a Friday, has a fruit slot of its own before it is changed.
     await addMealSlot(db, id("2026-11-13"), { slotCategoryId: ids.fruit, fill: { content: "empty" } });
     const [main13, salad13, grains13, fruit13] = (await getMeal(db, id("2026-11-13")))!.slots.map((slot) => slot.id);
@@ -353,7 +353,7 @@ describe("changing the slots of a Meal of a Meal Series", () => {
       db,
       id("2026-11-13"),
       UNCHANGED,
-      { removed: [salad13!], order: [grains13!, main13!, fruit13!], slotCategories: [{ slotId: main13!, slotCategoryId: ids.soup }] },
+      { removed: [salad13!], order: [grains13!, main13!, fruit13!], slotCategories: [{ slotId: main13!, slotCategoryId: ids.soup }], added: [] },
       { scope: "following" },
     );
 
@@ -411,7 +411,7 @@ describe("changing the slots of a Meal of a Meal Series", () => {
       db,
       first!.id,
       { hour: "19:00", name: "Slot Supper", untracked: false },
-      { removed: [soup!], order: [main!], slotCategories: [] },
+      { removed: [soup!], order: [main!], slotCategories: [], added: [] },
       { scope: "this" },
     );
     await createDueRepeats(db, "2026-11-23");
@@ -424,6 +424,74 @@ describe("changing the slots of a Meal of a Meal Series", () => {
     }
   });
 
+  // A daily series started on Monday the 9th with a main dish, its repeats
+  // running to the 22nd: the 10th Skipped, the 12th Confirmed, and the 14th
+  // with a fruit slot of its own.
+  async function addedSlotSeries(name: string) {
+    const lunchId = await seededMealTypeId("lunch");
+    const categories = await seriesCategories();
+    await createMeal(
+      db,
+      { ...UNCHANGED, name, date: "2026-11-09", mealTypeId: lunchId },
+      [{ slotCategoryId: categories.ids.main_dish, fill: { content: "empty" } }],
+      [1, 2, 3, 4, 5, 6, 7],
+    );
+    await createDueRepeats(db, "2026-11-09");
+    const byDate = new Map((await mealsNamed(name)).map((meal) => [meal.date, meal]));
+    const id = (date: string) => byDate.get(date)!.id;
+    expect(await skipMeal(db, id("2026-11-10"), TODAY)).toBe(true);
+    expect(await confirmMeal(db, id("2026-11-12"), { untracked: true, today: TODAY })).toEqual({ ok: true });
+    await addMealSlot(db, id("2026-11-14"), { slotCategoryId: categories.ids.fruit, fill: { content: "empty" } });
+    return { ...categories, id, slotIds: async (date: string) => (await getMeal(db, id(date)))!.slots.map((slot) => slot.id) };
+  }
+
+  // Edit Meal on the 13th: a soup slot with Broth added before its main dish.
+  async function addSoupOnEditMeal(series: Awaited<ReturnType<typeof addedSlotSeries>>, name: string, scope: "this" | "following") {
+    const broth = await seriesProduct(`${name} Broth`, series.ids.soup);
+    const [main] = await series.slotIds("2026-11-13");
+    const slot = { slotCategoryId: series.ids.soup, fill: { content: "product" as const, productId: broth, quantity: 300 } };
+    return updateMeal(
+      db,
+      series.id("2026-11-13"),
+      { ...UNCHANGED, name },
+      { removed: [], order: ["new-1", main!], slotCategories: [], added: [{ key: "new-1", slot }] },
+      { scope },
+    );
+  }
+
+  it("a slot added on Edit Meal \"this and all following\" becomes a series slot, empty on every later Planned repeat", async () => {
+    const series = await addedSlotSeries("Added Lunch");
+    const { names, id } = series;
+
+    expect(await addSoupOnEditMeal(series, "Added Lunch", "following")).toBe(true);
+
+    expect(await slotsOf(id("2026-11-13"), names)).toEqual([["soup", "Added Lunch Broth"], ["main_dish", "empty"]]);
+    // A later repeat takes the series' slots: its own fruit slot goes, as #186 has it.
+    expect(await slotsOf(id("2026-11-14"), names)).toEqual([["soup", "empty"], ["main_dish", "empty"]]);
+    expect(await slotsOf(id("2026-11-22"), names)).toEqual([["soup", "empty"], ["main_dish", "empty"]]);
+    // Earlier, Skipped and Confirmed Meals never change.
+    for (const date of ["2026-11-09", "2026-11-10", "2026-11-11", "2026-11-12"]) {
+      expect(await slotsOf(id(date), names)).toEqual([["main_dish", "empty"]]);
+    }
+    // New repeats copy it.
+    await createDueRepeats(db, "2026-11-23");
+    const [next] = (await listMeals(db, "2026-11-23", "2026-11-23")).filter((meal) => meal.name === "Added Lunch");
+    expect(await slotsOf(next!.id, names)).toEqual([["soup", "empty"], ["main_dish", "empty"]]);
+  });
+
+  it("a slot added on Edit Meal \"only this one\" goes, with its food, on that Meal alone", async () => {
+    const series = await addedSlotSeries("Added Brunch");
+    const { names, id } = series;
+
+    expect(await addSoupOnEditMeal(series, "Added Brunch", "this")).toBe(true);
+
+    expect(await slotsOf(id("2026-11-13"), names)).toEqual([["soup", "Added Brunch Broth"], ["main_dish", "empty"]]);
+    expect(await slotsOf(id("2026-11-14"), names)).toEqual([["main_dish", "empty"], ["fruit", "empty"]]);
+    expect(await slotsOf(id("2026-11-15"), names)).toEqual([["main_dish", "empty"]]);
+    await createDueRepeats(db, "2026-11-23");
+    const [next] = (await listMeals(db, "2026-11-23", "2026-11-23")).filter((meal) => meal.name === "Added Brunch");
+    expect(await slotsOf(next!.id, names)).toEqual([["main_dish", "empty"]]);
+  });
 });
 
 describe("changing \"Repeat on\" from a Meal of a Meal Series", () => {

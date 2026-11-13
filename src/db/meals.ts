@@ -261,11 +261,13 @@ export async function updateMeal(
   });
 }
 
-// The slots removed, given their new Slot Categories, and renumbered in
-// `order` (data-model T5). A slot added since `order` was read goes after
-// the others. The unique (meal, position) index is checked row by row, so
-// every slot steps aside to a negative position first.
-async function changeMealSlots(db: Db, mealId: string, { removed, order, slotCategories }: MealSlotChanges) {
+// The slots removed, given their new Slot Categories, the ones added on the
+// form written with their food, and all renumbered in `order`, where an
+// added slot goes by its key (data-model T5). A slot added elsewhere since
+// `order` was read goes after the others. The unique (meal, position) index
+// is checked row by row, so every slot steps aside to a negative position
+// first.
+async function changeMealSlots(db: Db, mealId: string, { removed, order, slotCategories, added }: MealSlotChanges) {
   const ofMeal = (slotId: string) => and(eq(mealSlots.mealId, mealId), eq(mealSlots.id, slotId));
   if (removed.length > 0) {
     await db.delete(mealSlots).where(and(eq(mealSlots.mealId, mealId), inArray(mealSlots.id, removed)));
@@ -273,12 +275,15 @@ async function changeMealSlots(db: Db, mealId: string, { removed, order, slotCat
   for (const { slotId, slotCategoryId } of slotCategories) {
     await db.update(mealSlots).set({ slotCategoryId }).where(ofMeal(slotId));
   }
+  const written = new Map<string, string>();
+  for (const { key, slot } of added) written.set(key, await insertSlotLast(db, mealId, slot));
+  const placed = order.map((id) => written.get(id) ?? id);
   const left = await db
     .select({ id: mealSlots.id })
     .from(mealSlots)
     .where(eq(mealSlots.mealId, mealId))
     .orderBy(asc(mealSlots.position));
-  const place = (id: string) => (order.includes(id) ? order.indexOf(id) : order.length);
+  const place = (id: string) => (placed.includes(id) ? placed.indexOf(id) : placed.length);
   // A stable sort, so slots added meanwhile keep their own order.
   const ids = left.map((slot) => slot.id).sort((a, b) => place(a) - place(b));
   for (const [index, slotId] of ids.entries()) {

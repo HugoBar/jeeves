@@ -727,7 +727,7 @@ describe("updateMeal with slot changes", () => {
         db,
         meal.id,
         { hour: "13:00", name: "Saved", untracked: true },
-        { removed: [second!], order: [third!, first!], slotCategories: [{ slotId: first!, slotCategoryId: fish }] },
+        { removed: [second!], order: [third!, first!], slotCategories: [{ slotId: first!, slotCategoryId: fish }], added: [] },
       ),
     ).toBe(true);
 
@@ -749,6 +749,7 @@ describe("updateMeal with slot changes", () => {
       removed: [],
       order: [second!, first!],
       slotCategories: [],
+      added: [],
     });
 
     expect(await positions(meal.id)).toEqual([
@@ -777,6 +778,7 @@ describe("updateMeal with slot changes", () => {
           removed: [first!],
           order: [second!],
           slotCategories: [{ slotId: second!, slotCategoryId: fish }],
+          added: [],
         }),
       ).toBe(false);
       expect(await getMeal(db, meal.id)).toMatchObject({ hour: "12:00", name: "Saving", untracked: false });
