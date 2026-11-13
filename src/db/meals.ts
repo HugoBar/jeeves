@@ -223,11 +223,12 @@ const changeable = (id: string) => and(eq(meals.id, id), eq(meals.status, "plann
 // the days ticked as saved on `today`, the viewer's date: on a Meal in no
 // Meal Series, any starts one from the Meal as saved; on a Meal of one, they
 // change its days from this Meal on (changeRepeatOn). Left out, they stay as
-// they are. For a Meal of a Meal Series, `scope` says whether its hour, name
-// and Untracked change on only it, or on the series and it and every later
-// Planned Meal of the series too (rewriteMealSeries), before its days
-// change, so repeats added then copy them. False, changing nothing, if the
-// Meal is gone, Confirmed or Skipped.
+// they are. For a Meal of a Meal Series, `scope` says whether its hour, name,
+// Untracked and slots change on only it, or the series takes them from it as
+// saved and it and every later Planned Meal of the series are rewritten to
+// match (rewriteMealSeries), before its days change, so repeats added then
+// copy them. False, changing nothing, if the Meal is gone, Confirmed or
+// Skipped.
 export async function updateMeal(
   db: Db,
   id: string,
@@ -248,12 +249,12 @@ export async function updateMeal(
       .where(changeable(id))
       .for("update");
     if (!meal) return false;
+    if (slots) await changeMealSlots(tx, id, slots);
     if (meal.seriesId !== null && scope === "following") {
       await rewriteMealSeries(tx, { id, seriesId: meal.seriesId, date: meal.date }, changes);
     } else {
       await tx.update(meals).set(changes).where(eq(meals.id, id));
     }
-    if (slots) await changeMealSlots(tx, id, slots);
     if (repeatOn && meal.seriesId !== null) {
       await changeRepeatOn(tx, { id, seriesId: meal.seriesId, date: meal.date }, repeatOn.weekdays, repeatOn.today);
     } else if (repeatOn && repeatOn.weekdays.length > 0) {

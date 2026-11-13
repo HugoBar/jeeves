@@ -217,7 +217,7 @@ function slotChangesInput(formData: FormData): MealSlotChangesInput | null {
 // On a Meal in no Meal Series, days ticked start one. On a Meal of one,
 // they change its days from this Meal on, without asking, unless the Meal is
 // before the viewer's date or the series ended, when they stay as they are;
-// its hour, name and Untracked change on it alone, or on it and all
+// its hour, name, Untracked and slots change on it alone, or on it and all
 // following when "seriesScope" says so. Nothing changes if the Meal was
 // Confirmed or Skipped; the refresh shows the planner it was.
 export async function editMealAction(

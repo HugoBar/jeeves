@@ -1,5 +1,5 @@
 import "server-only";
-import { and, asc, eq, gt, inArray, isNull, lt, notExists, or } from "drizzle-orm";
+import { and, asc, eq, gt, inArray, isNull, lt, notExists, notInArray, or, sql } from "drizzle-orm";
 import type { MealChanges } from "@/core/meals";
 import { dueRepeatDates, repeatOnChange, repeatsThrough, weekdayOf, type Weekday } from "@/core/meal-series";
 import type { Db } from "./index";
@@ -172,27 +172,113 @@ export async function endMealSeries(
   await db.update(mealSeries).set({ endedAt: new Date() }).where(eq(mealSeries.id, seriesId));
 }
 
-// Changes a Meal Series' hour, name and Untracked from one of its Meals: the
-// series, so its new repeats copy them, and it and every later Planned Meal
-// of the series, even ones changed on their own (ADR 0004). Earlier,
-// Confirmed and Skipped Meals never change. Run inside a transaction holding
-// the series (lockMealSeries).
+// Changes a Meal Series from one of its Meals, as saved with `changes`: the
+// series takes its hour, name, Untracked and slots, so its new repeats copy
+// them, and it and every later Planned Meal of the series are rewritten to
+// match, even ones changed on their own (ADR 0004). Earlier, Confirmed and
+// Skipped Meals never change. Run inside a transaction holding the series
+// (lockMealSeries), after the Meal's own slots are written.
 export async function rewriteMealSeries(
   db: Db,
-  { id: mealId, seriesId, date }: { id: string; seriesId: string; date: string },
+  meal: { id: string; seriesId: string; date: string },
   changes: MealChanges,
 ): Promise<void> {
-  await db.update(mealSeries).set(changes).where(eq(mealSeries.id, seriesId));
+  await db.update(mealSeries).set(changes).where(eq(mealSeries.id, meal.seriesId));
   await db
     .update(meals)
     .set(changes)
     .where(
       and(
-        eq(meals.seriesId, seriesId),
+        eq(meals.seriesId, meal.seriesId),
         eq(meals.status, "planned"),
-        or(eq(meals.id, mealId), gt(meals.date, date)),
+        or(eq(meals.id, meal.id), gt(meals.date, meal.date)),
       ),
     );
+  const layout = await copySlotsToSeries(db, meal);
+  const later = await db
+    .select({ id: meals.id })
+    .from(meals)
+    .where(and(eq(meals.seriesId, meal.seriesId), eq(meals.status, "planned"), gt(meals.date, meal.date)));
+  for (const repeat of later) await matchSlotsToSeries(db, repeat.id, layout);
+}
+
+// The series' slots made the Meal's, in its order (data-model Q5): a series
+// slot the Meal's slot was copied from takes its Slot Category and place, one
+// the Meal no longer has goes (earlier Meals' slots copied from it keep their
+// food and lose only the link), and a slot added to the Meal only becomes a
+// new series slot, linked to it. The unique (series, position) index is
+// checked row by row, so every series slot steps aside to a negative
+// position first. The series' slots, in order.
+async function copySlotsToSeries(
+  db: Db,
+  { id: mealId, seriesId }: { id: string; seriesId: string },
+): Promise<{ id: string; slotCategoryId: string }[]> {
+  const slots = await db
+    .select({ id: mealSlots.id, slotCategoryId: mealSlots.slotCategoryId, layoutSlotId: mealSlots.layoutSlotId })
+    .from(mealSlots)
+    .where(eq(mealSlots.mealId, mealId))
+    .orderBy(asc(mealSlots.position));
+  const stillLinked = slots.flatMap((slot) => (slot.layoutSlotId === null ? [] : [slot.layoutSlotId]));
+  const ofSeries = eq(layoutSlots.seriesId, seriesId);
+  await db.delete(layoutSlots).where(stillLinked.length > 0 ? and(ofSeries, notInArray(layoutSlots.id, stillLinked)) : ofSeries);
+  await db.update(layoutSlots).set({ position: sql`-1 - ${layoutSlots.position}` }).where(ofSeries);
+  const layout: { id: string; slotCategoryId: string }[] = [];
+  for (const [position, slot] of slots.entries()) {
+    if (slot.layoutSlotId !== null) {
+      await db
+        .update(layoutSlots)
+        .set({ slotCategoryId: slot.slotCategoryId, position })
+        .where(eq(layoutSlots.id, slot.layoutSlotId));
+      layout.push({ id: slot.layoutSlotId, slotCategoryId: slot.slotCategoryId });
+    } else {
+      const [added] = await db
+        .insert(layoutSlots)
+        .values({ seriesId, slotCategoryId: slot.slotCategoryId, position })
+        .returning({ id: layoutSlots.id });
+      await db.update(mealSlots).set({ layoutSlotId: added!.id }).where(eq(mealSlots.id, slot.id));
+      layout.push({ id: added!.id, slotCategoryId: slot.slotCategoryId });
+    }
+  }
+  return layout;
+}
+
+// A repeat's slots made the series' `layout`, in its order: a slot keeps its
+// food while the series slot it was copied from is still there, whatever its
+// place, and takes that series slot's Slot Category; a series slot it has
+// none of comes empty; any other slot, added to it only or copied from a
+// series slot now gone, goes with its food. Every slot steps aside to a
+// negative position first, as the unique (meal, position) index is checked
+// row by row.
+async function matchSlotsToSeries(
+  db: Db,
+  mealId: string,
+  layout: readonly { id: string; slotCategoryId: string }[],
+): Promise<void> {
+  const ofMeal = eq(mealSlots.mealId, mealId);
+  const linked = layout.map((slot) => slot.id);
+  await db
+    .delete(mealSlots)
+    .where(
+      and(
+        ofMeal,
+        linked.length > 0
+          ? or(isNull(mealSlots.layoutSlotId), notInArray(mealSlots.layoutSlotId, linked))
+          : undefined,
+      ),
+    );
+  await db.update(mealSlots).set({ position: sql`-1 - ${mealSlots.position}` }).where(ofMeal);
+  const kept = await db
+    .select({ id: mealSlots.id, layoutSlotId: mealSlots.layoutSlotId })
+    .from(mealSlots)
+    .where(ofMeal);
+  for (const [position, { id: layoutSlotId, slotCategoryId }] of layout.entries()) {
+    const slot = kept.find((one) => one.layoutSlotId === layoutSlotId);
+    if (slot) {
+      await db.update(mealSlots).set({ slotCategoryId, position }).where(eq(mealSlots.id, slot.id));
+    } else {
+      await db.insert(mealSlots).values({ mealId, slotCategoryId, position, layoutSlotId });
+    }
+  }
 }
 
 // Held while its Meals are deleted or rewritten, so repeats can't be

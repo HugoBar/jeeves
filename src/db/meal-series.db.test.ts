@@ -6,7 +6,7 @@ import { createCategory, listActiveCategories, removeCategory } from "./food-cat
 import { createDueRepeats } from "./meal-series";
 import { createMealType, listActiveMealTypes, removeMealType } from "./meal-types";
 import { confirmMeal, skipMeal } from "./confirmation";
-import { createMeal, deleteMeal, getMeal, listMeals, updateMeal, type Meal } from "./meals";
+import { addMealSlot, createMeal, deleteMeal, fillMealSlot, getMeal, listMeals, updateMeal, type Meal } from "./meals";
 import { createProduct } from "./products";
 import { mealSeries } from "./schema";
 import { createTestDb } from "./test-database";
@@ -277,6 +277,142 @@ describe("changing a Meal of a Meal Series", () => {
       ["2026-11-26", "19:00"],
       ["2026-12-03", "19:00"],
     ]);
+  });
+});
+
+describe("changing the slots of a Meal of a Meal Series", () => {
+  const KEYS = ["main_dish", "salad", "grains", "soup", "fruit"] as const;
+
+  async function seriesCategories() {
+    const ids = await Promise.all(KEYS.map(seededCategoryId));
+    return {
+      ids: Object.fromEntries(KEYS.map((key, index) => [key, ids[index]!])) as Record<(typeof KEYS)[number], string>,
+      names: new Map(ids.map((id, index) => [id, KEYS[index]!])),
+    };
+  }
+
+  // What a Meal's slots show: each Slot Category's seed key and what it holds.
+  async function slotsOf(id: string, names: Map<string, string>) {
+    const meal = (await getMeal(db, id))!;
+    return meal.slots.map((slot) => [
+      names.get(slot.slotCategoryId),
+      slot.content === "product" ? slot.product.name : slot.content,
+    ]);
+  }
+
+  async function seriesProduct(name: string, categoryId: string): Promise<string> {
+    const result = await createProduct(db, { name, defaultUnit: "g", density: null, packSize: null, categoryIds: [categoryId] });
+    if (!result.ok) throw new Error(result.error);
+    return result.product.id;
+  }
+
+  const UNCHANGED = { hour: "12:00", name: "Slot Lunch", untracked: false };
+
+  it("\"this and all following\" gives the series this Meal's slots and rewrites every later Planned repeat, keeping food by series slot", async () => {
+    const lunchId = await seededMealTypeId("lunch");
+    const { ids, names } = await seriesCategories();
+    const stew = await seriesProduct("Slot Stew", ids.main_dish);
+    const greens = await seriesProduct("Slot Greens", ids.salad);
+    const apple = await seriesProduct("Slot Apple", ids.fruit);
+    // Started on Monday the 9th, so its repeats run from the 10th to the 22nd.
+    await createMeal(
+      db,
+      { ...UNCHANGED, date: "2026-11-09", mealTypeId: lunchId },
+      [ids.main_dish, ids.salad, ids.grains].map((slotCategoryId) => ({ slotCategoryId, fill: { content: "empty" } as const })),
+      [1, 2, 3, 4, 5, 6, 7],
+    );
+    await createDueRepeats(db, "2026-11-09");
+    const byDate = new Map((await mealsNamed("Slot Lunch")).map((meal) => [meal.date, meal]));
+    const id = (date: string) => byDate.get(date)!.id;
+    const slotIds = (date: string) => byDate.get(date)!.slots.map((slot) => slot.id);
+    await fillMealSlot(db, slotIds("2026-11-11")[0]!, { content: "product", productId: stew, quantity: 200 });
+    expect(await skipMeal(db, id("2026-11-10"), TODAY)).toBe(true);
+    expect(await confirmMeal(db, id("2026-11-12"), { untracked: true, today: TODAY })).toEqual({ ok: true });
+    // The 14th: food in its main dish and salad, and a slot of its own.
+    await fillMealSlot(db, slotIds("2026-11-14")[0]!, { content: "product", productId: stew, quantity: 200 });
+    await fillMealSlot(db, slotIds("2026-11-14")[1]!, { content: "product", productId: greens, quantity: 50 });
+    await addMealSlot(db, id("2026-11-14"), { slotCategoryId: ids.fruit, fill: { content: "product", productId: apple, quantity: 100 } });
+    // The 15th, on its own: grains moved first.
+    const [main15, salad15, grains15] = slotIds("2026-11-15");
+    await updateMeal(db, id("2026-11-15"), UNCHANGED, { removed: [], order: [grains15!, main15!, salad15!], slotCategories: [] });
+    // The 13th, a Friday, has a fruit slot of its own before it is changed.
+    await addMealSlot(db, id("2026-11-13"), { slotCategoryId: ids.fruit, fill: { content: "empty" } });
+    const [main13, salad13, grains13, fruit13] = (await getMeal(db, id("2026-11-13")))!.slots.map((slot) => slot.id);
+
+    // Salad removed, grains moved first, main dish made a soup.
+    const saved = await updateMeal(
+      db,
+      id("2026-11-13"),
+      UNCHANGED,
+      { removed: [salad13!], order: [grains13!, main13!, fruit13!], slotCategories: [{ slotId: main13!, slotCategoryId: ids.soup }] },
+      { scope: "following" },
+    );
+
+    expect(saved).toBe(true);
+    const asChanged = [["grains", "empty"], ["soup", "empty"], ["fruit", "empty"]];
+    expect(await slotsOf(id("2026-11-13"), names)).toEqual(asChanged);
+    // Food stays with the series slot it came from; a slot of its own goes, with its food.
+    expect(await slotsOf(id("2026-11-14"), names)).toEqual([["grains", "empty"], ["soup", "Slot Stew"], ["fruit", "empty"]]);
+    expect(await slotsOf(id("2026-11-15"), names)).toEqual(asChanged);
+    expect(await slotsOf(id("2026-11-22"), names)).toEqual(asChanged);
+    // Earlier, Skipped and Confirmed Meals never change.
+    const asStarted = [["main_dish", "empty"], ["salad", "empty"], ["grains", "empty"]];
+    expect(await slotsOf(id("2026-11-09"), names)).toEqual(asStarted);
+    expect(await slotsOf(id("2026-11-10"), names)).toEqual(asStarted);
+    expect(await slotsOf(id("2026-11-11"), names)).toEqual([["main_dish", "Slot Stew"], ["salad", "empty"], ["grains", "empty"]]);
+    expect(await slotsOf(id("2026-11-12"), names)).toEqual(asStarted);
+    // New repeats copy the series as changed.
+    await createDueRepeats(db, "2026-11-23");
+    const [next] = (await listMeals(db, "2026-11-23", "2026-11-23")).filter((meal) => meal.name === "Slot Lunch");
+    expect(await slotsOf(next!.id, names)).toEqual(asChanged);
+  });
+
+  it("\"this and all following\" with only the hour changed still makes later repeats' slots match the series", async () => {
+    const dinnerId = await seededMealTypeId("dinner");
+    const { ids, names } = await seriesCategories();
+    await createMeal(
+      db,
+      { date: TODAY, hour: "19:00", name: "Slot Dinner", mealTypeId: dinnerId },
+      [{ slotCategoryId: ids.soup, fill: { content: "empty" } }],
+      [4],
+    );
+    await createDueRepeats(db, TODAY);
+    const [first, second] = await mealsNamed("Slot Dinner");
+    await addMealSlot(db, second!.id, { slotCategoryId: ids.fruit, fill: { content: "empty" } });
+
+    await updateMeal(db, first!.id, { hour: "20:00", name: "Slot Dinner", untracked: false }, undefined, { scope: "following" });
+
+    expect(await slotsOf(second!.id, names)).toEqual([["soup", "empty"]]);
+  });
+
+  it("\"only this one\" changes only that Meal's slots, and new repeats keep the series' slots", async () => {
+    const dinnerId = await seededMealTypeId("dinner");
+    const { ids, names } = await seriesCategories();
+    await createMeal(
+      db,
+      { date: TODAY, hour: "19:00", name: "Slot Supper", mealTypeId: dinnerId },
+      [ids.soup, ids.main_dish].map((slotCategoryId) => ({ slotCategoryId, fill: { content: "empty" } as const })),
+      [4],
+    );
+    await createDueRepeats(db, TODAY);
+    const [first] = await mealsNamed("Slot Supper");
+    const [soup, main] = first!.slots.map((slot) => slot.id);
+
+    await updateMeal(
+      db,
+      first!.id,
+      { hour: "19:00", name: "Slot Supper", untracked: false },
+      { removed: [soup!], order: [main!], slotCategories: [] },
+      { scope: "this" },
+    );
+    await createDueRepeats(db, "2026-11-23");
+
+    const meals = await mealsNamed("Slot Supper", "2026-12-06");
+    expect(meals.map((meal) => meal.date)).toEqual([TODAY, "2026-11-19", "2026-11-26", "2026-12-03"]);
+    expect(await slotsOf(first!.id, names)).toEqual([["main_dish", "empty"]]);
+    for (const meal of meals.slice(1)) {
+      expect(await slotsOf(meal.id, names)).toEqual([["soup", "empty"], ["main_dish", "empty"]]);
+    }
   });
 });
 
