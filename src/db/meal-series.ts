@@ -1,7 +1,7 @@
 import "server-only";
-import { and, asc, eq, gt, isNull, lt, notExists, or } from "drizzle-orm";
+import { and, asc, eq, gt, inArray, isNull, lt, notExists, or } from "drizzle-orm";
 import type { MealChanges } from "@/core/meals";
-import { dueRepeatDates, repeatsThrough, type Weekday } from "@/core/meal-series";
+import { dueRepeatDates, repeatOnChange, repeatsThrough, weekdayOf, type Weekday } from "@/core/meal-series";
 import type { Db } from "./index";
 import { layoutSlots, mealSeries, mealSlots, meals, mealTypes } from "./schema";
 
@@ -69,37 +69,87 @@ async function createSeriesRepeats(db: Db, seriesId: string, today: string): Pro
     if (!series || series.endedAt) return 0;
     const { dates, through } = dueRepeatDates(series, today);
     if (through === series.generatedThrough) return 0;
-    const slots = await tx
-      .select({ id: layoutSlots.id, slotCategoryId: layoutSlots.slotCategoryId })
-      .from(layoutSlots)
-      .where(eq(layoutSlots.seriesId, seriesId))
-      .orderBy(asc(layoutSlots.position));
-    for (const date of dates) {
-      const [meal] = await tx
-        .insert(meals)
-        .values({
-          date,
-          hour: series.hour,
-          name: series.name,
-          mealTypeId: series.mealTypeId,
-          untracked: series.untracked,
-          seriesId,
-        })
-        .returning({ id: meals.id });
-      if (slots.length > 0) {
-        await tx.insert(mealSlots).values(
-          slots.map((slot, position) => ({
-            mealId: meal!.id,
-            slotCategoryId: slot.slotCategoryId,
-            position,
-            layoutSlotId: slot.id,
-          })),
-        );
-      }
-    }
+    await insertRepeats(tx, series, dates);
     await tx.update(mealSeries).set({ generatedThrough: through }).where(eq(mealSeries.id, seriesId));
     return dates.length;
   });
+}
+
+// Writes the series' repeats on `dates` as ordinary Planned Meals copying
+// its name, Meal Type, hour, Untracked and slots' Slot Categories, in order,
+// every slot empty and linked to the series slot it was copied from.
+async function insertRepeats(db: Db, series: typeof mealSeries.$inferSelect, dates: readonly string[]): Promise<void> {
+  if (dates.length === 0) return;
+  const slots = await db
+    .select({ id: layoutSlots.id, slotCategoryId: layoutSlots.slotCategoryId })
+    .from(layoutSlots)
+    .where(eq(layoutSlots.seriesId, series.id))
+    .orderBy(asc(layoutSlots.position));
+  for (const date of dates) {
+    const [meal] = await db
+      .insert(meals)
+      .values({
+        date,
+        hour: series.hour,
+        name: series.name,
+        mealTypeId: series.mealTypeId,
+        untracked: series.untracked,
+        seriesId: series.id,
+      })
+      .returning({ id: meals.id });
+    if (slots.length > 0) {
+      await db.insert(mealSlots).values(
+        slots.map((slot, position) => ({
+          mealId: meal!.id,
+          slotCategoryId: slot.slotCategoryId,
+          position,
+          layoutSlotId: slot.id,
+        })),
+      );
+    }
+  }
+}
+
+// Changes a Meal Series' days from one of its Meals, dated `date`, as
+// "Repeat on" was saved on `today`, the viewer's date (core's
+// repeatOnChange): later Planned repeats on newly unticked days are deleted,
+// and repeats are added on newly ticked days, unless its Meal Type is
+// Archived, as no new repeats come then. Every other repeat stays as it is,
+// even one changed on its own. Unticking every day deletes every later Planned repeat and ends
+// the series; the Meal itself leaves it, so it no longer repeats, and the
+// series goes once no Meal belongs to it. An ended series changes nothing.
+// Earlier, Confirmed and Skipped Meals never change. Run inside a
+// transaction holding the series (lockMealSeries).
+export async function changeRepeatOn(
+  db: Db,
+  { id: mealId, seriesId, date }: { id: string; seriesId: string; date: string },
+  weekdays: readonly Weekday[],
+  today: string,
+): Promise<void> {
+  const [series] = await db.select().from(mealSeries).where(eq(mealSeries.id, seriesId));
+  if (!series || series.endedAt) return;
+  const change = repeatOnChange(series, weekdays, date, today);
+  if (change.kind === "unchanged") return;
+  const later = and(eq(meals.seriesId, seriesId), eq(meals.status, "planned"), gt(meals.date, date));
+  if (change.kind === "end") {
+    await db.delete(meals).where(later);
+    await db.update(mealSeries).set({ endedAt: new Date() }).where(eq(mealSeries.id, seriesId));
+    await db.update(mealSlots).set({ layoutSlotId: null }).where(eq(mealSlots.mealId, mealId));
+    await db.update(meals).set({ seriesId: null }).where(eq(meals.id, mealId));
+    await removeEmptyMealSeries(db, seriesId);
+    return;
+  }
+  if (change.removed.length > 0) {
+    const repeats = await db.select({ id: meals.id, date: meals.date }).from(meals).where(later);
+    const gone = repeats.filter((repeat) => change.removed.includes(weekdayOf(repeat.date))).map((repeat) => repeat.id);
+    if (gone.length > 0) await db.delete(meals).where(inArray(meals.id, gone));
+  }
+  await db.update(mealSeries).set({ weekdays: [...weekdays] }).where(eq(mealSeries.id, seriesId));
+  const [mealType] = await db
+    .select({ archivedAt: mealTypes.archivedAt })
+    .from(mealTypes)
+    .where(eq(mealTypes.id, series.mealTypeId));
+  if (mealType && !mealType.archivedAt) await insertRepeats(db, series, change.addedDates);
 }
 
 // Ends a Meal Series from one of its Meals: it and every later Planned Meal

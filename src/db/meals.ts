@@ -14,7 +14,7 @@ import type { DefaultUnit } from "@/core/units";
 import type { FoodCategory } from "./food-categories";
 import type { Db } from "./index";
 import type { MealType } from "./meal-types";
-import { endMealSeries, lockMealSeries, removeEmptyMealSeries, rewriteMealSeries, startMealSeries } from "./meal-series";
+import { changeRepeatOn, endMealSeries, lockMealSeries, removeEmptyMealSeries, rewriteMealSeries, startMealSeries } from "./meal-series";
 import { listActiveProducts } from "./products";
 import { finalCategoryIdsByRecipe, listActiveRecipes } from "./recipes";
 import { foodCategories, mealSeries, mealSlots, meals, mealTypes, products, recipes } from "./schema";
@@ -41,15 +41,25 @@ export type MealSlot = {
 
 // A Meal as the planner shows it, with what its card needs of its Meal Type
 // and its slots in order. That Meal Type may be Archived: the Meal keeps it.
-// `repeats` are its Meal Series' days, Monday first; null if it has none.
+// `repeats` are its Meal Series' days, Monday first, and `series` when the
+// series started (its earliest Meal's day) and whether it ended; both null if
+// it has none.
 export interface Meal extends NewMealFields {
   id: string;
   createdAt: Date;
   status: MealStatus;
   untracked: boolean;
   repeats: Weekday[] | null;
+  series: MealSeriesState | null;
   mealType: Pick<MealType, "seedKey" | "name" | "allowsLeftovers"> & { archived: boolean };
   slots: MealSlot[];
+}
+
+// A Meal's Meal Series as its form needs it: the day it started (its
+// earliest Meal's) and whether it ended.
+export interface MealSeriesState {
+  startedOn: string;
+  ended: boolean;
 }
 
 function selectMeals(db: Db) {
@@ -64,6 +74,8 @@ function selectMeals(db: Db) {
       status: meals.status,
       untracked: meals.untracked,
       repeats: mealSeries.weekdays,
+      seriesStartedOn: sql<string | null>`(select min(m.date)::text from ${meals} m where m.series_id = ${meals.seriesId})`,
+      seriesEndedAt: mealSeries.endedAt,
       mealType: {
         seedKey: mealTypes.seedKey,
         name: mealTypes.name,
@@ -147,11 +159,19 @@ function toFood(row: {
   }
 }
 
+// A Meal as selectMeals reads it, before its slots and series are added.
+type MealRow = Omit<Meal, "slots" | "series"> & { seriesStartedOn: string | null; seriesEndedAt: Date | null };
+
 // Rows with their slots added. Postgres reads a `time` back as "HH:MM:SS";
 // core works in "HH:MM".
-async function toMeals(db: Db, rows: Omit<Meal, "slots">[]): Promise<Meal[]> {
+async function toMeals(db: Db, rows: MealRow[]): Promise<Meal[]> {
   const slots = await slotsByMeal(db, rows.map((row) => row.id));
-  return rows.map((row) => ({ ...row, hour: row.hour.slice(0, 5), slots: slots.get(row.id)! }));
+  return rows.map(({ seriesStartedOn, seriesEndedAt, ...row }) => ({
+    ...row,
+    hour: row.hour.slice(0, 5),
+    series: seriesStartedOn === null ? null : { startedOn: seriesStartedOn, ended: seriesEndedAt !== null },
+    slots: slots.get(row.id)!,
+  }));
 }
 
 // Every Meal from `from` to `to`, both included, in no order.
@@ -199,19 +219,21 @@ const changeable = (id: string) => and(eq(meals.id, id), eq(meals.status, "plann
 
 // Its Meal Type never changes. `slots`, Edit Meal's slot changes, must
 // already be checked by core's parseMealSlotChanges; they are written with
-// the rest, or not at all. `repeatOn`, checked by core's parseRepeatOn,
-// starts a Meal Series from the Meal as saved, unless it is already in one.
-// For a Meal of a Meal Series, `scope` says whether its hour, name and
-// Untracked change on only it, or on the series and it and every later
-// Planned Meal of the series too (rewriteMealSeries). False, changing
-// nothing, if the Meal is gone, Confirmed or Skipped.
+// the rest, or not at all. `repeatOn`, checked by core's parseRepeatOn, is
+// the days ticked as saved on `today`, the viewer's date: on a Meal in no
+// Meal Series, any starts one from the Meal as saved; on a Meal of one, they
+// change its days from this Meal on (changeRepeatOn). Left out, they stay as
+// they are. For a Meal of a Meal Series, `scope` says whether its hour, name
+// and Untracked change on only it, or on the series and it and every later
+// Planned Meal of the series too (rewriteMealSeries), before its days
+// change, so repeats added then copy them. False, changing nothing, if the
+// Meal is gone, Confirmed or Skipped.
 export async function updateMeal(
   db: Db,
   id: string,
   changes: MealChanges,
   slots?: MealSlotChanges,
-  repeatOn: readonly Weekday[] = [],
-  scope: SeriesScope = "this",
+  { repeatOn, scope = "this" }: { repeatOn?: { weekdays: readonly Weekday[]; today: string }; scope?: SeriesScope } = {},
 ): Promise<boolean> {
   return db.transaction(async (tx) => {
     // The series is held before the Meal, as deleteMeal does, so a save and
@@ -232,7 +254,11 @@ export async function updateMeal(
       await tx.update(meals).set(changes).where(eq(meals.id, id));
     }
     if (slots) await changeMealSlots(tx, id, slots);
-    if (repeatOn.length > 0) await startMealSeries(tx, id, repeatOn);
+    if (repeatOn && meal.seriesId !== null) {
+      await changeRepeatOn(tx, { id, seriesId: meal.seriesId, date: meal.date }, repeatOn.weekdays, repeatOn.today);
+    } else if (repeatOn && repeatOn.weekdays.length > 0) {
+      await startMealSeries(tx, id, repeatOn.weekdays);
+    }
     return true;
   });
 }

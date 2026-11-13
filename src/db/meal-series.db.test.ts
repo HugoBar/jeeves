@@ -155,7 +155,7 @@ describe("a Meal Series started on Edit Meal", () => {
       meal.id,
       { hour: "08:30", name: "Weekend Breakfast", untracked: false },
       { removed: [first!.id], order: [second!.id], slotCategories: [] },
-      [6, 7],
+      { repeatOn: { weekdays: [6, 7], today: TODAY } },
     );
     await createDueRepeats(db, TODAY);
 
@@ -243,7 +243,7 @@ describe("changing a Meal of a Meal Series", () => {
     await updateMeal(db, byDate.get("2026-11-14")!, { hour: "14:00", name: "Saturday Change", untracked: false });
 
     expect(
-      await updateMeal(db, byDate.get("2026-11-11")!, { hour: "13:00", name: "Late Change", untracked: true }, undefined, [], "following"),
+      await updateMeal(db, byDate.get("2026-11-11")!, { hour: "13:00", name: "Late Change", untracked: true }, undefined, { scope: "following" }),
     ).toBe(true);
 
     const shown = async (date: string) => {
@@ -268,7 +268,7 @@ describe("changing a Meal of a Meal Series", () => {
     await createDueRepeats(db, TODAY);
     const [first, second] = await mealsNamed("Thursday Dinner");
 
-    await updateMeal(db, first!.id, { hour: "20:00", name: "Late Thursday", untracked: false }, undefined, [], "this");
+    await updateMeal(db, first!.id, { hour: "20:00", name: "Late Thursday", untracked: false }, undefined, { scope: "this" });
     await createDueRepeats(db, "2026-11-23");
 
     expect((await mealsNamed("Late Thursday", "2026-12-06")).map((m) => m.date)).toEqual([TODAY]);
@@ -277,5 +277,92 @@ describe("changing a Meal of a Meal Series", () => {
       ["2026-11-26", "19:00"],
       ["2026-12-03", "19:00"],
     ]);
+  });
+});
+
+describe("changing \"Repeat on\" from a Meal of a Meal Series", () => {
+  it("adds repeats only on newly ticked days and removes them only on newly unticked days, from this Meal on", async () => {
+    const [lunchId, mainDish] = await Promise.all([seededMealTypeId("lunch"), seededCategoryId("main_dish")]);
+    // Started on Monday the 9th, so its repeats run from the 10th to the 20th.
+    await createMeal(
+      db,
+      { date: "2026-11-09", hour: "12:00", name: "Desk Lunch", mealTypeId: lunchId },
+      [{ slotCategoryId: mainDish, fill: { content: "empty" } }],
+      [1, 2, 3, 4, 5],
+    );
+    await createDueRepeats(db, "2026-11-09");
+    const byDate = new Map((await mealsNamed("Desk Lunch")).map((meal) => [meal.date, meal.id]));
+    await updateMeal(db, byDate.get("2026-11-16")!, { hour: "14:00", name: "Desk Lunch", untracked: false });
+
+    // From Friday the 13th: Tuesday unticked, Saturday ticked.
+    const saved = await updateMeal(db, byDate.get("2026-11-13")!, { hour: "12:00", name: "Desk Lunch", untracked: false }, undefined, {
+      repeatOn: { weekdays: [1, 3, 4, 5, 6], today: TODAY },
+    });
+
+    expect(saved).toBe(true);
+    const meals = await mealsNamed("Desk Lunch");
+    expect(meals.map((meal) => [meal.date, meal.hour, meal.repeats])).toEqual([
+      ["2026-11-09", "12:00", [1, 3, 4, 5, 6]],
+      ["2026-11-10", "12:00", [1, 3, 4, 5, 6]],
+      ["2026-11-11", "12:00", [1, 3, 4, 5, 6]],
+      ["2026-11-12", "12:00", [1, 3, 4, 5, 6]],
+      ["2026-11-13", "12:00", [1, 3, 4, 5, 6]],
+      ["2026-11-14", "12:00", [1, 3, 4, 5, 6]],
+      ["2026-11-16", "14:00", [1, 3, 4, 5, 6]],
+      ["2026-11-18", "12:00", [1, 3, 4, 5, 6]],
+      ["2026-11-19", "12:00", [1, 3, 4, 5, 6]],
+      ["2026-11-20", "12:00", [1, 3, 4, 5, 6]],
+      ["2026-11-21", "12:00", [1, 3, 4, 5, 6]],
+    ]);
+    expect(meals[5]!.slots.map((slot) => [slot.slotCategoryId, slot.content])).toEqual([[mainDish, "empty"]]);
+    // A new week repeats on the new days.
+    await createDueRepeats(db, "2026-11-23");
+    const next = (await listMeals(db, "2026-11-23", "2026-11-29")).filter((meal) => meal.name === "Desk Lunch");
+    expect(next.map((meal) => meal.date).sort()).toEqual(["2026-11-23", "2026-11-25", "2026-11-26", "2026-11-27", "2026-11-28"]);
+  });
+
+  it("unticking every day ends the series from this Meal, which leaves it", async () => {
+    const dinnerId = await seededMealTypeId("dinner");
+    await createMeal(db, { date: "2026-11-09", hour: "19:00", name: "Daily Stop", mealTypeId: dinnerId }, [], [1, 2, 3, 4, 5, 6, 7]);
+    await createDueRepeats(db, "2026-11-09");
+    const byDate = new Map((await mealsNamed("Daily Stop")).map((meal) => [meal.date, meal.id]));
+    expect(await confirmMeal(db, byDate.get("2026-11-12")!, { untracked: true, today: TODAY })).toEqual({ ok: true });
+
+    await updateMeal(db, byDate.get("2026-11-13")!, { hour: "19:00", name: "Daily Stop", untracked: false }, undefined, {
+      repeatOn: { weekdays: [], today: TODAY },
+    });
+
+    const left = await mealsNamed("Daily Stop");
+    expect(left.map((meal) => [meal.date, meal.status, meal.repeats])).toEqual([
+      ["2026-11-09", "planned", [1, 2, 3, 4, 5, 6, 7]],
+      ["2026-11-10", "planned", [1, 2, 3, 4, 5, 6, 7]],
+      ["2026-11-11", "planned", [1, 2, 3, 4, 5, 6, 7]],
+      ["2026-11-12", "confirmed", [1, 2, 3, 4, 5, 6, 7]],
+      ["2026-11-13", "planned", null],
+    ]);
+    // Earlier Meals keep the ended series, as started.
+    expect(left[0]!.series).toEqual({ startedOn: "2026-11-09", ended: true });
+    expect(left[4]!.series).toBeNull();
+    await createDueRepeats(db, "2026-11-23");
+    expect((await mealsNamed("Daily Stop", "2026-12-06")).map((meal) => meal.date)).toEqual([
+      "2026-11-09",
+      "2026-11-10",
+      "2026-11-11",
+      "2026-11-12",
+      "2026-11-13",
+    ]);
+  });
+
+  it("removes the series when the Meal unticking every day was its last", async () => {
+    const lunchId = await seededMealTypeId("lunch");
+    const meal = await createMeal(db, { date: "2026-11-22", hour: "12:00", name: "Last Sunday", mealTypeId: lunchId }, [], [7]);
+    const [series] = await db.select({ id: mealSeries.id }).from(mealSeries).where(eq(mealSeries.name, "Last Sunday"));
+
+    await updateMeal(db, meal.id, { hour: "12:00", name: "Last Sunday", untracked: false }, undefined, {
+      repeatOn: { weekdays: [], today: TODAY },
+    });
+
+    expect((await getMeal(db, meal.id))!.repeats).toBeNull();
+    expect(await db.select().from(mealSeries).where(eq(mealSeries.id, series!.id))).toEqual([]);
   });
 });
