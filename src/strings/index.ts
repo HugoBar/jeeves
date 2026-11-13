@@ -231,3 +231,13 @@ export function formatRepeats(weekdays: readonly Weekday[]): string {
   }
   return t("planner.repeatsDays", { days: weekdays.map(weekdayName).join(", ") });
 }
+
+// A Meal's name made plural, as "Delete which Weekday Lunches?" asks:
+// "Lunch" becomes "Lunches", "Party" "Parties", and a name already ending in
+// s stays as it is.
+export function pluralName(name: string): string {
+  if (/s$/i.test(name)) return name;
+  if (/(ch|sh|x|z)$/i.test(name)) return `${name}es`;
+  if (/[^aeiou]y$/i.test(name)) return `${name.slice(0, -1)}ies`;
+  return `${name}s`;
+}

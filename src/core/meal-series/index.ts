@@ -8,6 +8,10 @@ export type Weekday = 1 | 2 | 3 | 4 | 5 | 6 | 7;
 
 export const WEEKDAYS: readonly Weekday[] = [1, 2, 3, 4, 5, 6, 7];
 
+// What deleting a Meal of a Meal Series applies to: only that Meal, or it
+// and every later Planned Meal of the series, which ends it.
+export type SeriesScope = "this" | "following";
+
 export type RepeatOnError = "pastMealRepeat" | "invalidWeekday";
 
 export type RepeatOnResult = { ok: true; weekdays: Weekday[] } | { ok: false; error: RepeatOnError };

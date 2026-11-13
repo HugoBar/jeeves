@@ -1,11 +1,14 @@
+import { eq } from "drizzle-orm";
 import { beforeAll, describe, expect, it } from "vitest";
 import type { CategorySeedKey } from "@/core/food-categories";
 import type { MealTypeSeedKey } from "@/core/meal-types";
 import { createCategory, listActiveCategories, removeCategory } from "./food-categories";
 import { createDueRepeats } from "./meal-series";
 import { createMealType, listActiveMealTypes, removeMealType } from "./meal-types";
+import { confirmMeal, skipMeal } from "./confirmation";
 import { createMeal, deleteMeal, getMeal, listMeals, updateMeal, type Meal } from "./meals";
 import { createProduct } from "./products";
+import { mealSeries } from "./schema";
 import { createTestDb } from "./test-database";
 
 let db: Awaited<ReturnType<typeof createTestDb>>;
@@ -164,5 +167,66 @@ describe("a Meal Series started on Edit Meal", () => {
       ["2026-11-22", "08:30", [6, 7]],
     ]);
     expect(meals[1]!.slots.map((slot) => slot.slotCategoryId)).toEqual([mainDish]);
+  });
+});
+
+describe("deleting a Meal of a Meal Series", () => {
+  it("\"this and all following\" deletes it and every later Planned repeat, and ends the series", async () => {
+    const lunchId = await seededMealTypeId("lunch");
+    // Started on Monday the 9th, so its repeats run from the 10th to the 22nd.
+    await createMeal(db, { date: "2026-11-09", hour: "12:00", name: "Daily Ending", mealTypeId: lunchId }, [], [1, 2, 3, 4, 5, 6, 7]);
+    await createDueRepeats(db, "2026-11-09");
+    const byDate = new Map((await mealsNamed("Daily Ending")).map((meal) => [meal.date, meal]));
+    expect(await skipMeal(db, byDate.get("2026-11-10")!.id, TODAY)).toBe(true);
+    expect(await confirmMeal(db, byDate.get("2026-11-12")!.id, { untracked: true, today: TODAY })).toEqual({ ok: true });
+
+    await deleteMeal(db, byDate.get("2026-11-11")!.id, "following");
+
+    const left = await mealsNamed("Daily Ending");
+    expect(left.map((meal) => [meal.date, meal.status, meal.repeats])).toEqual([
+      ["2026-11-09", "planned", [1, 2, 3, 4, 5, 6, 7]],
+      ["2026-11-10", "skipped", [1, 2, 3, 4, 5, 6, 7]],
+      ["2026-11-12", "confirmed", [1, 2, 3, 4, 5, 6, 7]],
+    ]);
+    // Ended: a new week brings no new repeats.
+    await createDueRepeats(db, "2026-11-23");
+    expect((await mealsNamed("Daily Ending", "2026-12-06")).map((meal) => meal.date)).toEqual(["2026-11-09", "2026-11-10", "2026-11-12"]);
+  });
+
+  it("removes a series once its last Meal is deleted with \"only this one\", so it stops repeating", async () => {
+    const dinnerId = await seededMealTypeId("dinner");
+    // Sunday the 22nd only: the planner shows no other Sunday after it.
+    const meal = await createMeal(db, { date: "2026-11-22", hour: "19:00", name: "Lone Sunday", mealTypeId: dinnerId }, [], [7]);
+    await createDueRepeats(db, TODAY);
+    expect((await mealsNamed("Lone Sunday")).map((m) => m.date)).toEqual(["2026-11-22"]);
+
+    await deleteMeal(db, meal.id, "this");
+
+    await createDueRepeats(db, "2026-11-23");
+    expect(await mealsNamed("Lone Sunday", "2026-12-06")).toEqual([]);
+  });
+
+  it("removes an ended series once no Meal belongs to it", async () => {
+    const lunchId = await seededMealTypeId("lunch");
+    const meal = await createMeal(db, { date: TODAY, hour: "12:00", name: "All Gone", mealTypeId: lunchId }, [], [4]);
+    await createDueRepeats(db, TODAY);
+    const [series] = await db.select({ id: mealSeries.id }).from(mealSeries).where(eq(mealSeries.name, "All Gone"));
+
+    await deleteMeal(db, meal.id, "following");
+
+    expect(await mealsNamed("All Gone")).toEqual([]);
+    expect(await db.select().from(mealSeries).where(eq(mealSeries.id, series!.id))).toEqual([]);
+  });
+
+  it("\"only this one\" leaves the rest of the series repeating", async () => {
+    const lunchId = await seededMealTypeId("lunch");
+    await createMeal(db, { date: TODAY, hour: "12:00", name: "Gap Thursday", mealTypeId: lunchId }, [], [4]);
+    await createDueRepeats(db, TODAY);
+    const [, repeat] = await mealsNamed("Gap Thursday");
+
+    await deleteMeal(db, repeat!.id, "this");
+    await createDueRepeats(db, "2026-11-23");
+
+    expect((await mealsNamed("Gap Thursday", "2026-12-06")).map((m) => m.date)).toEqual(["2026-11-12", "2026-11-26", "2026-12-03"]);
   });
 });

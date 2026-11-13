@@ -9,12 +9,12 @@ import {
   type MealStatus,
   type NewMealFields,
 } from "@/core/meals";
-import type { Weekday } from "@/core/meal-series";
+import type { SeriesScope, Weekday } from "@/core/meal-series";
 import type { DefaultUnit } from "@/core/units";
 import type { FoodCategory } from "./food-categories";
 import type { Db } from "./index";
 import type { MealType } from "./meal-types";
-import { startMealSeries } from "./meal-series";
+import { endMealSeries, lockMealSeries, removeEmptyMealSeries, startMealSeries } from "./meal-series";
 import { listActiveProducts } from "./products";
 import { finalCategoryIdsByRecipe, listActiveRecipes } from "./recipes";
 import { foodCategories, mealSeries, mealSlots, meals, mealTypes, products, recipes } from "./schema";
@@ -363,7 +363,28 @@ export async function listFoodsForSlots(db: Db): Promise<{ recipes: SlotRecipe[]
 
 // A hard delete; its own slots cascade. Nothing if the Meal is Confirmed or
 // Skipped: it must be Reopened first. A Reopened Meal's Stock Movements stay
-// in the Products' history, no longer linked to it.
-export async function deleteMeal(db: Db, id: string): Promise<void> {
-  await db.delete(meals).where(changeable(id));
+// in the Products' history, no longer linked to it. For a Meal of a Meal
+// Series, `scope` says whether only it goes, leaving a gap that is never
+// recreated, or it and every later Planned Meal of the series, which ends
+// it. The series goes once no Meal belongs to it.
+export async function deleteMeal(db: Db, id: string, scope: SeriesScope = "this"): Promise<void> {
+  await db.transaction(async (tx) => {
+    // The series is held before the Meal, as deleting "this and all
+    // following" holds the later Meals after it: two deletes in one series
+    // then wait in turn instead of on each other.
+    const [found] = await tx.select({ seriesId: meals.seriesId }).from(meals).where(eq(meals.id, id));
+    if (found?.seriesId) await lockMealSeries(tx, found.seriesId);
+    const [meal] = await tx
+      .select({ seriesId: meals.seriesId, date: meals.date })
+      .from(meals)
+      .where(changeable(id))
+      .for("update");
+    if (!meal) return;
+    if (meal.seriesId !== null && scope === "following") {
+      await endMealSeries(tx, { id, seriesId: meal.seriesId, date: meal.date });
+    } else {
+      await tx.delete(meals).where(eq(meals.id, id));
+    }
+    if (meal.seriesId !== null) await removeEmptyMealSeries(tx, meal.seriesId);
+  });
 }

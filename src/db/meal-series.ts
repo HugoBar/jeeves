@@ -1,5 +1,5 @@
 import "server-only";
-import { and, asc, eq, isNull, lt } from "drizzle-orm";
+import { and, asc, eq, gt, isNull, lt, notExists, or } from "drizzle-orm";
 import { dueRepeatDates, repeatsThrough, type Weekday } from "@/core/meal-series";
 import type { Db } from "./index";
 import { layoutSlots, mealSeries, mealSlots, meals, mealTypes } from "./schema";
@@ -43,14 +43,20 @@ export async function startMealSeries(db: Db, mealId: string, weekdays: readonly
 // dueRepeatDates), as ordinary Planned Meals with every slot empty, even on a
 // day that already has a Meal of the same Meal Type. A series whose Meal Type
 // is Archived creates none. Each series is held while its repeats are
-// written, so two pages opened at once never create one twice. How many
-// repeats were created.
+// written, so two pages opened at once never create one twice. An ended
+// series creates none. How many repeats were created.
 export async function createDueRepeats(db: Db, today: string): Promise<number> {
   const due = await db
     .select({ id: mealSeries.id })
     .from(mealSeries)
     .innerJoin(mealTypes, eq(mealSeries.mealTypeId, mealTypes.id))
-    .where(and(isNull(mealTypes.archivedAt), lt(mealSeries.generatedThrough, repeatsThrough(today))));
+    .where(
+      and(
+        isNull(mealTypes.archivedAt),
+        isNull(mealSeries.endedAt),
+        lt(mealSeries.generatedThrough, repeatsThrough(today)),
+      ),
+    );
   let created = 0;
   for (const { id } of due) created += await createSeriesRepeats(db, id, today);
   return created;
@@ -59,7 +65,7 @@ export async function createDueRepeats(db: Db, today: string): Promise<number> {
 async function createSeriesRepeats(db: Db, seriesId: string, today: string): Promise<number> {
   return db.transaction(async (tx) => {
     const [series] = await tx.select().from(mealSeries).where(eq(mealSeries.id, seriesId)).for("update");
-    if (!series) return 0;
+    if (!series || series.endedAt) return 0;
     const { dates, through } = dueRepeatDates(series, today);
     if (through === series.generatedThrough) return 0;
     const slots = await tx
@@ -93,4 +99,42 @@ async function createSeriesRepeats(db: Db, seriesId: string, today: string): Pro
     await tx.update(mealSeries).set({ generatedThrough: through }).where(eq(mealSeries.id, seriesId));
     return dates.length;
   });
+}
+
+// Ends a Meal Series from one of its Meals: it and every later Planned Meal
+// of the series are deleted, and the series creates no new repeats. Earlier,
+// Confirmed and Skipped Meals keep it, and its "Repeats" label. Run inside a
+// transaction holding the series (lockMealSeries).
+export async function endMealSeries(
+  db: Db,
+  { id: mealId, seriesId, date }: { id: string; seriesId: string; date: string },
+): Promise<void> {
+  await db
+    .delete(meals)
+    .where(
+      and(
+        eq(meals.seriesId, seriesId),
+        eq(meals.status, "planned"),
+        or(eq(meals.id, mealId), gt(meals.date, date)),
+      ),
+    );
+  await db.update(mealSeries).set({ endedAt: new Date() }).where(eq(mealSeries.id, seriesId));
+}
+
+// Held while its Meals are deleted, so repeats can't be created meanwhile.
+export async function lockMealSeries(db: Db, seriesId: string): Promise<void> {
+  await db.select({ id: mealSeries.id }).from(mealSeries).where(eq(mealSeries.id, seriesId)).for("update");
+}
+
+// Deletes the Meal Series once no Meal belongs to it, ended or not, so it
+// creates no more repeats.
+export async function removeEmptyMealSeries(db: Db, seriesId: string): Promise<void> {
+  await db
+    .delete(mealSeries)
+    .where(
+      and(
+        eq(mealSeries.id, seriesId),
+        notExists(db.select({ id: meals.id }).from(meals).where(eq(meals.seriesId, seriesId))),
+      ),
+    );
 }

@@ -48,11 +48,11 @@ import { ConfirmSheet, Sheet } from "../sheet";
 import { SidePanel } from "../side-panel";
 import { useViewerNow, viewerMoment, viewerToday } from "../viewer-clock";
 import { AddSlotSheet } from "./add-slot";
+import { DeleteMealSheet } from "./delete-meal-sheet";
 import {
   confirmMealAction,
   editMealAction,
   fillEmptySlotsAction,
-  removeMealAction,
   reopenMealAction,
   skipMealAction,
   type ConfirmMealError,
@@ -357,15 +357,7 @@ function MealMenu({
           onDelete={pick(() => setDeleting(true))}
         />
       )}
-      {deleting && (
-        <ConfirmSheet
-          title={t("sheet.deleteTitle", { name: label })}
-          confirmLabel={t("sheet.delete")}
-          destructive
-          onConfirm={() => removeMealAction(meal.id)}
-          onClose={() => setDeleting(false)}
-        />
-      )}
+      {deleting && <DeleteMealSheet meal={meal} label={label} onClose={() => setDeleting(false)} />}
     </div>
   );
 }
@@ -1780,7 +1772,8 @@ function EditMealForm({
   );
 }
 
-// The foot of Edit Meal. Delete asks first in a sheet.
+// The foot of Edit Meal. Delete asks first in a sheet, which Meals for a
+// Meal of a Meal Series.
 function DeleteMealCard({ meal, label, onDeleted }: { meal: PlannerMeal; label: string; onDeleted: () => void }) {
   const [deleting, setDeleting] = useState(false);
   return (
@@ -1791,16 +1784,7 @@ function DeleteMealCard({ meal, label, onDeleted }: { meal: PlannerMeal; label: 
         {t("planner.menu.deleteMeal")}
       </button>
       {deleting && (
-        <ConfirmSheet
-          title={t("sheet.deleteTitle", { name: label })}
-          confirmLabel={t("sheet.delete")}
-          destructive
-          onConfirm={async () => {
-            await removeMealAction(meal.id);
-            onDeleted();
-          }}
-          onClose={() => setDeleting(false)}
-        />
+        <DeleteMealSheet meal={meal} label={label} onDeleted={onDeleted} onClose={() => setDeleting(false)} />
       )}
     </section>
   );

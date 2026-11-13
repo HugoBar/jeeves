@@ -3639,6 +3639,88 @@ body:has(.needs-confirmation-locked) :is(.top-menu, .bottom-menu, a.app-badge) {
   font-size: var(--text-meta);
 }
 
+/* Deleting a Meal of a Meal Series: "Only this one" or "This and all
+   following", red as the Delete they lead to. */
+.sheet-eyebrow:has(svg) {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.delete-scopes {
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.delete-scope {
+  display: flex;
+  flex-direction: row;
+  align-items: flex-start;
+  gap: 12px;
+  min-height: 44px;
+  padding: 14px;
+  border: 1px solid var(--color-border);
+  border-radius: 16px;
+  cursor: pointer;
+}
+
+.delete-scope:has(input:checked) {
+  border-color: var(--color-danger);
+  background: var(--color-danger-card);
+}
+
+.delete-scope:has(input:focus-visible) {
+  outline: 2px solid var(--color-danger);
+  outline-offset: 2px;
+}
+
+.delete-scope input {
+  flex: none;
+  width: 20px;
+  height: 20px;
+  margin: 1px 0 0;
+  accent-color: var(--color-danger);
+}
+
+.delete-scope-text {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.delete-scope-name {
+  color: var(--color-ink);
+  font-size: var(--text-item);
+  font-weight: 600;
+}
+
+.delete-scope-hint {
+  color: var(--color-ink-soft);
+  font-size: var(--text-meta);
+}
+
+.delete-scope-note {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 0;
+  color: var(--color-ink-muted);
+  font-size: var(--text-meta);
+}
+
+.delete-scope-note svg {
+  flex: none;
+  width: 15px;
+  height: 15px;
+  margin-top: 1px;
+}
+
 /* The Confirm sheet's "Takes from Stock": each Product and "− 300 g", amber
    with why when Stock is short, or why nothing leaves Stock. */
 .confirm-takes {
