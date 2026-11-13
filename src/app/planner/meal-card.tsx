@@ -49,7 +49,7 @@ import { AlertIcon, FormBanner, FormError, LockIcon, useFieldErrors } from "../f
 import { ConfirmSheet, Sheet } from "../sheet";
 import { SidePanel } from "../side-panel";
 import { useViewerNow, viewerMoment, viewerToday } from "../viewer-clock";
-import { AddSlotSheet } from "./add-slot";
+import { AddSlotBody, AddSlotSheet, addSlotTitle, addToMealForm, type AddSlotScreen } from "./add-slot";
 import { DeleteMealSheet } from "./delete-meal-sheet";
 import { useAskWhichMeals } from "./series-scope-sheet";
 import {
@@ -66,6 +66,8 @@ import {
   hasSlotEdits,
   moveShownSlot,
   NO_SLOT_EDITS,
+  withAddedSlotRemoved,
+  withSlotAdded,
   withSlotRemoved,
   withSlotCategory,
   shownSlots,
@@ -1128,16 +1130,10 @@ export function NewMealSlotsCard({
                     setSlots(moveSlot(slots, index, offset));
                   }}
                 >
-                  <button
-                    type="button"
-                    className="meal-form-slot-remove"
-                    aria-label={t("planner.newMeal.removeSlot", { category: slot.slotCategoryLabel })}
-                    onClick={() => setSlots(slots.filter((slot) => slot.key !== key))}
-                  >
-                    <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-                      <path d="M6 6l12 12M18 6L6 18" />
-                    </svg>
-                  </button>
+                  <RemoveFormSlot
+                    category={slot.slotCategoryLabel}
+                    onRemove={() => setSlots(slots.filter((slot) => slot.key !== key))}
+                  />
                 </SlotTools>
                 <input type="hidden" name={names.food} value={input.food} />
                 <input type="hidden" name={names.amount} value={input.amount} />
@@ -1148,24 +1144,45 @@ export function NewMealSlotsCard({
           })}
         </ol>
       )}
-      <button
-        type="button"
-        className="meal-form-add-slot"
-        onClick={() =>
+      <AddFormSlot
+        onAdd={() =>
           onAddSlot((input) => {
             const key = nextKey.current++;
             setSlots((shown) => [...shown, { key, input }]);
           })
         }
-      >
-        <span className="meal-form-add-slot-icon">
-          <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round">
-            <path d="M12 5v14M5 12h14" />
-          </svg>
-        </span>
-        {t("planner.newMeal.addSlot")}
-      </button>
+      />
     </FormCard>
+  );
+}
+
+// "+ Add slot" at the foot of a Meal form's Slots card.
+function AddFormSlot({ onAdd }: { onAdd: () => void }) {
+  return (
+    <button type="button" className="meal-form-add-slot" onClick={onAdd}>
+      <span className="meal-form-add-slot-icon">
+        <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round">
+          <path d="M12 5v14M5 12h14" />
+        </svg>
+      </span>
+      {t("planner.newMeal.addSlot")}
+    </button>
+  );
+}
+
+// The x on a slot added on a Meal form, named for its Slot Category.
+function RemoveFormSlot({ category, onRemove }: { category: string; onRemove: () => void }) {
+  return (
+    <button
+      type="button"
+      className="meal-form-slot-remove"
+      aria-label={t("planner.newMeal.removeSlot", { category })}
+      onClick={onRemove}
+    >
+      <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+        <path d="M6 6l12 12M18 6L6 18" />
+      </svg>
+    </button>
   );
 }
 
@@ -1239,17 +1256,23 @@ function useMoveFocus(keys: readonly string[]) {
 
 // Edit Meal's slots, as changed on the form. A tap opens the slot picker when
 // `onPickSlot` is given, and ▲ or ▼ moves the slot on the form when
-// `onMoveSlot` is. `slotErrors` are the slots Save refused, under their row.
+// `onMoveSlot` is. A slot added on the form, one of `added`, is not in the
+// Meal yet, so it opens no picker: its x takes it off with `onRemoveAdded`,
+// as on New Meal. `slotErrors` are the slots Save refused, under their row.
 function EditMealSlotList({
   slots,
+  added = new Set(),
   slotErrors = [],
   onPickSlot,
   onMoveSlot,
+  onRemoveAdded,
 }: {
   slots: PlannerMealSlot[];
+  added?: ReadonlySet<string>;
   slotErrors?: MealSlotChangeError[];
   onPickSlot?: (slot: PlannerMealSlot) => void;
   onMoveSlot?: (index: number, offset: SlotMove) => void;
+  onRemoveAdded?: (key: string) => void;
 }) {
   const { list, focusAfterMove } = useMoveFocus(slots.map((slot) => slot.id));
   return (
@@ -1257,18 +1280,20 @@ function EditMealSlotList({
       {slots.map((slot, index) => {
         const empty = slot.food.content === "empty";
         const dashed = empty || slot.slotCategoryArchived;
+        const isAdded = added.has(slot.id);
+        const pick = isAdded ? undefined : onPickSlot;
         // On the food's line, as on New Meal. An empty slot has none, so its
         // chevron stays by "Not chosen yet", clear of ▲ ▼.
-        const chevron = onPickSlot !== undefined && !slot.slotCategoryArchived;
+        const chevron = pick !== undefined && !slot.slotCategoryArchived;
         const summary = <SlotSummary slot={slot} showAmount chevron={chevron && empty} />;
         const error = slotErrors.find((refused) => refused.slotId === slot.id);
         return (
           <li
             key={slot.id}
-            className={`slot-row${dashed ? " slot-row-dashed" : ""}${onMoveSlot ? " meal-form-slot" : ""}`}
+            className={`slot-row${dashed ? " slot-row-dashed" : ""}${onMoveSlot ? " meal-form-slot" : ""}${isAdded ? " meal-form-slot-removable" : ""}`}
           >
-            {onPickSlot ? (
-              <button type="button" className="slot-row-main" onClick={() => onPickSlot(slot)}>
+            {pick ? (
+              <button type="button" className="slot-row-main" onClick={() => pick(slot)}>
                 {summary}
                 {chevron && !empty && <ChevronIcon />}
               </button>
@@ -1285,7 +1310,11 @@ function EditMealSlotList({
                   focusAfterMove(slot.id, index + offset);
                   onMoveSlot(index, offset);
                 }}
-              />
+              >
+                {isAdded && onRemoveAdded && (
+                  <RemoveFormSlot category={slot.slotCategoryLabel} onRemove={() => onRemoveAdded(slot.id)} />
+                )}
+              </SlotTools>
             )}
             {error && <FormError>{slotErrorMessage(index + 1, slot.food, error.code)}</FormError>}
           </li>
@@ -1347,6 +1376,7 @@ export function EditMealPanel({
 }) {
   const [picking, setPicking] = useState<SlotPicking | null>(null);
   const [slotEdits, setSlotEdits] = useState(NO_SLOT_EDITS);
+  const [addingSlot, setAddingSlot] = useState<AddSlotScreen | null>(null);
   return (
     <EditMealPanelView
       meal={meal}
@@ -1356,6 +1386,8 @@ export function EditMealPanel({
       onPicking={setPicking}
       slotEdits={slotEdits}
       onSlotEdits={setSlotEdits}
+      addingSlot={addingSlot}
+      onAddingSlot={setAddingSlot}
       onClose={onClose}
     />
   );
@@ -1364,12 +1396,13 @@ export function EditMealPanel({
 // A slot of the Meal being picked for, and the picker's screen.
 export type SlotPicking = { slotId: string; screen: SlotPickerScreen };
 
-// Edit Meal, or the slot picker for one of its slots in its place, headed
-// "Back to {Meal}": nothing stacks on top of the panel. The form stays
-// mounted, hidden, so what was typed in it is still there on the way back. A
-// slot removed meanwhile, or on the form, goes back to the form. The slots
-// show `slotEdits`, kept until Save; the picker's Remove Slot and Change
-// Slot Category add to them, while its food is written straight away.
+// Edit Meal, or in its place the slot picker for one of its slots, or Add a
+// slot (`addingSlot`), headed "Back to {Meal}": nothing stacks on top of the
+// panel. The form stays mounted, hidden, so what was typed in it is still
+// there on the way back. A slot removed meanwhile, or on the form, goes back
+// to the form. The slots show `slotEdits`, kept until Save; the picker's
+// Remove Slot and Change Slot Category add to them, as does Add a slot with
+// its food, while the picker's food is written straight away.
 export function EditMealPanelView({
   meal,
   week,
@@ -1378,6 +1411,8 @@ export function EditMealPanelView({
   onPicking,
   slotEdits,
   onSlotEdits,
+  addingSlot,
+  onAddingSlot,
   onClose,
 }: {
   meal: PlannerMeal;
@@ -1387,12 +1422,18 @@ export function EditMealPanelView({
   onPicking: (picking: SlotPicking | null) => void;
   slotEdits: SlotEdits;
   onSlotEdits: (edits: SlotEdits) => void;
+  addingSlot: AddSlotScreen | null;
+  onAddingSlot: (screen: AddSlotScreen | null) => void;
   onClose: () => void;
 }) {
   const label = meal.name ?? meal.mealTypeLabel;
-  const slots = shownSlots(meal.slots, slotEdits, pickers.slotCategories);
+  // Added with a non-Archived Slot Category, so none is looked up Archived.
+  const slots = shownSlots(meal.slots, slotEdits, pickers.slotCategories, ({ key, input }) =>
+    draftSlot(key, input, pickers, []),
+  );
   const pickedSlot = picking ? slots.find((slot) => slot.id === picking.slotId) : undefined;
   const back = () => onPicking(null);
+  const backTo = (onBack: () => void) => ({ label: t("planner.picker.backTo", { meal: label }), onBack });
   const mealFormAndDelete = (
     <>
       <EditMealForm
@@ -1401,6 +1442,8 @@ export function EditMealPanelView({
         slotEdits={slotEdits}
         onMoveSlot={(index, offset) => onSlotEdits(moveShownSlot(slotEdits, slots, index, offset))}
         onPickSlot={(slot) => onPicking({ slotId: slot.id, screen: startScreen(slot) })}
+        onAddSlot={() => onAddingSlot({ kind: "food" })}
+        onRemoveAdded={(key) => onSlotEdits(withAddedSlotRemoved(slotEdits, key))}
         onDone={onClose}
       />
       <DeleteMealCard meal={meal} label={label} onDeleted={onClose} />
@@ -1410,18 +1453,26 @@ export function EditMealPanelView({
     <SidePanel
       className={mealPanelClass(week)}
       onClose={onClose}
-      {...(picking && pickedSlot
-        ? {
-            ...slotPickerHeading(meal, pickedSlot, picking.screen),
-            back: { label: t("planner.picker.backTo", { meal: label }), onBack: back },
-          }
-        : {
+      {...(addingSlot
+        ? { back: backTo(() => onAddingSlot(null)), title: addSlotTitle(addingSlot), screen: `addSlot-${addingSlot.kind}` }
+        : picking && pickedSlot
+          ? { ...slotPickerHeading(meal, pickedSlot, picking.screen), back: backTo(back) }
+          : {
             icon: <MealPanelIcon />,
             label: mealPanelLabel(meal.date, week, "editing"),
             title: t("planner.panel.editTitle", { name: label }),
           })}
     >
-      {picking && pickedSlot && (
+      {addingSlot && (
+        <AddSlotBody
+          pickers={pickers}
+          screen={addingSlot}
+          onScreen={onAddingSlot}
+          add={addToMealForm(pickers, (input) => onSlotEdits(withSlotAdded(slotEdits, input)))}
+          onDone={() => onAddingSlot(null)}
+        />
+      )}
+      {!addingSlot && picking && pickedSlot && (
         <SlotPickerBody
           meal={meal}
           slot={pickedSlot}
@@ -1439,7 +1490,7 @@ export function EditMealPanelView({
         />
       )}
       {/* The same element either way, so the form isn't mounted again. */}
-      <div className="meal-panel-content" hidden={pickedSlot !== undefined}>
+      <div className="meal-panel-content" hidden={addingSlot !== null || pickedSlot !== undefined}>
         {mealFormAndDelete}
       </div>
     </SidePanel>
@@ -1513,7 +1564,13 @@ export function MealFormFields({
   mealTypes: PickerOption[];
   mealTypeHint?: string;
   slotsCard?: ReactNode;
-  editing?: Pick<PlannerMeal, "mealTypeLabel" | "slots">;
+  editing?: Pick<PlannerMeal, "mealTypeLabel" | "slots"> & {
+    // The keys of the slots added on the form, among `slots`.
+    added: ReadonlySet<string>;
+    // Opens Add a slot, and takes off a slot added on the form.
+    onAddSlot: () => void;
+    onRemoveAdded: (key: string) => void;
+  };
   // Opens the slot picker for a slot of the Meal being edited.
   onPickSlot?: (slot: PlannerMealSlot) => void;
   // Moves the slot at `index` of the Meal being edited one place up (-1) or
@@ -1593,10 +1650,18 @@ export function MealFormFields({
       {editing ? (
         <FormCard title={t("planner.slots")}>
           {editing.slots.length > 0 ? (
-            <EditMealSlotList slots={editing.slots} slotErrors={editSlotErrors} onPickSlot={onPickSlot} onMoveSlot={onMoveSlot} />
+            <EditMealSlotList
+              slots={editing.slots}
+              added={editing.added}
+              slotErrors={editSlotErrors}
+              onPickSlot={onPickSlot}
+              onMoveSlot={onMoveSlot}
+              onRemoveAdded={editing.onRemoveAdded}
+            />
           ) : (
             <p className="meal-form-no-slots">{t("planner.noSlots")}</p>
           )}
+          <AddFormSlot onAdd={editing.onAddSlot} />
         </FormCard>
       ) : (
         slotsCard
@@ -1723,6 +1788,8 @@ function EditMealForm({
   slotEdits,
   onMoveSlot,
   onPickSlot,
+  onAddSlot,
+  onRemoveAdded,
   onDone,
 }: {
   meal: PlannerMeal;
@@ -1730,6 +1797,8 @@ function EditMealForm({
   slotEdits: SlotEdits;
   onMoveSlot: (index: number, offset: SlotMove) => void;
   onPickSlot: (slot: PlannerMealSlot) => void;
+  onAddSlot: () => void;
+  onRemoveAdded: (key: string) => void;
   onDone: () => void;
 }) {
   const [state, action, pending] = useActionState(
@@ -1775,7 +1844,13 @@ function EditMealForm({
             seriesStartedOn: meal.series && !meal.series.ended ? meal.series.startedOn : undefined,
           }}
           mealTypes={[]}
-          editing={{ mealTypeLabel: meal.mealTypeLabel, slots }}
+          editing={{
+            mealTypeLabel: meal.mealTypeLabel,
+            slots,
+            added: new Set(slotEdits.added.map((slot) => slot.key)),
+            onAddSlot,
+            onRemoveAdded,
+          }}
           onPickSlot={onPickSlot}
           onMoveSlot={onMoveSlot}
         />
@@ -1793,6 +1868,12 @@ function EditMealForm({
                 <input key={`${slot.id}:id`} type="hidden" name="changedSlotId" value={slot.id} />,
                 <input key={`${slot.id}:category`} type="hidden" name="changedSlotCategoryId" value={slot.slotCategoryId} />,
               ])}
+            {slotEdits.added.flatMap(({ key, input }) => [
+              <input key={`${key}:key`} type="hidden" name="addedSlotKey" value={key} />,
+              <input key={`${key}:food`} type="hidden" name="addedSlotFood" value={input.food} />,
+              <input key={`${key}:amount`} type="hidden" name="addedSlotAmount" value={input.amount} />,
+              <input key={`${key}:category`} type="hidden" name="addedSlotCategoryId" value={input.slotCategoryId} />,
+            ])}
           </>
         )}
         {question.field}
