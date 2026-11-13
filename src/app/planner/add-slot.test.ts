@@ -19,6 +19,7 @@ const meal: PlannerMeal = {
   status: "planned",
   untracked: false,
   repeats: null,
+  series: null,
   slots: [],
   addsBack: [],
   takes: { ok: true, products: [] },

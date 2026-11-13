@@ -45,6 +45,7 @@ const meal = (overrides: Partial<PlannerMeal> = {}): PlannerMeal => ({
   status: "planned",
   untracked: false,
   repeats: null,
+  series: null,
   slots: [],
   addsBack: [],
   takes: { ok: true, products: [] },
@@ -1214,6 +1215,26 @@ describe("the Meal form", () => {
     it("starts off for a New Meal, and shows an edited Meal's setting", () => {
       expect(untracked(renderForm())).not.toContain("checked");
       expect(untracked(renderEditForm({ values: { hour: "12:30", name: "", untracked: true, repeatOn: [] } }))).toContain('checked=""');
+    });
+
+    describe("on a Meal of a Meal Series", () => {
+      const repeatOn = (html: string) => /<fieldset class="form-field meal-form-repeat"[^>]*>.*?<\/fieldset>/s.exec(html)?.[0] ?? "";
+      const values = { hour: "12:30", name: "Weekday Lunch", untracked: false, repeatOn: ["1", "2", "3", "4", "5"] };
+
+      it("shows its days, which can be changed, saying how a change applies", () => {
+        const html = repeatOn(renderEditForm({ values, repeat: { past: false, locked: false, seriesStartedOn: "2026-10-26" } }));
+        expect(html).not.toMatch(/<fieldset[^>]*disabled/);
+        expect([...html.matchAll(/<input [^>]*>/g)].filter((m) => m[0].includes('checked=""')).length).toBe(5);
+        expect(text(html)).toContain(
+          "Part of a series that started Mon 26 Oct. Changing the days applies from this Meal on, without asking; untick every day to end the series here. Other changes ask which Meals on Save.",
+        );
+      });
+
+      it("shows them disabled, without that note, once the series ended", () => {
+        const html = repeatOn(renderEditForm({ values, repeat: { past: false, locked: true } }));
+        expect(html).toMatch(/<fieldset[^>]*disabled/);
+        expect(text(html)).not.toContain("Part of a series");
+      });
     });
   });
 });

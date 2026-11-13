@@ -194,6 +194,7 @@ export const en = {
   "planner.repeatOn": "Repeat on",
   "planner.repeatOnHint": "Tick the days this Meal repeats on. Repeats copy its name, hour and slots, but not their food.",
   "planner.repeatOnPast": "Only Meals today or later can repeat.",
+  "planner.repeatOnSeries": "Part of a series that started {date}. Changing the days applies from this Meal on, without asking; untick every day to end the series here. Other changes ask which Meals on Save.",
   "planner.mealEyebrow": "{mealType} · {hour}",
   "planner.status.confirmed": "Confirmed",
   "planner.status.confirmedUntracked": "Confirmed · Untracked",

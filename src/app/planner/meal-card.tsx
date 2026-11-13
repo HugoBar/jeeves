@@ -26,6 +26,7 @@ import type { CategoryKind } from "@/core/food-categories";
 import { WEEKDAYS, type Weekday } from "@/core/meal-series";
 import { moveSlot, type SlotMove } from "@/core/slot-order";
 import type { AddedBack, ConfirmTakes } from "@/db/confirmation";
+import type { MealSeriesState } from "@/db/meals";
 import { localDate, localHour, type Week } from "@/core/planner";
 import { shortfallUrgency } from "@/core/projected-stock";
 import type { DefaultUnit } from "@/core/units";
@@ -96,6 +97,8 @@ export interface PlannerMeal {
   untracked: boolean;
   // Its Meal Series' days, Monday first; null if it is in none.
   repeats: Weekday[] | null;
+  // When its Meal Series started and whether it ended; null if it is in none.
+  series: MealSeriesState | null;
   slots: PlannerMealSlot[];
   // What Reopening it adds back to Stock, by Product name: exactly what its
   // Confirmation took. Empty unless it is Confirmed and took something.
@@ -1457,11 +1460,13 @@ export interface MealFormValues {
 }
 
 // What "Repeat on" can do on a Meal form: nothing on a Meal dated before the
-// viewer's date (`past`), and nothing on Edit Meal for a Meal already in a
-// Meal Series (`locked`), which shows its series' days.
+// viewer's date (`past`), and nothing on Edit Meal for a Meal of a Meal
+// Series that ended (`locked`), which shows its series' days. On a Meal of a
+// series still repeating, `seriesStartedOn` is the day it started.
 export interface RepeatOnState {
   past: boolean;
   locked: boolean;
+  seriesStartedOn?: string;
 }
 
 // Whether a Meal on `date` is before the viewer's date, so it can't repeat.
@@ -1631,12 +1636,14 @@ function UntrackedSwitch({ untracked }: { untracked: boolean }) {
 
 // "Repeat on": the seven weekdays as tick boxes, Monday first. None is no
 // repeat, one is weekly, all seven is daily. On a past Meal they show
-// disabled, with why; on a Meal already in a Meal Series, its days, disabled.
-// An error takes the hint's place.
+// disabled, with why; on a Meal of a Meal Series that ended, its days,
+// disabled. On a Meal of a series still repeating, the hint says how a
+// change applies. An error takes the hint's place.
 function RepeatOn({
   ticked,
   past,
   locked,
+  seriesStartedOn,
   invalid,
   message,
 }: RepeatOnState & {
@@ -1665,6 +1672,8 @@ function RepeatOn({
       {message ??
         (past ? (
           <p className="field-hint">{t("planner.repeatOnPast")}</p>
+        ) : seriesStartedOn !== undefined ? (
+          <p className="field-hint">{t("planner.repeatOnSeries", { date: formatMealDate(seriesStartedOn) })}</p>
         ) : (
           !locked && <p className="field-hint">{t("planner.repeatOnHint")}</p>
         ))}
@@ -1776,7 +1785,11 @@ function EditMealForm({
           errors={state.errors}
           editSlotErrors={state.slotErrors}
           values={state.values}
-          repeat={{ past, locked: meal.repeats !== null }}
+          repeat={{
+            past,
+            locked: meal.series?.ended === true,
+            seriesStartedOn: meal.series && !meal.series.ended ? meal.series.startedOn : undefined,
+          }}
           mealTypes={[]}
           editing={{ mealTypeLabel: meal.mealTypeLabel, slots }}
           onPickSlot={onPickSlot}
