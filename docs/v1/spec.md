@@ -46,12 +46,15 @@ I want one place that knows what food is in my Pantry, what I can cook from it, 
 - A Meal can be marked Untracked while planning or confirming.
 
 ### Meal Series
-- A Meal dated today or later can repeat: "Repeat on" shows the seven weekdays as tick boxes (all = daily, one = weekly, none = no repeat).
-- A repeat is an ordinary Meal. It copies the series' name, Meal Type, hour and slots' Slot Categories, with every slot empty; food is never repeated and Suggestions fill the slots as usual.
-- Repeats are created only within the planner's two weeks, on days after the starting Meal; when a new week comes into view its repeats are added. A repeat is created even if that day already has a Meal of the same Meal Type.
-- Editing a repeat's hour, name, slots (added, removed, Slot Category) or "Repeat on" asks "only this one" or "this and all following". "All following" rewrites every later Planned repeat, including individually edited ones, and keeps food in slots that still exist; changing "Repeat on" only adds or removes repeats on the newly ticked or unticked days. Earlier, Confirmed and Skipped Meals never change.
-- Filling or changing a repeat's food only affects that Meal and never asks.
+- A Meal dated today or later can repeat: "Repeat on" shows the seven weekdays as tick boxes (all = daily, one = weekly, none = no repeat). The starting Meal belongs to the series even if its own weekday isn't ticked.
+- A repeat is an ordinary Meal. It copies the series' name, Meal Type, hour, Untracked and slots' Slot Categories in order, with every slot empty; food is never repeated and Suggestions fill the slots as usual.
+- Repeats are created only within the planner's two weeks, on days after the starting Meal and never before today; when a new week comes into view its repeats are added. Days missed while the app wasn't opened are never filled in. Every screen that shows or uses Meals (Planner, Home, Needs confirmation, Generate on the Shopping List) first creates any repeats that are due. A repeat is created even if that day already has a Meal of the same Meal Type. A series whose Meal Type is Archived creates no new repeats.
+- Editing a repeat's hour, name, Untracked or slots (added, removed, reordered, Slot Category) asks "only this one" or "this and all following" on Save. "All following" rewrites every later Planned repeat to match the series, including individually edited ones: slots added to one repeat only are removed with their food, and food stays in a slot while the series slot it came from still exists. Earlier, Confirmed and Skipped Meals never change.
+- Changing "Repeat on" never asks: on Save it applies from this Meal onwards, adding or removing repeats only on the newly ticked or unticked days. Unticking every day ends the series from this Meal.
+- Filling or changing a repeat's food, and Confirming it (including as Untracked), only affects that Meal and never asks.
 - Deleting a repeat asks the same: "only this one" leaves a gap that is never recreated; "this and all following" deletes the later Planned repeats and ends the series.
+- An ended series creates no new repeats; its earlier Meals keep their "Repeats" label. The series itself is removed once no Meal belongs to it.
+- A repeat shows a "Repeats" label with the series' days: "Repeats Mon to Fri" for days in a row, "Repeats daily" for all seven, "Repeats Mon, Wed, Fri" otherwise, "Repeats Mon" for one.
 
 ### Projected Stock and warnings
 - Projected Stock at a Meal = current Stock minus every Planned or Unconfirmed, non-Untracked Meal served before it. Order: date, then Meal Priority (1 first), then hour, then the Meal created first.
