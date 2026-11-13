@@ -51,7 +51,7 @@ import { SidePanel } from "../side-panel";
 import { useViewerNow, viewerMoment, viewerToday } from "../viewer-clock";
 import { AddSlotSheet } from "./add-slot";
 import { DeleteMealSheet } from "./delete-meal-sheet";
-import { SeriesScopeSheet } from "./series-scope-sheet";
+import { useAskWhichMeals } from "./series-scope-sheet";
 import {
   confirmMealAction,
   editMealAction,
@@ -1716,7 +1716,7 @@ function FixMessage({ count, editing }: { count: number; editing: boolean }) {
 // only, so a slot added, removed or given a Slot Category elsewhere meanwhile
 // keeps that change. On a Meal of a Meal Series, a changed hour, name,
 // Untracked or slots first asks which Meals it applies to (core's
-// asksWhichMeals), then submits with the answer.
+// asksWhichMeals), then submits with the answer (useAskWhichMeals).
 function EditMealForm({
   meal,
   slots,
@@ -1751,36 +1751,20 @@ function EditMealForm({
     },
   );
   const past = useIsPastDay(meal.date);
-  const form = useRef<HTMLFormElement>(null);
-  const seriesScope = useRef<HTMLInputElement>(null);
-  const answered = useRef(false);
-  const [asking, setAsking] = useState(false);
+  const question = useAskWhichMeals({
+    kind: "change",
+    meal,
+    asks: (data) =>
+      asksWhichMeals(meal, {
+        hour: String(data.get("hour") ?? ""),
+        name: String(data.get("name") ?? ""),
+        untracked: data.get("untracked") === "on",
+        slots,
+      }),
+  });
   return (
     <>
-      <form
-        ref={form}
-        action={action}
-        className="form-cards"
-        noValidate
-        onSubmit={(event) => {
-          if (answered.current) {
-            answered.current = false;
-            return;
-          }
-          if (seriesScope.current) seriesScope.current.value = "this";
-          const data = new FormData(event.currentTarget);
-          const input = {
-            hour: String(data.get("hour") ?? ""),
-            name: String(data.get("name") ?? ""),
-            untracked: data.get("untracked") === "on",
-            slots,
-          };
-          if (asksWhichMeals(meal, input)) {
-            event.preventDefault();
-            setAsking(true);
-          }
-        }}
-      >
+      <form action={action} className="form-cards" noValidate onSubmit={question.onSubmit}>
         <MealFormFields
           key={state.submits}
           errors={state.errors}
@@ -1812,23 +1796,10 @@ function EditMealForm({
               ])}
           </>
         )}
-        {meal.repeats !== null && <input ref={seriesScope} type="hidden" name="seriesScope" defaultValue="this" />}
+        {question.field}
         <MealPanelActions submitLabel={t("planner.save")} pending={pending} onCancel={onDone} />
       </form>
-      {/* Outside the form, so its choices aren't sent with it. */}
-      {asking && meal.repeats !== null && (
-        <SeriesScopeSheet
-          kind="change"
-          meal={{ date: meal.date, repeats: meal.repeats }}
-          label={meal.name ?? meal.mealTypeLabel}
-          onPick={(scope) => {
-            if (seriesScope.current) seriesScope.current.value = scope;
-            answered.current = true;
-            form.current?.requestSubmit();
-          }}
-          onClose={() => setAsking(false)}
-        />
-      )}
+      {question.sheet}
     </>
   );
 }

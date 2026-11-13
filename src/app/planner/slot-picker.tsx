@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useActionState, useId, useState, useTransition, type ReactNode } from "react";
+import { useActionState, useId, useState, useTransition, type FormEvent, type ReactNode } from "react";
 import { pickableForSlot, slotFoodValue } from "@/core/meals";
 import type { DefaultUnit } from "@/core/units";
 import { formatMealDate, t } from "@/strings";
@@ -18,6 +18,7 @@ import {
   setMealSlotCategoryAction,
 } from "./actions";
 import type { PlannerMeal, PlannerMealSlot, SlotCategoryOption, SlotFoods, SlotPickers } from "./meal-card";
+import { useAskWhichMeals } from "./series-scope-sheet";
 import { usePlannerSuggestions } from "./suggestions";
 
 // What the slot picker shows: the food to pick from, how much of the picked
@@ -129,6 +130,7 @@ export function SlotPickerBody({
   if (screen.kind === "category") {
     return (
       <ChangeSlotCategory
+        meal={meal}
         slot={slot}
         slotCategories={pickers.slotCategories}
         onCancel={screen.fromPick ? toPick : onDone}
@@ -424,6 +426,7 @@ export function AmountForm({
   pending,
   onChangeFood,
   onBack,
+  onSubmit,
   children,
 }: {
   categoryLabel: string;
@@ -434,6 +437,7 @@ export function AmountForm({
   pending: boolean;
   onChangeFood: () => void;
   onBack: () => void;
+  onSubmit?: (event: FormEvent<HTMLFormElement>) => void;
   children?: ReactNode;
 }) {
   const [amount, setAmount] = useState(startAmount);
@@ -455,7 +459,7 @@ export function AmountForm({
   );
 
   return (
-    <form action={action} className="slot-picker-amount">
+    <form action={action} className="slot-picker-amount" onSubmit={onSubmit}>
       <p className="slot-picker-scope">
         <span className="slot-picker-scope-label">
           {t("planner.picker.slot")} <FoodCategoryPill label={categoryLabel} />
@@ -525,14 +529,17 @@ function startingAmount(slot: PlannerMealSlot, food: FoodOption): string {
 // Change Slot Category: the non-Archived Roles, then Kinds, with the slot's
 // own picked and marked "now". An Archived one isn't listed, so nothing is
 // picked. Saving keeps the food in the slot; with `keptUntilSave` it is kept on
-// Edit Meal until Save, and picking none just stays.
+// Edit Meal until Save, and picking none just stays. Otherwise, on a Meal of
+// a Meal Series, a new Slot Category first asks which Meals it applies to.
 function ChangeSlotCategory({
+  meal,
   slot,
   slotCategories,
   onCancel,
   onSaved,
   keptUntilSave,
 }: {
+  meal: PlannerMeal;
   slot: PlannerMealSlot;
   slotCategories: SlotCategoryOption[];
   onCancel: () => void;
@@ -549,40 +556,52 @@ function ChangeSlotCategory({
         onSaved();
       }
     : saveAction;
+  const question = useAskWhichMeals({
+    kind: "change",
+    meal: keptUntilSave ? null : meal,
+    asks: (data) => {
+      const picked = data.get("slotCategoryId");
+      return picked !== null && picked !== slot.slotCategoryId;
+    },
+  });
 
   return (
-    <form action={action} className="slot-category-form">
-      <fieldset className="slot-category-choices">
-        <legend>{t("planner.picker.categoryQuestion")}</legend>
-        {slotCategories.map((category) => {
-          const now = category.id === slot.slotCategoryId;
-          const kind = t(`categories.${category.kind}`);
-          return (
-            <label key={category.id} className="slot-category-choice">
-              <input
-                type="radio"
-                name="slotCategoryId"
-                value={category.id}
-                defaultChecked={now}
-                {...invalid("slotCategory")}
-              />
-              <FoodCategoryPill label={category.label} />
-              <span className="slot-category-kind">{now ? t("planner.picker.now", { kind }) : kind}</span>
-            </label>
-          );
-        })}
-      </fieldset>
-      <p className="field-hint">{t("planner.picker.categoryHint")}</p>
-      {allMessages()}
-      <div className="sheet-actions">
-        <button type="button" onClick={onCancel} disabled={pending}>
-          {t("planner.cancel")}
-        </button>
-        <button type="submit" className="button-primary" disabled={pending}>
-          {t("planner.save")}
-        </button>
-      </div>
-    </form>
+    <>
+      <form action={action} className="slot-category-form" onSubmit={question.onSubmit}>
+        {question.field}
+        <fieldset className="slot-category-choices">
+          <legend>{t("planner.picker.categoryQuestion")}</legend>
+          {slotCategories.map((category) => {
+            const now = category.id === slot.slotCategoryId;
+            const kind = t(`categories.${category.kind}`);
+            return (
+              <label key={category.id} className="slot-category-choice">
+                <input
+                  type="radio"
+                  name="slotCategoryId"
+                  value={category.id}
+                  defaultChecked={now}
+                  {...invalid("slotCategory")}
+                />
+                <FoodCategoryPill label={category.label} />
+                <span className="slot-category-kind">{now ? t("planner.picker.now", { kind }) : kind}</span>
+              </label>
+            );
+          })}
+        </fieldset>
+        <p className="field-hint">{t("planner.picker.categoryHint")}</p>
+        {allMessages()}
+        <div className="sheet-actions">
+          <button type="button" onClick={onCancel} disabled={pending}>
+            {t("planner.cancel")}
+          </button>
+          <button type="submit" className="button-primary" disabled={pending}>
+            {t("planner.save")}
+          </button>
+        </div>
+      </form>
+      {question.sheet}
+    </>
   );
 }
 
