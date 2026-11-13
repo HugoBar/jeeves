@@ -266,20 +266,30 @@ export function parseMealChanges(input: { hour: string; name: string; untracked:
   return { ok: true, changes: { hour, name: input.name.trim() || null, untracked: input.untracked } };
 }
 
+// A Meal's slots as asksWhichMeals compares them: in order, each with its
+// Slot Category.
+type SlotsInOrder = readonly { id: string; slotCategoryId: string }[];
+
 // Whether Save on Edit Meal first asks which Meals of its Meal Series a
 // change applies to: only when the Meal is in one and its hour, name or
-// Untracked, as Save would write them, differ from `meal`'s (spec "Meal
-// Series"). An hour Save refuses doesn't ask, so its error shows straight
-// away.
+// Untracked, as Save would write them, or its slots as the form shows them
+// (moved, removed, given a new Slot Category), differ from `meal`'s (spec
+// "Meal Series"). An hour Save refuses doesn't ask, so its error shows
+// straight away.
 export function asksWhichMeals(
-  meal: MealChanges & { repeats: readonly Weekday[] | null },
-  input: { hour: string; name: string; untracked: boolean },
+  meal: MealChanges & { repeats: readonly Weekday[] | null; slots: SlotsInOrder },
+  input: { hour: string; name: string; untracked: boolean; slots: SlotsInOrder },
 ): boolean {
   if (meal.repeats === null) return false;
   const parsed = parseMealChanges(input);
   if (!parsed.ok) return false;
   const { hour, name, untracked } = parsed.changes;
-  return hour !== meal.hour || name !== meal.name || untracked !== meal.untracked;
+  const slotsChanged =
+    input.slots.length !== meal.slots.length ||
+    input.slots.some(
+      (slot, index) => slot.id !== meal.slots[index]?.id || slot.slotCategoryId !== meal.slots[index]?.slotCategoryId,
+    );
+  return hour !== meal.hour || name !== meal.name || untracked !== meal.untracked || slotsChanged;
 }
 
 // A slot given a new Slot Category on Edit Meal.

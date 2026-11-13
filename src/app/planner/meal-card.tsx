@@ -1714,9 +1714,9 @@ function FixMessage({ count, editing }: { count: number; editing: boolean }) {
 // `slots` are the Meal's as changed on the form. Once `slotEdits` changed
 // them, Save sends their order, the ones removed and the new Slot Categories
 // only, so a slot added, removed or given a Slot Category elsewhere meanwhile
-// keeps that change. On a Meal of a Meal Series, a changed hour, name or
-// Untracked first asks which Meals it applies to (core's asksWhichMeals),
-// then submits with the answer.
+// keeps that change. On a Meal of a Meal Series, a changed hour, name,
+// Untracked or slots first asks which Meals it applies to (core's
+// asksWhichMeals), then submits with the answer.
 function EditMealForm({
   meal,
   slots,
@@ -1773,6 +1773,7 @@ function EditMealForm({
             hour: String(data.get("hour") ?? ""),
             name: String(data.get("name") ?? ""),
             untracked: data.get("untracked") === "on",
+            slots,
           };
           if (asksWhichMeals(meal, input)) {
             event.preventDefault();

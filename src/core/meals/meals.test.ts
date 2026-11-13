@@ -421,8 +421,18 @@ describe("parseMealChanges", () => {
 });
 
 describe("asksWhichMeals", () => {
-  const repeat: Parameters<typeof asksWhichMeals>[0] = { repeats: [1, 2, 3, 4, 5], hour: "12:30", name: "Weekday Lunch", untracked: false };
-  const asSaved = { hour: "12:30", name: "Weekday Lunch", untracked: false };
+  const slots = [
+    { id: "slot-1", slotCategoryId: "main" },
+    { id: "slot-2", slotCategoryId: "salad" },
+  ];
+  const repeat: Parameters<typeof asksWhichMeals>[0] = {
+    repeats: [1, 2, 3, 4, 5],
+    hour: "12:30",
+    name: "Weekday Lunch",
+    untracked: false,
+    slots,
+  };
+  const asSaved = { hour: "12:30", name: "Weekday Lunch", untracked: false, slots };
 
   it("asks when a repeat's hour, name or Untracked changes", () => {
     expect(asksWhichMeals(repeat, { ...asSaved, hour: "13:00" })).toBe(true);
@@ -431,8 +441,14 @@ describe("asksWhichMeals", () => {
     expect(asksWhichMeals(repeat, { ...asSaved, untracked: true })).toBe(true);
   });
 
+  it("asks when a repeat's slots are moved, removed or given a new Slot Category", () => {
+    expect(asksWhichMeals(repeat, { ...asSaved, slots: [slots[1]!, slots[0]!] })).toBe(true);
+    expect(asksWhichMeals(repeat, { ...asSaved, slots: [slots[0]!] })).toBe(true);
+    expect(asksWhichMeals(repeat, { ...asSaved, slots: [slots[0]!, { id: "slot-2", slotCategoryId: "soup" }] })).toBe(true);
+  });
+
   it("does not ask when they are as saved, once trimmed", () => {
-    expect(asksWhichMeals(repeat, { hour: " 12:30 ", name: " Weekday Lunch ", untracked: false })).toBe(false);
+    expect(asksWhichMeals(repeat, { hour: " 12:30 ", name: " Weekday Lunch ", untracked: false, slots: [...slots] })).toBe(false);
     expect(asksWhichMeals({ ...repeat, name: null }, { ...asSaved, name: " " })).toBe(false);
   });
 
