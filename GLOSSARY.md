@@ -126,7 +126,7 @@ One Meal Type eaten on a specific date, such as Tuesday's Lunch, with its own ho
 _Avoid_: Meal slot (for the whole meal), plan entry
 
 **Meal Series**:
-Meals that repeat on chosen weekdays, sharing a Meal Type, an hour, a name and the Slot Categories of their Meal Slots, but not what fills them. Each repeat is an ordinary Meal. Only a Meal dated today or later can start one. Editing or deleting one asks whether it applies to only that Meal or to it and all following; earlier Meals never change.
+Meals that repeat on chosen weekdays, sharing a Meal Type, an hour, a name, whether they are Untracked and the Slot Categories of their Meal Slots, but not what fills them. Each repeat is an ordinary Meal. Only a Meal dated today or later can start one. Editing or deleting one asks whether it applies to only that Meal or to it and all following; earlier Meals never change.
 _Avoid_: Recurrence, routine, repeating template
 
 **Meal Slot**:
