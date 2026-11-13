@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { dueRepeatDates, parseRepeatOn } from "./index";
+import { dueRepeatDates, parseRepeatOn, repeatOnChange } from "./index";
 
 // 2026-11-12 is a Thursday.
 const TODAY = "2026-11-12";
@@ -76,5 +76,43 @@ describe("dueRepeatDates", () => {
       dates: [],
       through: "2026-12-06",
     });
+  });
+});
+
+describe("repeatOnChange", () => {
+  // Mon to Fri, with repeats created through Sunday the 22nd.
+  const series = { weekdays: [1, 2, 3, 4, 5] as const, generatedThrough: "2026-11-22" };
+
+  it("adds repeats only on a newly ticked day, after this Meal, through the repeats already created", () => {
+    expect(repeatOnChange(series, [1, 2, 3, 4, 5, 6], "2026-11-13", TODAY)).toEqual({
+      kind: "change",
+      removed: [],
+      addedDates: ["2026-11-14", "2026-11-21"],
+    });
+  });
+
+  it("removes repeats only on a newly unticked day, adding none for the days kept", () => {
+    expect(repeatOnChange(series, [1, 3, 5], "2026-11-13", TODAY)).toEqual({
+      kind: "change",
+      removed: [2, 4],
+      addedDates: [],
+    });
+  });
+
+  it("never adds a repeat before today, even for a Meal of the series dated earlier", () => {
+    // Sunday the 15th is before Monday the 16th.
+    expect(repeatOnChange(series, [1, 2, 3, 4, 5, 7], "2026-11-09", "2026-11-16")).toEqual({
+      kind: "change",
+      removed: [],
+      addedDates: ["2026-11-22"],
+    });
+  });
+
+  it("ends the series when every day is unticked", () => {
+    expect(repeatOnChange(series, [], "2026-11-13", TODAY)).toEqual({ kind: "end" });
+  });
+
+  it("changes nothing when the same days are ticked", () => {
+    expect(repeatOnChange(series, [1, 2, 3, 4, 5], "2026-11-13", TODAY)).toEqual({ kind: "unchanged" });
   });
 });

@@ -65,3 +65,34 @@ export function dueRepeatDates({ weekdays, generatedThrough }: SeriesWindow, tod
   }
   return { dates, through: last > generatedThrough ? last : generatedThrough };
 }
+
+// What saving "Repeat on" with `weekdays` on a Meal of the series dated
+// `date` does, applied from that Meal onwards without asking (spec "Meal
+// Series"). "end": every day unticked, so the series ends there. "change":
+// repeats on the `removed` days after it go, and new ones come on
+// `addedDates`, the newly ticked days after it, never before `today`, the
+// viewer's date, through the last day the series has created repeats on;
+// later ones follow as repeats fall due. Every other repeat stays as it is.
+export type RepeatOnChange =
+  | { kind: "unchanged" }
+  | { kind: "end" }
+  | { kind: "change"; removed: Weekday[]; addedDates: string[] };
+
+// See RepeatOnChange. `series` is the series before the change.
+export function repeatOnChange(
+  { weekdays: was, generatedThrough }: SeriesWindow,
+  weekdays: readonly Weekday[],
+  date: string,
+  today: string,
+): RepeatOnChange {
+  if (weekdays.length === 0) return { kind: "end" };
+  const added = weekdays.filter((day) => !was.includes(day));
+  const removed = was.filter((day) => !weekdays.includes(day));
+  if (added.length === 0 && removed.length === 0) return { kind: "unchanged" };
+  const dayAfter = addDays(date, 1);
+  const addedDates: string[] = [];
+  for (let day = dayAfter > today ? dayAfter : today; day <= generatedThrough; day = addDays(day, 1)) {
+    if (added.includes(weekdayOf(day))) addedDates.push(day);
+  }
+  return { kind: "change", removed: [...removed], addedDates };
+}
