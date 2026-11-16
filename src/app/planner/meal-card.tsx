@@ -227,7 +227,7 @@ export function MealCard({
         <div className="meal-card-title">
           <p className="meal-card-eyebrow">{t("planner.mealEyebrow", { mealType: meal.mealTypeLabel, hour: meal.hour })}</p>
           <h3 className="meal-card-name">{label}</h3>
-          {meal.repeats && <p className="meal-card-repeats">{formatRepeats(meal.repeats)}</p>}
+          {meal.repeats && <MealRepeatsLine repeats={meal.repeats} />}
           {meal.mealTypeArchived && <span className="tag">{t("planner.mealTypeArchived")}</span>}
         </div>
         {status && <MealCardStatusLine status={status} />}
@@ -458,6 +458,19 @@ export function ReopenSheet({ meal, today, onClose }: { meal: PlannerMeal; today
 function nothingAddedBack(meal: PlannerMeal): StringKey {
   if (meal.status === "skipped") return "planner.reopenSheet.nothingSkipped";
   return meal.untracked ? "planner.reopenSheet.nothingUntracked" : "planner.reopenSheet.nothingConfirmed";
+}
+
+// "↻ Repeats Mon to Fri", under a Meal Series' Meal's name.
+export function MealRepeatsLine({ repeats }: { repeats: readonly Weekday[] }) {
+  return (
+    <p className="meal-card-repeats">
+      <svg aria-hidden="true" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M20 12a8 8 0 1 1-2.34-5.66" />
+        <path d="M20 4v4.5h-4.5" />
+      </svg>
+      {formatRepeats(repeats)}
+    </p>
+  );
 }
 
 // "✓ Confirmed", "↗ Confirmed · Untracked", "↗ Untracked", "◷ Unconfirmed",
