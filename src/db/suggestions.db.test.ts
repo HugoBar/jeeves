@@ -112,7 +112,7 @@ describe("loadSuggestionContext", () => {
       categoryIds: [fruit],
     });
     expect(context.categories.get(fruit)).toEqual({ kind: "kind", archived: false });
-    expect(context.products.get(rice.id)).toEqual({ defaultUnit: "g", density: null, stock: 500 });
+    expect(context.products.get(rice.id)).toEqual({ name: "Rice", defaultUnit: "g", density: null, stock: 500 });
     // The latest Meal holding it gives the quantity.
     expect(context.quantities.get(apple.id)).toBe(2);
     expect(context.quantities.has(rice.id)).toBe(false);
