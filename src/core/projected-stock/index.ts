@@ -177,6 +177,37 @@ export function projectedStockAt(
   return null;
 }
 
+// A place in the plan food could go: in `meal`, saved or not, after
+// `slotsBefore`, the slots ahead of it in that Meal as they stand.
+export interface StockPlace {
+  meal: Omit<ProjectedMeal, "slots">;
+  slotsBefore: readonly ProjectedSlot[];
+}
+
+// The slot a place stands for, so it can be found in the walk.
+const PLACE_SLOT_ID = "\u0000place";
+
+// What a Recipe made for `portions` at `place` would be short of, as its
+// slot's Shortfalls would be once added (spec "Projected Stock"): the Meals
+// served before it, and the slots ahead of it, take their Stock first. None
+// in an Untracked, Confirmed or Skipped Meal, and none for a Product whose
+// need cannot be worked out.
+export function recipeShortfallsAt(
+  meals: readonly ProjectedMeal[],
+  products: ReadonlyMap<string, ProjectedProduct>,
+  place: StockPlace,
+  recipe: ProjectedRecipe,
+  portions: number,
+): Shortfall[] {
+  const atPlace: ProjectedMeal = {
+    ...place.meal,
+    slots: [...place.slotsBefore, { id: PLACE_SLOT_ID, content: "recipe", portions, recipe }],
+  };
+  // The Meal as it stands at the place stands in for its saved self.
+  const plan = [...meals.filter((meal) => meal.id !== place.meal.id), atPlace];
+  return projectStock(plan, products).get(PLACE_SLOT_ID)?.shortfalls ?? [];
+}
+
 // How a slot's warnings show: "urgent" (red) when its Meal is 1 day away or
 // less, its day passed included, "upcoming" (amber) otherwise (spec
 // "Projected Stock"). `today` is the viewer's date (spec "Platform").

@@ -1,7 +1,6 @@
 import "server-only";
 import { and, asc, desc, eq, gte, inArray, lte, or, sql } from "drizzle-orm";
 import { addDays } from "@/core/planner";
-import type { ProjectedProduct } from "@/core/projected-stock";
 import {
   VARIETY_WINDOW_DAYS,
   type SlotFill,
@@ -12,7 +11,7 @@ import {
 import { activeCategoryIdsByProduct } from "./food-categories";
 import type { Db } from "./index";
 import { listFoodsForSlots } from "./meals";
-import { loadMealSlots } from "./projected-stock";
+import { loadMealSlots, type ProjectedProductWithName } from "./projected-stock";
 import { finalCategoryIdsByRecipe } from "./recipes";
 import { foodCategories, ingredients, mealSlots, meals, mealTypes, products } from "./schema";
 
@@ -22,7 +21,8 @@ export interface SuggestionContext {
   meals: SuggestionMeal[];
   candidates: SuggestionCandidate[];
   categories: Map<string, SuggestionCategory>;
-  products: Map<string, ProjectedProduct>;
+  // By name too, for the Portions step's Shortfall lines.
+  products: Map<string, ProjectedProductWithName>;
   // The quantity each Product last had in a Meal Slot, by Product id: in the
   // latest Meal holding it, of any status.
   quantities: Map<string, number>;
@@ -64,7 +64,13 @@ export async function loadSuggestionContext(db: Db, from: string, to: string): P
       })
       .from(foodCategories),
     db
-      .select({ id: products.id, defaultUnit: products.defaultUnit, density: products.density, stock: products.stock })
+      .select({
+        id: products.id,
+        name: products.name,
+        defaultUnit: products.defaultUnit,
+        density: products.density,
+        stock: products.stock,
+      })
       .from(products),
     lastQuantities(db),
   ]);

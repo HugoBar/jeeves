@@ -3489,6 +3489,17 @@ body:has(.needs-confirmation-locked) :is(.top-menu, .bottom-menu, a.app-badge) {
   font-weight: 500;
 }
 
+/* On "How many Portions?": what the Portions would leave short, under the
+   hint. A box of its own, with the note lighter than the lines. */
+.portions-shortfall {
+  margin-top: 8px;
+  border-radius: 8px;
+}
+
+.slot-strip .portions-shortfall-note {
+  font-weight: 500;
+}
+
 /* The Confirm sheet: what was eaten, each slot with Edit, then what
    happened, picked as one of three outcome cards. */
 .confirm-sheet {

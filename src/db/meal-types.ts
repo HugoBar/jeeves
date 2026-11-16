@@ -12,6 +12,12 @@ export function listActiveMealTypes(db: Db): Promise<MealType[]> {
   return db.select().from(mealTypes).where(isNull(mealTypes.archivedAt));
 }
 
+// Each Meal Type's Meal Priority, Archived ones included, by id.
+export async function listMealTypePriorities(db: Db): Promise<Map<string, number>> {
+  const rows = await db.select({ id: mealTypes.id, priority: mealTypes.priority }).from(mealTypes);
+  return new Map(rows.map(({ id, priority }) => [id, priority]));
+}
+
 export async function getMealType(db: Db, id: string): Promise<MealType | undefined> {
   const [mealType] = await db.select().from(mealTypes).where(eq(mealTypes.id, id));
   return mealType;
