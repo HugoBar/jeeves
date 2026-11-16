@@ -185,6 +185,10 @@ describe("Stock history", () => {
     expect(titles(render({}, [movement("correction", -300, 1000)]))).toEqual(["Correction to 1,000 g"]);
   });
 
+  it("shows a Correction to 0 as what Stock was set to", () => {
+    expect(titles(render({}, [movement("correction", -300, 0)]))).toEqual(["Correction to 0 g"]);
+  });
+
   it("gives each row its type's icon and date", () => {
     const html = render({}, [movement("restock", 1000, 1800)]);
     expect(html).toContain("list-row-tile list-row-tile-restock");
