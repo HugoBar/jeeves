@@ -32,7 +32,7 @@ describe("foodCategoryLabel", () => {
   });
 
   it("shows the typed name of a renamed seeded category", () => {
-    expect(foodCategoryLabel({ seedKey: "white_meat", name: "Poultry" })).toBe("Poultry");
+    expect(foodCategoryLabel({ seedKey: "poultry", name: "Poultry" })).toBe("Poultry");
   });
 
   it("shows a user-created category by its name", () => {

@@ -623,7 +623,7 @@ export const en = {
   "unit.cup": "cup",
   "unit.pc": "pc",
   "foodCategory.red_meat": "Red Meat",
-  "foodCategory.white_meat": "White Meat",
+  "foodCategory.poultry": "Poultry",
   "foodCategory.fish": "Fish",
   "foodCategory.seafood": "Seafood",
   "foodCategory.eggs": "Eggs",
