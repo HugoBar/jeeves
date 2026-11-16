@@ -90,6 +90,7 @@ const press = async (button: HTMLButtonElement) => {
 };
 const slotList = () => sheet().querySelector(".confirm-slot-list");
 const banners = () => [...sheet().querySelectorAll(".banner")].map((banner) => banner.textContent);
+const takesBox = () => sheet().querySelector(".confirm-takes");
 
 describe("picking what happened on the Confirm sheet", () => {
   it("names the button for the outcome picked", () => {
@@ -143,15 +144,17 @@ describe("pressing the Confirm sheet's button", () => {
 });
 
 describe("a refused Confirm", () => {
+  const refusal = {
+    ok: false,
+    error: "unconvertible",
+    code: "noDensity",
+    product: { name: "Honey", defaultUnit: "g" },
+    amount: 2,
+    unit: "tbsp",
+  } as const;
+
   beforeEach(() => {
-    confirm.mockResolvedValue({
-      ok: false,
-      error: "unconvertible",
-      code: "noDensity",
-      product: { name: "Honey", defaultUnit: "g" },
-      amount: 2,
-      unit: "tbsp",
-    });
+    confirm.mockResolvedValue({ ...refusal });
   });
 
   it("says why and that nothing left Stock in one red message, keeps the sheet open and turns its button off", async () => {
@@ -164,12 +167,22 @@ describe("a refused Confirm", () => {
     expect(onClose).not.toHaveBeenCalled();
   });
 
+  // The sheet already saw it coming, so "Takes from Stock" said the same in grey.
+  it("hides Takes from Stock, so the message shows once", async () => {
+    open(false, meal({ takes: { ...refusal } }));
+    expect(takesBox()).not.toBeNull();
+    await press(mainButton());
+    expect(takesBox()).toBeNull();
+    expect(sheet().textContent!.split("Can't confirm")).toHaveLength(2);
+  });
+
   it("clears once another outcome is picked", async () => {
     open();
     await press(mainButton());
     pick("Eaten, but not from the Pantry");
     expect(sheet().querySelector(".banner-error")).toBeNull();
     expect(mainButton().disabled).toBe(false);
+    expect(takesBox()).not.toBeNull();
   });
 
   it("clears once a slot has been edited", async () => {
@@ -179,6 +192,7 @@ describe("a refused Confirm", () => {
     act(() => container.querySelectorAll("dialog")[1]!.querySelector<HTMLButtonElement>(".sheet-close")!.click());
     expect(sheet().querySelector(".banner-error")).toBeNull();
     expect(mainButton().disabled).toBe(false);
+    expect(takesBox()).not.toBeNull();
   });
 
   it("stays when the page refreshes with the same slots", async () => {
