@@ -2568,10 +2568,14 @@ a.back-link {
   text-transform: uppercase;
 }
 
+/* Seven equal days. Reaching into the bar's side padding and keeping the gaps
+   narrow makes each 44 px wide on a 375 px phone; narrower phones shrink
+   them rather than scroll sideways. */
 .planner-strip {
   display: grid;
   grid-template-columns: repeat(7, minmax(0, 1fr));
-  gap: 4px;
+  gap: 2px;
+  margin: 0 -8px;
 }
 
 .planner-strip a {

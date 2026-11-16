@@ -51,6 +51,30 @@ describe("on phone", () => {
     expect(heights.filter((height) => height < 44)).toEqual([]);
   });
 
+  it("fits the Planner's seven days on one line at 375 px, each at least 44 px wide", () => {
+    const phoneWidth = 375;
+    const tapTarget = 44;
+    const space = Number(/--space: (\d+)px/.exec(css)?.[1]);
+    const rule = (selector: string) => new RegExp(`(?:^|[}/])\\s*${selector} {([^}]*)}`).exec(phoneCss)?.[1] ?? "";
+    const px = (value = "") => (value === "var(--space)" ? space : Number(value.replace("px", "")));
+    // The left and right padding: the second value, or the only one.
+    const sidePadding = (declarations: string) => {
+      const values = /padding: ([^;]+);/.exec(declarations)?.[1]?.split(" ") ?? [];
+      return px(values[1] ?? values[0]);
+    };
+    const page = sidePadding(rule("\\.app-main:has\\(\\.planner\\)"));
+    const bar = rule("\\.planner-week-bar");
+    const barBorder = px(/border: (\d+px)/.exec(bar)?.[1]);
+    const strip = rule("\\.planner-strip");
+    const reachIntoBar = -px(/margin: 0 (-?\d+px);/.exec(strip)?.[1] ?? "0px");
+    const gap = px(/gap: (\d+px);/.exec(strip)?.[1]);
+
+    // Equal shares that can shrink, so a narrower phone never scrolls sideways.
+    expect(strip).toContain("grid-template-columns: repeat(7, minmax(0, 1fr));");
+    const stripWidth = phoneWidth - 2 * (page + barBorder + sidePadding(bar) - reachIntoBar);
+    expect(stripWidth - 6 * gap).toBeGreaterThanOrEqual(7 * tapTarget);
+  });
+
   it("gives list rows 44 px too, on links and buttons alike", () => {
     const row = /\.list-row,\s*a\.list-row {[^}]*min-height: (\d+)px/.exec(phoneCss);
     expect(Number(row?.[1])).toBeGreaterThanOrEqual(44);
