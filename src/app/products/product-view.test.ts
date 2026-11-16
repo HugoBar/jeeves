@@ -201,6 +201,10 @@ describe("Stock history", () => {
     expect(titles(render({}, [movement("confirmation", 0, 500)]))).toEqual(["Confirmation 0 g"]);
   });
 
+  it("says a Reopen that adds back 0 had nothing to add back", () => {
+    expect(titles(render({}, [movement("reopen", 0, 0)]))).toEqual(["Reopen · nothing to add back"]);
+  });
+
   it("still shows the date and Meal of a Confirmation that took nothing", () => {
     const row = { ...movement("confirmation", 0, 0), meal: { ...dinner, name: "Rice bowl" } };
     expect(meta(render({}, [row]))).toBe(`${date} · Tue Dinner · Rice bowl`);

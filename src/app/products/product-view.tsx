@@ -224,8 +224,8 @@ function StockHistory({
 }
 
 // A Correction sets Stock, so it reads as what Stock became, not by how much.
-// A Confirmation or Discard that took nothing because Stock was already 0
-// says so instead of "0 g".
+// A Confirmation or Discard that took nothing because Stock was already 0,
+// and a Reopen that added nothing back, say so instead of "0 g".
 function movementTitle(movement: StockMovement, unit: DefaultUnit): string {
   const type = t(`stockMovement.${movement.type}`);
   if (movement.type === "correction") {
@@ -235,6 +235,7 @@ function movementTitle(movement: StockMovement, unit: DefaultUnit): string {
     });
   }
   if (movement.delta === 0) {
+    if (movement.type === "reopen") return t("stockMovement.nothingAddedBack", { type });
     const tookFromZero = movement.type === "confirmation" || movement.type === "discard";
     if (tookFromZero && movement.resultingQuantity === 0) return t("stockMovement.nothingTaken", { type });
   }

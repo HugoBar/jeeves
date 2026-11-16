@@ -607,6 +607,7 @@ export const en = {
   "stockMovement.amount": "{type} {amount}",
   "stockMovement.correctedTo": "to {quantity}",
   "stockMovement.nothingTaken": "{type} · nothing taken, Stock was already 0",
+  "stockMovement.nothingAddedBack": "{type} · nothing to add back",
   "stockMovement.mealAfterDate": "· {meal}",
   "stockMovement.meal": "{day} {mealType}",
   "stockMovement.namedMeal": "{day} {mealType} · {name}",
