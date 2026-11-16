@@ -38,6 +38,7 @@ import {
   MealFormFields,
   mealPanelClass,
   NewMealSlotsCard,
+  type NewMealPlace,
   type Pickers,
   type PlannerMeal,
   type Submitted,
@@ -48,6 +49,7 @@ import {
   withViewerToday,
 } from "./meal-card";
 import { ChevronIcon } from "./slot-picker";
+import { PlannerStockProvider } from "./portions-shortfall";
 import { recordFills, SuggestionsProvider, suggestionsBySlot, type FilledMeal } from "./suggestions";
 
 // "Today" is the date in the viewer's time zone (spec "Platform"). The server
@@ -56,10 +58,12 @@ import { recordFills, SuggestionsProvider, suggestionsBySlot, type FilledMeal } 
 export function Planner({
   meals,
   suggestions,
+  priorities,
   ...pickers
-}: { meals: PlannerMeal[]; suggestions: SuggestionContext } & Pickers) {
+}: { meals: PlannerMeal[]; suggestions: SuggestionContext; priorities: ReadonlyMap<string, number> } & Pickers) {
   const now = useViewerNow();
   const [week, setWeek] = useState<Week>("this");
+  const stock = useMemo(() => ({ context: suggestions, priorities }), [suggestions, priorities]);
   if (!now)
     return (
       <div className="planner-head">
@@ -67,14 +71,16 @@ export function Planner({
       </div>
     );
   return (
-    <PlannerView
-      today={now.date}
-      week={week}
-      meals={meals}
-      pickers={pickers}
-      suggestions={suggestions}
-      onWeekChange={setWeek}
-    />
+    <PlannerStockProvider value={stock}>
+      <PlannerView
+        today={now.date}
+        week={week}
+        meals={meals}
+        pickers={pickers}
+        suggestions={suggestions}
+        onWeekChange={setWeek}
+      />
+    </PlannerStockProvider>
   );
 }
 
@@ -555,9 +561,9 @@ export function AddMealPanel({
 // the picked Meal Template.
 export type AddMealStep = "start" | "scratch" | { template: TemplateOption };
 
-// Add a slot, open in place of New Meal: its screen, and what takes the slot
-// on New Meal once it is picked.
-export type AddingSlot = { screen: AddSlotScreen; deliver: (slot: NewMealSlotInput) => void };
+// Add a slot, open in place of New Meal: its screen, what takes the slot on
+// New Meal once it is picked, and where on New Meal it goes.
+export type AddingSlot = { screen: AddSlotScreen; deliver: (slot: NewMealSlotInput) => void; at?: NewMealPlace };
 
 export function AddMealPanelView({
   date,
@@ -604,6 +610,7 @@ export function AddMealPanelView({
           screen={addingSlot.screen}
           onScreen={(screen) => onAddingSlot({ ...addingSlot, screen })}
           add={addToMealForm(pickers, addingSlot.deliver)}
+          place={addingSlot.at && { ...addingSlot.at, mealId: null, date }}
           onDone={back}
         />
       )}
@@ -621,7 +628,7 @@ export function AddMealPanelView({
             date={date}
             pickers={pickers}
             template={template}
-            onAddSlot={(deliver) => onAddingSlot({ screen: { kind: "food" }, deliver })}
+            onAddSlot={(deliver, at) => onAddingSlot({ screen: { kind: "food" }, deliver, at })}
             onDone={onClose}
           />
         </div>
@@ -704,7 +711,7 @@ function AddMealForm({
   date: string;
   pickers: Pickers;
   template?: TemplateOption;
-  onAddSlot: (deliver: (slot: NewMealSlotInput) => void) => void;
+  onAddSlot: (deliver: (slot: NewMealSlotInput) => void, at: NewMealPlace) => void;
   onDone: () => void;
 }) {
   const [state, action, pending] = useActionState(

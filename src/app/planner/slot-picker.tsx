@@ -18,6 +18,7 @@ import {
   setMealSlotCategoryAction,
 } from "./actions";
 import type { PlannerMeal, PlannerMealSlot, SlotCategoryOption, SlotFoods, SlotPickers } from "./meal-card";
+import { placeIn, PortionsShortfall, type PortionsPlace } from "./portions-shortfall";
 import { usePlannerSuggestions } from "./suggestions";
 
 // What the slot picker shows: the food to pick from, how much of the picked
@@ -108,6 +109,8 @@ export interface SlotPickerKeptUntilSave {
 // What the slot picker shows under its heading, in a sheet or in the Meal
 // panel. `onDone` closes it. With `keptUntilSave`, on Edit Meal, `slot` is as
 // changed on the form, and its food is checked against that Slot Category.
+// `slotsBefore` are the slots ahead of it, which take Stock first: the
+// Meal's saved ones unless given, as Edit Meal shows them.
 export function SlotPickerBody({
   meal,
   slot,
@@ -116,6 +119,7 @@ export function SlotPickerBody({
   onScreen,
   onDone,
   keptUntilSave,
+  slotsBefore = meal.slots.slice(0, Math.max(0, meal.slots.findIndex((found) => found.id === slot.id))),
 }: {
   meal: PlannerMeal;
   slot: PlannerMealSlot;
@@ -124,6 +128,7 @@ export function SlotPickerBody({
   onScreen: (screen: SlotPickerScreen) => void;
   onDone: () => void;
   keptUntilSave?: SlotPickerKeptUntilSave;
+  slotsBefore?: readonly PlannerMealSlot[];
 }) {
   const toPick = () => onScreen({ kind: "pick" });
   if (screen.kind === "category") {
@@ -141,7 +146,10 @@ export function SlotPickerBody({
     const value = slotFoodValue(screen.content, screen.id);
     const food = foodOptions(pickers, slot.slotCategoryId).find((option) => option.value === value);
     // Gone from what the slot can take since it was picked.
-    if (food) return <PickAmount slot={slot} food={food} onBack={toPick} onDone={onDone} keptUntilSave={keptUntilSave} />;
+    const place = placeIn(meal, slotsBefore);
+    if (food) {
+      return <PickAmount slot={slot} food={food} place={place} onBack={toPick} onDone={onDone} keptUntilSave={keptUntilSave} />;
+    }
   }
   return <PickFood meal={meal} slot={slot} pickers={pickers} onScreen={onScreen} onDone={onDone} keptUntilSave={keptUntilSave} />;
 }
@@ -382,12 +390,14 @@ export function PickedFood({
 function PickAmount({
   slot,
   food,
+  place,
   onBack,
   onDone,
   keptUntilSave,
 }: {
   slot: PlannerMealSlot;
   food: FoodOption;
+  place: PortionsPlace;
   onBack: () => void;
   onDone: () => void;
   keptUntilSave?: SlotPickerKeptUntilSave;
@@ -398,6 +408,7 @@ function PickAmount({
       categoryLabel={slot.slotCategoryLabel}
       food={food}
       startAmount={startingAmount(slot, food)}
+      place={place}
       error={state.error}
       action={action}
       pending={pending}
@@ -414,11 +425,13 @@ function PickAmount({
 // `startAmount`. `action` sends the food and amount, with `children`, hidden
 // fields of its own. `error` is why the last send was refused: an amount
 // shows under its field, keeping what was typed. Change goes to the food and
-// Back a step back.
+// Back a step back. A Recipe's Portions warn of what they would leave short
+// at `place`, where it would go.
 export function AmountForm({
   categoryLabel,
   food,
   startAmount,
+  place,
   error,
   action,
   pending,
@@ -429,6 +442,7 @@ export function AmountForm({
   categoryLabel: string;
   food: FoodOption;
   startAmount: string;
+  place?: PortionsPlace;
   error: SlotError | null;
   action: (formData: FormData) => void;
   pending: boolean;
@@ -479,6 +493,7 @@ export function AmountForm({
             </span>
             {messages("amount")}
             <p className="field-hint">{t("planner.picker.portionsHint", { portions: food.portions })}</p>
+            {place && <PortionsShortfall place={place} recipeId={food.id} portions={amount} />}
           </>
         ) : (
           <>

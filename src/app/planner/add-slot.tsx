@@ -15,6 +15,7 @@ import { FormBanner } from "../form-error";
 import { Sheet } from "../sheet";
 import { addMealSlotAction, type NewMealSlotFormState } from "./actions";
 import type { PlannerMeal, SlotCategoryOption, SlotPickers } from "./meal-card";
+import { placeIn, type PortionsPlace } from "./portions-shortfall";
 import { AmountForm, FoodList, PickedFood, toFoodOptions, type FoodOption } from "./slot-picker";
 
 // What Add a slot shows: the food to pick from, the Slot Category of the
@@ -136,24 +137,35 @@ export function AddSlotSheetView({
       className="slot-picker-sheet"
       onClose={onClose}
     >
-      <AddSlotBody pickers={pickers} screen={screen} onScreen={onScreen} add={add} onDone={onClose} />
+      <AddSlotBody
+        pickers={pickers}
+        screen={screen}
+        onScreen={onScreen}
+        add={add}
+        place={placeIn(meal)}
+        onDone={onClose}
+      />
     </Sheet>
   );
 }
 
 // What Add a slot shows under its heading, in a sheet or in the Meal panel.
 // `add` saves the slot, and `onDone` closes it, once added or on Cancel.
+// `place` is where the slot goes, after the Meal's others, for the Portions'
+// Shortfall warning.
 export function AddSlotBody({
   pickers,
   screen,
   onScreen,
   add,
+  place,
   onDone,
 }: {
   pickers: SlotPickers;
   screen: AddSlotScreen;
   onScreen: (screen: AddSlotScreen) => void;
   add: AddSlot;
+  place?: PortionsPlace;
   onDone: () => void;
 }) {
   const toFood = () => onScreen({ kind: "food" });
@@ -167,6 +179,7 @@ export function AddSlotBody({
         categoryLabel={category?.label ?? ""}
         slotCategoryId={screen.slotCategoryId}
         add={add}
+        place={place}
         onChangeFood={toFood}
         onBack={() => onScreen(backFrom(screen))}
         onAdded={onDone}
@@ -221,6 +234,7 @@ function AddSlotAmount({
   categoryLabel,
   slotCategoryId,
   add,
+  place,
   onChangeFood,
   onBack,
   onAdded,
@@ -229,6 +243,7 @@ function AddSlotAmount({
   categoryLabel: string;
   slotCategoryId: string;
   add: AddSlot;
+  place?: PortionsPlace;
   onChangeFood: () => void;
   onBack: () => void;
   onAdded: () => void;
@@ -246,6 +261,7 @@ function AddSlotAmount({
       categoryLabel={categoryLabel}
       food={food}
       startAmount={food.content === "recipe" ? String(food.portions) : ""}
+      place={place}
       error={state.error}
       action={action}
       pending={pending}

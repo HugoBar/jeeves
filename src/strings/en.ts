@@ -313,6 +313,8 @@ export const en = {
   "planner.picker.portionsLess": "One portion less",
   "planner.picker.portionsMore": "One portion more",
   "planner.picker.portionsHint": "The Recipe makes {portions}, so that's the default. Ingredients scale with Portions.",
+  "planner.picker.portionsShort": "Short {quantity} {name} at this Meal",
+  "planner.picker.portionsShortNote": "A warning only. You can still add it.",
   "planner.picker.quantity": "Quantity",
   "planner.picker.quantityHint": "In {product}'s Default Unit.",
   "planner.picker.pickedProductLine": "Product · Default Unit {unit}",

@@ -2,6 +2,7 @@ import { connection } from "next/server";
 import { plannerRange } from "@/core/planner";
 import { getDb } from "@/db";
 import { listMeals } from "@/db/meals";
+import { listMealTypePriorities } from "@/db/meal-types";
 import { DueRepeats } from "../due-repeats";
 import { loadSuggestionContext } from "@/db/suggestions";
 import { Planner } from "./planner";
@@ -14,11 +15,13 @@ export default async function PlannerPage() {
   // Which two weeks show depends on the viewer's date, known only in the
   // browser, so this loads every Meal any viewer's two weeks could hold.
   const { from, to } = plannerRange(new Date().toISOString().slice(0, 10));
-  const [meals, pickers, suggestions] = await Promise.all([
+  const [meals, pickers, suggestions, priorities] = await Promise.all([
     listMeals(db, from, to),
     loadPickers(db),
     // Worked out in the browser, which knows how many days away each Meal is.
     loadSuggestionContext(db, from, to),
+    // New Meal's Shortfall warning places the Meal by its Meal Type's.
+    listMealTypePriorities(db),
   ]);
   // Every Meal before the last day shown takes Stock from the ones shown.
   const plannerMeals = await toPlannerMeals(db, meals, to);
@@ -26,7 +29,7 @@ export default async function PlannerPage() {
   return (
     <section className="page-wide planner">
       <DueRepeats />
-      <Planner meals={plannerMeals} suggestions={suggestions} {...pickers} />
+      <Planner meals={plannerMeals} suggestions={suggestions} priorities={priorities} {...pickers} />
     </section>
   );
 }

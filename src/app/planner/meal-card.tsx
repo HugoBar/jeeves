@@ -51,6 +51,7 @@ import { SidePanel } from "../side-panel";
 import { useViewerNow, viewerMoment, viewerToday } from "../viewer-clock";
 import { AddSlotBody, AddSlotSheet, addSlotTitle, addToMealForm, type AddSlotScreen } from "./add-slot";
 import { DeleteMealSheet } from "./delete-meal-sheet";
+import { placeIn, type PortionsPlace } from "./portions-shortfall";
 import { useAskWhichMeals } from "./series-scope-sheet";
 import {
   confirmMealAction,
@@ -1075,7 +1076,8 @@ type FormSlot = { key: number; input: NewMealSlotInput; error?: NewMealSlotError
 // count rows from 1, and each shows under its slot. Mounted again on every
 // submit, so it starts from `initial`, what was sent. `hint` says where the
 // slots came from. Add slot calls `onAddSlot` with what takes the slot once
-// it is picked, as the panel shows the picking steps in the card's place.
+// it is picked, as the panel shows the picking steps in the card's place,
+// and where it goes: after these slots, in the Meal as the form stands.
 export function NewMealSlotsCard({
   pickers,
   archivedCategories = [],
@@ -1089,7 +1091,7 @@ export function NewMealSlotsCard({
   initial?: NewMealSlotInput[];
   errors?: NewMealSlotRowError[];
   hint?: string;
-  onAddSlot: (add: (slot: NewMealSlotInput) => void) => void;
+  onAddSlot: (add: (slot: NewMealSlotInput) => void, at: NewMealPlace) => void;
 }) {
   const [slots, setSlots] = useState<FormSlot[]>(() =>
     initial.map((input, index) => ({
@@ -1145,21 +1147,42 @@ export function NewMealSlotsCard({
         </ol>
       )}
       <AddFormSlot
-        onAdd={() =>
-          onAddSlot((input) => {
-            const key = nextKey.current++;
-            setSlots((shown) => [...shown, { key, input }]);
-          })
+        onAdd={(form) =>
+          onAddSlot(
+            (input) => {
+              const key = nextKey.current++;
+              setSlots((shown) => [...shown, { key, input }]);
+            },
+            {
+              ...newMealFormFields(form),
+              slotsBefore: slots.map(({ key, input }) => draftSlot(String(key), input, pickers, archivedCategories)),
+            },
+          )
         }
       />
     </FormCard>
   );
 }
 
-// "+ Add slot" at the foot of a Meal form's Slots card.
-function AddFormSlot({ onAdd }: { onAdd: () => void }) {
+// Where a slot added on New Meal goes: the new Meal as its form stands.
+export type NewMealPlace = Omit<PortionsPlace, "mealId" | "date">;
+
+// New Meal's Meal Type, hour and Untracked as they stand on `form`.
+function newMealFormFields(form: HTMLFormElement | null): Omit<NewMealPlace, "slotsBefore"> {
+  const data = form ? new FormData(form) : new FormData();
+  const mealTypeId = data.get("mealTypeId");
+  return {
+    mealTypeId: typeof mealTypeId === "string" ? mealTypeId : undefined,
+    hour: String(data.get("hour") ?? ""),
+    untracked: data.get("untracked") === "on",
+  };
+}
+
+// "+ Add slot" at the foot of a Meal form's Slots card. `onAdd` is given
+// the form it is on.
+function AddFormSlot({ onAdd }: { onAdd: (form: HTMLFormElement | null) => void }) {
   return (
-    <button type="button" className="meal-form-add-slot" onClick={onAdd}>
+    <button type="button" className="meal-form-add-slot" onClick={(event) => onAdd(event.currentTarget.form)}>
       <span className="meal-form-add-slot-icon">
         <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round">
           <path d="M12 5v14M5 12h14" />
@@ -1469,6 +1492,8 @@ export function EditMealPanelView({
           screen={addingSlot}
           onScreen={onAddingSlot}
           add={addToMealForm(pickers, (input) => onSlotEdits(withSlotAdded(slotEdits, input)))}
+          // After the slots as the form shows them; the hour and Untracked as saved.
+          place={placeIn(meal, slots)}
           onDone={() => onAddingSlot(null)}
         />
       )}
@@ -1480,6 +1505,7 @@ export function EditMealPanelView({
           screen={picking.screen}
           onScreen={(screen) => onPicking({ slotId: pickedSlot.id, screen })}
           onDone={back}
+          slotsBefore={slots.slice(0, slots.indexOf(pickedSlot))}
           keptUntilSave={{
             setSlotCategory: (slotCategoryId) => onSlotEdits(withSlotCategory(slotEdits, pickedSlot.id, slotCategoryId)),
             remove: () => {
