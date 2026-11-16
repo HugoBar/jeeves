@@ -655,7 +655,8 @@ export function ConfirmMealSheet({
             </label>
           ))}
         </fieldset>
-        <TakesFromStock meal={meal} outcome={outcome} />
+        {/* Refused as a unit can't convert: only the red message says why, not this too. */}
+        {refused?.error !== "unconvertible" && <TakesFromStock meal={meal} outcome={outcome} />}
         {notYet && !refused && !blocked && (
           <div className="banner">
             <AlertIcon />
