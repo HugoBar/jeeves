@@ -196,10 +196,7 @@ function StockHistory({
                 <span className={`list-row-tile list-row-tile-${movement.type}`} />
                 <span className="list-row-text">
                   <span className="list-row-title">
-                    {t("stockMovement.amount", {
-                      type: t(`stockMovement.${movement.type}`),
-                      amount: movementAmount(movement, unit),
-                    })}
+                    {movementTitle(movement, unit)}
                   </span>
                   <span className="list-row-meta">
                     <LocalDate value={movement.createdAt} />
@@ -227,8 +224,19 @@ function StockHistory({
 }
 
 // A Correction sets Stock, so it reads as what Stock became, not by how much.
-function movementAmount(movement: StockMovement, unit: DefaultUnit): string {
-  return movement.type === "correction"
-    ? t("stockMovement.correctedTo", { quantity: formatQuantity(movement.resultingQuantity, unit) })
-    : formatDelta(movement.delta, unit);
+// A Confirmation or Discard that took nothing because Stock was already 0
+// says so instead of "0 g".
+function movementTitle(movement: StockMovement, unit: DefaultUnit): string {
+  const type = t(`stockMovement.${movement.type}`);
+  if (movement.type === "correction") {
+    return t("stockMovement.amount", {
+      type,
+      amount: t("stockMovement.correctedTo", { quantity: formatQuantity(movement.resultingQuantity, unit) }),
+    });
+  }
+  if (movement.delta === 0) {
+    const tookFromZero = movement.type === "confirmation" || movement.type === "discard";
+    if (tookFromZero && movement.resultingQuantity === 0) return t("stockMovement.nothingTaken", { type });
+  }
+  return t("stockMovement.amount", { type, amount: formatDelta(movement.delta, unit) });
 }

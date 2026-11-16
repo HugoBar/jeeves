@@ -189,6 +189,23 @@ describe("Stock history", () => {
     expect(titles(render({}, [movement("correction", -300, 0)]))).toEqual(["Correction to 0 g"]);
   });
 
+  it("says why a Confirmation or Discard that took nothing changed nothing", () => {
+    const html = render({}, [movement("confirmation", 0, 0), movement("discard", 0, 0)]);
+    expect(titles(html)).toEqual([
+      "Confirmation · nothing taken, Stock was already 0",
+      "Discard · nothing taken, Stock was already 0",
+    ]);
+  });
+
+  it("doesn't say Stock was already 0 on a Confirmation that took nothing from Stock above 0", () => {
+    expect(titles(render({}, [movement("confirmation", 0, 500)]))).toEqual(["Confirmation 0 g"]);
+  });
+
+  it("still shows the date and Meal of a Confirmation that took nothing", () => {
+    const row = { ...movement("confirmation", 0, 0), meal: { ...dinner, name: "Rice bowl" } };
+    expect(meta(render({}, [row]))).toBe(`${date} · Tue Dinner · Rice bowl`);
+  });
+
   it("gives each row its type's icon and date", () => {
     const html = render({}, [movement("restock", 1000, 1800)]);
     expect(html).toContain("list-row-tile list-row-tile-restock");

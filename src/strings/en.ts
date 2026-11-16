@@ -606,6 +606,7 @@ export const en = {
   "quantity.error.notWholePacks": "Enter a whole number of packs above 0.",
   "stockMovement.amount": "{type} {amount}",
   "stockMovement.correctedTo": "to {quantity}",
+  "stockMovement.nothingTaken": "{type} · nothing taken, Stock was already 0",
   "stockMovement.mealAfterDate": "· {meal}",
   "stockMovement.meal": "{day} {mealType}",
   "stockMovement.namedMeal": "{day} {mealType} · {name}",
