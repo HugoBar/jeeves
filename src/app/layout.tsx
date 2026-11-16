@@ -44,7 +44,7 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
       <body>
         <header className="app-header">
           <div className="app-header-bar">
-            <Link href="/" className="app-logo" aria-label={t("nav.home")}>
+            <Link href="/planner" className="app-logo" aria-label={t("nav.home")}>
               <span className="app-logo-mark">
                 <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M4 10h16v9a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2zM3 6h18v4H3z" />

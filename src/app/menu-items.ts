@@ -25,7 +25,7 @@ const shopping: BottomMenuItem = {
 };
 const more: BottomMenuItem = { href: "/more", label: "nav.more", icon: "M4 6h16M4 12h16M4 18h16" };
 
-// Home is reached from the Jeeves logo, so it is in neither menu.
+// Home (V1) will be reached from the Jeeves logo, so it is in neither menu.
 export const topMenu: MenuItem[] = [planner, stock, recipes, shoppingList, more];
 export const bottomMenu: BottomMenuItem[] = [planner, stock, shopping, more];
 

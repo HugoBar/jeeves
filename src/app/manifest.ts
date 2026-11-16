@@ -7,7 +7,7 @@ export default function manifest(): MetadataRoute.Manifest {
     name: t("app.name"),
     short_name: t("app.name"),
     description: t("app.description"),
-    start_url: "/",
+    start_url: "/planner",
     display: "standalone",
     background_color: theme.background,
     theme_color: theme.accent,
