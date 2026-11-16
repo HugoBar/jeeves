@@ -3,10 +3,8 @@
 export const en = {
   "app.name": "Jeeves",
   "app.description": "Pantry, recipes and meal planning for the household.",
-  "home.title": "Welcome",
-  "home.body": "Nothing here yet.",
   "nav.main": "Main",
-  "nav.home": "Jeeves, go to Home",
+  "nav.home": "Jeeves, go to Planner",
   "nav.planner": "Planner",
   "nav.stock": "Stock",
   "nav.recipes": "Recipes",
