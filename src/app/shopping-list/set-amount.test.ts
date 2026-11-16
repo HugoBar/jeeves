@@ -82,14 +82,14 @@ describe("setting an item's amount", () => {
   it("opens in place of the amount when tapped: − the packs +, its unit, then the amount", async () => {
     show([spinach]);
     const amount = labelled("Change the amount of Spinach");
-    expect(text(amount)).toBe("1 bag (100 g)");
+    expect(text(amount)).toBe("1 bag (100 g needed)");
 
     await press(amount);
 
     expect(labelled("Change the amount of Spinach")).toBeNull();
     const stepper = row("Spinach")?.querySelector(".amount-stepper");
     const order = [...stepper!.children].map((child) => child.getAttribute("aria-label") ?? text(child));
-    expect(order).toEqual(["Less Spinach", "Amount of Spinach", "More Spinach", "bag", "(100 g)"]);
+    expect(order).toEqual(["Less Spinach", "Amount of Spinach", "More Spinach", "bag", "(100 g needed)"]);
     expect((labelled("Amount of Spinach") as HTMLInputElement).value).toBe("1");
   });
 
@@ -264,6 +264,6 @@ describe("setting an item's amount", () => {
     show([beef]);
 
     expect(labelled("Change the amount of Ground beef")).toBeNull();
-    expect(text(row("Ground beef"))).toContain("1 pack (300 g)");
+    expect(text(row("Ground beef"))).toContain("1 pack (300 g needed)");
   });
 });

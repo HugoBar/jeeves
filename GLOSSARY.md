@@ -66,6 +66,10 @@ _Avoid_: Missing stock, deficit
 The single, current list of Products to buy, filled from Shortfalls or by hand. Ticking an item marks it as bought without changing Stock; Restocking the ticked items adds them to Stock and removes them from the list. An item from Shortfalls holds only what was worked out; once someone adds to it, sets its amount or merges it with an item added by hand, it counts as added by hand, since part of it was chosen.
 _Avoid_: Grocery list, cart
 
+**Running low**:
+A Product with no item on the Shopping List, ticked or not, that is out of Stock or has a Shortfall at a Meal in the Planner's two weeks. It says what is likely needed next, not that little is left: a Product with only a little in Stock that no Meal needs is not Running low. It is only worked out, never stored.
+_Avoid_: Low stock, needed
+
 ## Recipes
 
 **Recipe**:

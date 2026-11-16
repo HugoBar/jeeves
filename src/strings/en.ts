@@ -405,7 +405,7 @@ export const en = {
   "shopping.count": "{count} items",
   "shopping.countOne": "1 item",
   "shopping.packs": "{count} {name}",
-  "shopping.amountBesidePacks": "({quantity})",
+  "shopping.amountBesidePacks": "({quantity} needed)",
   "shopping.setAmount": "Set amount",
   "shopping.changeAmount": "Change the amount of {name}",
   "shopping.less": "Less {name}",

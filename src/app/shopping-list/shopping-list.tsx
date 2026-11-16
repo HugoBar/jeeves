@@ -296,7 +296,7 @@ function ShoppingItemRow({ item, fresh, uncertain }: { item: ShoppingListItem; f
 }
 
 // What to buy: the whole packs that cover the amount, with the amount, as in
-// "2 bags (1,000 g)", or only the amount without a Pack Size. An item added
+// "2 bags (1,000 g needed)", or only the amount without a Pack Size. An item added
 // by hand without an amount shows none.
 function ShoppingAmount({ item }: { item: ShoppingListItem }) {
   const { quantity, product } = item;
