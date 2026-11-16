@@ -29,7 +29,7 @@ export function sortCategories<T extends { kind: CategoryKind }>(
 // the UI strings file until the user renames it.
 export const SEED_CATEGORIES = [
   { seedKey: "red_meat", kind: "kind" },
-  { seedKey: "white_meat", kind: "kind" },
+  { seedKey: "poultry", kind: "kind" },
   { seedKey: "fish", kind: "kind" },
   { seedKey: "seafood", kind: "kind" },
   { seedKey: "eggs", kind: "kind" },

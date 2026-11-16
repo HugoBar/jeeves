@@ -94,8 +94,8 @@ describe("Food Categories", () => {
   });
 
   it("names a seeded Food Category by its seed", () => {
-    const html = card(render({ foodCategories: [{ id: "w", kind: "kind", name: null, seedKey: "white_meat" }] }));
-    expect(html).toContain('<span class="pill">White Meat</span>');
+    const html = card(render({ foodCategories: [{ id: "w", kind: "kind", name: null, seedKey: "poultry" }] }));
+    expect(html).toContain('<span class="pill">Poultry</span>');
   });
 
   it("says so when the Recipe has none", () => {
