@@ -1,5 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { projectedStockAt, projectStock, shortfallUrgency, type ProjectedMeal, type ProjectedProduct, type ProjectedRecipe } from "./index";
+import {
+  projectedStockAt,
+  projectStock,
+  recipeShortfallsAt,
+  shortfallUrgency,
+  type ProjectedMeal,
+  type ProjectedProduct,
+  type ProjectedRecipe,
+} from "./index";
 
 // Products by id: rice in grams with 500 g in Stock, milk in millilitres
 // (1.03 g/ml) with 1000 ml, eggs in pieces with 6.
@@ -339,5 +347,52 @@ describe("shortfallUrgency", () => {
 
   it("counts across a month's end", () => {
     expect(shortfallUrgency("2026-12-01", "2026-11-30")).toBe("urgent");
+  });
+});
+
+describe("recipeShortfallsAt", () => {
+  // Rice pilaf for 2 Portions: 200 g of rice.
+  const pilaf: ProjectedRecipe = { portions: 2, ingredients: [{ productId: "rice", amount: 200, unit: "g" }] };
+  // A Meal not saved yet, served after `aMeal`'s on the same day: Dinner at 19:30.
+  const dinner = aMeal("new", [], { hour: "19:30", priority: 3, createdAt: new Date("2026-11-16T10:00:00Z") });
+
+  it("is what the Recipe at these Portions needs beyond the Stock left by the Meals served before", () => {
+    const meals = [aMeal("lunch", [aProductSlot("lunch-rice", "rice", 200)])];
+    // 300 g of rice is left; 6 Portions need 600 g.
+    expect(recipeShortfallsAt(meals, products, { meal: dinner, slotsBefore: [] }, pilaf, 6)).toEqual([
+      { productId: "rice", amount: 300 },
+    ]);
+  });
+
+  it("counts the slots ahead of it in the Meal, but not what that Meal holds saved", () => {
+    // Saved, the Meal holds 500 g of rice in a slot being changed: it no longer counts.
+    const meals = [aMeal("lunch", [aProductSlot("being-changed", "rice", 500)])];
+    const place = { meal: meals[0]!, slotsBefore: [aProductSlot("ahead", "rice", 100)] };
+    // 400 g is left after the slot ahead; 6 Portions need 600 g.
+    expect(recipeShortfallsAt(meals, products, place, pilaf, 6)).toEqual([{ productId: "rice", amount: 200 }]);
+  });
+
+  it("leaves out the Meals served after it", () => {
+    const meals = [aMeal("tomorrow", [aProductSlot("tomorrow-rice", "rice", 500)], { date: "2026-11-11" })];
+    expect(recipeShortfallsAt(meals, products, { meal: dinner, slotsBefore: [] }, pilaf, 4)).toEqual([]);
+  });
+
+  it("is none in an Untracked Meal", () => {
+    const place = { meal: { ...dinner, untracked: true }, slotsBefore: [] };
+    expect(recipeShortfallsAt([], products, place, pilaf, 20)).toEqual([]);
+  });
+
+  it("is none for a Product whose need cannot be worked out", () => {
+    // Eggs are counted in pieces: 300 g of them can't be converted.
+    const omelette: ProjectedRecipe = {
+      portions: 1,
+      ingredients: [
+        { productId: "eggs", amount: 300, unit: "g" },
+        { productId: "rice", amount: 600, unit: "g" },
+      ],
+    };
+    expect(recipeShortfallsAt([], products, { meal: dinner, slotsBefore: [] }, omelette, 1)).toEqual([
+      { productId: "rice", amount: 100 },
+    ]);
   });
 });
