@@ -52,8 +52,8 @@ const show = (items: ShoppingListItem[]) =>
   act(() => root.render(createElement(ShoppingListView, { items, today: "2026-11-11", products: [], candidates: [], shortfalls: [], unknownNeeds: [], shortfallProducts: [] })));
 
 beforeEach(() => {
-  setTicked.mockReset().mockResolvedValue();
-  setAllTicked.mockReset().mockResolvedValue();
+  setTicked.mockReset().mockResolvedValue(true);
+  setAllTicked.mockReset().mockResolvedValue(true);
   container = document.createElement("div");
   document.body.append(container);
   root = createRoot(container);

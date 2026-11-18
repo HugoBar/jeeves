@@ -19,8 +19,16 @@ import {
 import { sortByName } from "@/core/names";
 import type { DefaultUnit } from "@/core/units";
 import type { ShoppingListItem } from "@/db/shopping-list";
-import { formatPackName, formatPacks, formatQuantity, formatShoppingCount, t } from "@/strings";
-import { useFieldErrors, WarningIcon } from "../form-error";
+import {
+  formatList,
+  formatPackName,
+  formatPacks,
+  formatQuantity,
+  formatQuantityError,
+  formatShoppingCount,
+  t,
+} from "@/strings";
+import { FormError, useFieldErrors, WarningIcon } from "../form-error";
 import { productHref } from "../products/origin";
 import { ConfirmSheet } from "../sheet";
 import { StepIcon } from "../stepper";
@@ -175,6 +183,7 @@ function UncertainBanner({ unconfirmed }: { unconfirmed: number }) {
 function TickAll({ ticked, total, onTick }: { ticked: number; total: number; onTick: (ticked: boolean) => void }) {
   const box = useRef<HTMLInputElement>(null);
   const [, startTicking] = useTransition();
+  const [refused, setRefused] = useState(false);
   const some = ticked > 0 && ticked < total;
   // A half-filled box can only be set from script.
   useEffect(() => {
@@ -189,13 +198,15 @@ function TickAll({ ticked, total, onTick }: { ticked: number; total: number; onT
         checked={ticked === total}
         onChange={() => {
           const next = ticked < total;
+          setRefused(false);
           startTicking(async () => {
             onTick(next);
-            await setAllShoppingListItemsTickedAction(next);
+            if (!(await setAllShoppingListItemsTickedAction(next))) setRefused(true);
           });
         }}
       />
       {t("shopping.tickAll")}
+      {refused && <FormError>{t("shopping.untickAllTooLarge")}</FormError>}
     </label>
   );
 }
@@ -216,6 +227,7 @@ function ShoppingItemRow({ item, fresh, uncertain }: { item: ShoppingListItem; f
   const [removing, startRemoving] = useTransition();
   const [, startTicking] = useTransition();
   const [ticked, setTicked] = useOptimistic(item.ticked);
+  const [untickRefused, setUntickRefused] = useState(false);
   const { name } = item.product;
   const remove = () => removeShoppingListItemAction(item.id);
   const classes = [
@@ -234,9 +246,10 @@ function ShoppingItemRow({ item, fresh, uncertain }: { item: ShoppingListItem; f
         checked={ticked}
         onChange={(event) => {
           const next = event.target.checked;
+          setUntickRefused(false);
           startTicking(async () => {
             setTicked(next);
-            await setShoppingListItemTickedAction(item.id, next);
+            if (!(await setShoppingListItemTickedAction(item.id, next))) setUntickRefused(true);
           });
         }}
       />
@@ -261,6 +274,7 @@ function ShoppingItemRow({ item, fresh, uncertain }: { item: ShoppingListItem; f
             {item.quantity === null ? t("shopping.setAmount") : <ShoppingAmount item={item} />}
           </button>
         )}
+        {untickRefused && <FormError>{t("shopping.untickTooLarge", { name })}</FormError>}
       </div>
       {editing && !ticked ? (
         // Leaving the number sets what was typed before it closes.
@@ -342,7 +356,7 @@ function AmountEditor({
   const { invalid, messages } = useFieldErrors(
     error ? [error] : [],
     () => "amount" as const,
-    (found) => t(`quantity.error.${found}`),
+    (found) => formatQuantityError(found, defaultUnit, packSize),
   );
 
   // The number as the action reads it: whole packs with a Pack Size, else
@@ -460,6 +474,7 @@ function FromShortfalls({
   shortfallProducts: ShortfallProduct[];
 }) {
   const [pending, startTransition] = useTransition();
+  const [tooLarge, setTooLarge] = useState<string[] | null>(null);
   const [choice, setChoice] = useState<DatesChoice>({ preset: "planned" });
   const [choosing, setChoosing] = useState(false);
   const current = today ? currentChoice(choice, today) : choice;
@@ -492,11 +507,16 @@ function FromShortfalls({
         className="button-primary"
         disabled={!today || pending}
         onClick={() => {
-          if (today) startTransition(() => generateShoppingListAction(today, chosenRange(current, today)));
+          if (!today) return;
+          startTransition(async () => {
+            const refused = await generateShoppingListAction(today, chosenRange(current, today));
+            startTransition(() => setTooLarge(refused));
+          });
         }}
       >
         {t("shopping.generate")}
       </button>
+      {tooLarge && <FormError>{t("shopping.generateTooLarge", { products: formatList(tooLarge) })}</FormError>}
       <p>{t("shopping.generateKeeps")}</p>
       {named && <p className="shopping-earlier">{t("shopping.earlierShort", { products: named })}</p>}
     </div>
