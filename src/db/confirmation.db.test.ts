@@ -358,7 +358,7 @@ describe("reopenMeal", () => {
     ]);
     await confirmMeal(db, meal.id, { untracked: false, today: TODAY });
 
-    expect(await reopenMeal(db, meal.id)).toBe(true);
+    expect(await reopenMeal(db, meal.id)).toEqual({ ok: true });
 
     expect(await movements(pasta.id, "reopen")).toEqual([
       expect.objectContaining({ delta: 200, resultingQuantity: 500, mealId: meal.id }),
@@ -423,7 +423,7 @@ describe("reopenMeal", () => {
     const meal = await aMeal(TODAY, [{ content: "product", productId: jam.id, quantity: 50 }]);
     await confirmMeal(db, meal.id, { untracked: true, today: TODAY });
 
-    expect(await reopenMeal(db, meal.id)).toBe(true);
+    expect(await reopenMeal(db, meal.id)).toEqual({ ok: true });
 
     expect(await listStockMovements(db, jam.id)).toHaveLength(1);
     expect(await getMeal(db, meal.id)).toMatchObject({ status: "planned", untracked: true });
@@ -434,7 +434,7 @@ describe("reopenMeal", () => {
     const meal = await aMeal("2026-10-27", [{ content: "product", productId: muffins.id, quantity: 2 }]);
     await skipMeal(db, meal.id, TODAY);
 
-    expect(await reopenMeal(db, meal.id)).toBe(true);
+    expect(await reopenMeal(db, meal.id)).toEqual({ ok: true });
 
     expect(await listStockMovements(db, muffins.id)).toHaveLength(1);
     expect(await getProduct(db, muffins.id)).toMatchObject({ stock: 6 });
@@ -458,7 +458,7 @@ describe("reopenMeal", () => {
 
   it("refuses a Meal that is not Confirmed or Skipped", async () => {
     const meal = await aMeal(TODAY, []);
-    expect(await reopenMeal(db, meal.id)).toBe(false);
+    expect(await reopenMeal(db, meal.id)).toEqual({ ok: false, error: "notReopenable" });
   });
 });
 

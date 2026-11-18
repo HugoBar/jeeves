@@ -6,6 +6,7 @@ import type { MealTypeSeedKey } from "@/core/meal-types";
 import type { Week } from "@/core/planner";
 import type { PackSize } from "@/core/products";
 import { SOURCE_URL_MAX_LENGTH, STEPS_MAX_LENGTH } from "@/core/recipes";
+import { maxPacks, type ItemAmountError } from "@/core/shopping-list";
 import type { DefaultUnit, Unit } from "@/core/units";
 import { en } from "./en";
 
@@ -100,6 +101,17 @@ export function formatRestockSubmit(count: number): string {
 // is dropped, as in a sentence, but "XL bag" keeps its letters.
 function inSentence(name: string): string {
   return name.replace(/^\p{Lu}(?!\p{Lu})/u, (capital) => capital.toLowerCase());
+}
+
+// Why an amount typed for Stock or the Shopping List was refused, for a
+// Product counted in `unit`, with its Pack Size when the amount is in packs.
+export function formatQuantityError(error: ItemAmountError, unit: DefaultUnit, packSize: PackSize | null = null): string {
+  const most = packSize ? maxPacks(packSize.amount) : 0;
+  return t(`quantity.error.${error}`, {
+    unit: t(`unit.${unit}`),
+    maxPacks: quantityFormat.format(most),
+    packs: packSize ? formatPackName(most, packSize.name) : "",
+  });
 }
 
 // Whole packs of a Pack Size: "1 bag", "2 cartons", "3 boxes".

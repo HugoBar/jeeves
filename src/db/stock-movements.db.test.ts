@@ -204,3 +204,39 @@ describe("listStockMovements", () => {
     expect(history.find(({ type }) => type === "confirmation")).toMatchObject({ delta: -100, meal: null });
   });
 });
+
+// Stock is numeric(10,2), so it holds at most 99,999,999.99.
+describe("a movement past the most Stock holds", () => {
+  it("refuses a Restock, writing nothing", async () => {
+    const rice = await aProduct("Jasmine rice");
+    await restockProduct(db, rice.id, 99_999_999);
+
+    expect(await restockProduct(db, rice.id, 5)).toBe("stockTooLarge");
+
+    expect((await getProduct(db, rice.id))?.stock).toBe(99_999_999);
+    expect(await listStockMovements(db, rice.id)).toHaveLength(1);
+  });
+
+  it("takes a Restock up to exactly the most it holds", async () => {
+    const oats = await aProduct("Rolled oats");
+    await restockProduct(db, oats.id, 99_999_999);
+
+    expect(await restockProduct(db, oats.id, 0.99)).toBeNull();
+
+    expect((await getProduct(db, oats.id))?.stock).toBe(99_999_999.99);
+  });
+
+  it("refuses a Reopen, leaving the Meal Confirmed and Stock as it is", async () => {
+    const chickpeas = await aProduct("Dried chickpeas");
+    await restockProduct(db, chickpeas.id, 500);
+    const meal = await aDinner("2026-10-27", "Hummus", chickpeas.id);
+    await confirmMeal(db, meal.id, { untracked: false, today: TODAY });
+    await correctProductStock(db, chickpeas.id, 99_999_950);
+
+    expect(await reopenMeal(db, meal.id)).toEqual({ ok: false, error: "stockTooLarge", product: "Dried chickpeas" });
+
+    expect((await getProduct(db, chickpeas.id))?.stock).toBe(99_999_950);
+    expect((await listStockMovements(db, chickpeas.id)).map(({ type }) => type)).not.toContain("reopen");
+    expect(await reopenMeal(db, meal.id)).toMatchObject({ ok: false, error: "stockTooLarge" });
+  });
+});
