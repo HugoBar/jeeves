@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { ProjectedMeal, ProjectedProduct } from "@/core/projected-stock";
+import type { DefaultUnit } from "@/core/units";
 import {
   chosenRange,
   currentChoice,
@@ -28,6 +29,16 @@ import {
 // Spinach, 250 g short (spec "Shopping List"), every need worked out.
 const short = { short: new Map([["spinach", 250]]), unknown: new Set<string>() };
 
+// Each Product's Default Unit: eggs come in pieces, the rest by weight.
+const defaultUnits = new Map<string, { defaultUnit: DefaultUnit }>([
+  ["spinach", { defaultUnit: "g" }],
+  ["rice", { defaultUnit: "g" }],
+  ["oats", { defaultUnit: "g" }],
+  ["beans", { defaultUnit: "g" }],
+  ["milk", { defaultUnit: "ml" }],
+  ["eggs", { defaultUnit: "pc" }],
+]);
+
 describe("planGenerate", () => {
   const nothing = { add: [], set: [], remove: [] };
   const notShort = { short: new Map<string, number>(), unknown: new Set<string>() };
@@ -44,20 +55,20 @@ describe("planGenerate", () => {
   const byHand = { source: "manual" } as const;
 
   it("adds a Product that is short and not on the list", () => {
-    expect(planGenerate(short, [])).toEqual({ ...nothing, add: [{ productId: "spinach", quantity: 250 }] });
+    expect(planGenerate(short, [], defaultUnits)).toEqual({ ...nothing, add: [{ productId: "spinach", quantity: 250 }] });
   });
 
   it("raises an unticked item from Shortfalls to the Shortfall", () => {
-    expect(planGenerate(short, [item("a", 100)])).toEqual({ ...nothing, set: [{ id: "a", quantity: 250 }] });
+    expect(planGenerate(short, [item("a", 100)], defaultUnits)).toEqual({ ...nothing, set: [{ id: "a", quantity: 250 }] });
   });
 
   it("lowers an unticked item from Shortfalls to the Shortfall", () => {
     // Generated over both weeks, now over this week only.
-    expect(planGenerate(short, [item("a", 400)])).toEqual({ ...nothing, set: [{ id: "a", quantity: 250 }] });
+    expect(planGenerate(short, [item("a", 400)], defaultUnits)).toEqual({ ...nothing, set: [{ id: "a", quantity: 250 }] });
   });
 
   it("lowers an unticked item from Shortfalls to what ticked items leave short", () => {
-    expect(planGenerate(short, [item("a", 100, ticked), item("b", 250)])).toEqual({
+    expect(planGenerate(short, [item("a", 100, ticked), item("b", 250)], defaultUnits)).toEqual({
       ...nothing,
       set: [{ id: "b", quantity: 150 }],
     });
@@ -65,11 +76,11 @@ describe("planGenerate", () => {
 
   it("removes an unticked item from Shortfalls whose Product is not short", () => {
     // Its Meal Skipped, or first generated for other dates.
-    expect(planGenerate(notShort, [item("a", 100)])).toEqual({ ...nothing, remove: ["a"] });
+    expect(planGenerate(notShort, [item("a", 100)], defaultUnits)).toEqual({ ...nothing, remove: ["a"] });
   });
 
   it("removes an unticked item from Shortfalls when ticked items cover the Shortfall", () => {
-    expect(planGenerate(short, [item("a", 100, ticked), item("b", 150, ticked), item("c", 50)])).toEqual({
+    expect(planGenerate(short, [item("a", 100, ticked), item("b", 150, ticked), item("c", 50)], defaultUnits)).toEqual({
       ...nothing,
       remove: ["c"],
     });
@@ -77,43 +88,76 @@ describe("planGenerate", () => {
 
   it("leaves an item as it is when its Product's need can't be worked out", () => {
     const unknown = { short: new Map<string, number>(), unknown: new Set(["spinach"]) };
-    expect(planGenerate(unknown, [item("a", 100), item("b", 50, ticked)])).toEqual(nothing);
+    expect(planGenerate(unknown, [item("a", 100), item("b", 50, ticked)], defaultUnits)).toEqual(nothing);
   });
 
   it("raises an unticked item added by hand below the Shortfall", () => {
-    expect(planGenerate(short, [item("a", 100, byHand)])).toEqual({ ...nothing, set: [{ id: "a", quantity: 250 }] });
+    expect(planGenerate(short, [item("a", 100, byHand)], defaultUnits)).toEqual({ ...nothing, set: [{ id: "a", quantity: 250 }] });
   });
 
   it("counts an item with no amount as 0", () => {
-    expect(planGenerate(short, [item("a", null, byHand)])).toEqual({ ...nothing, set: [{ id: "a", quantity: 250 }] });
+    expect(planGenerate(short, [item("a", null, byHand)], defaultUnits)).toEqual({ ...nothing, set: [{ id: "a", quantity: 250 }] });
   });
 
   it("never lowers or removes an unticked item added by hand", () => {
     // 2 bags of 500 g set by hand, 250 g short.
-    expect(planGenerate(short, [item("a", 1000, byHand)])).toEqual(nothing);
-    expect(planGenerate(notShort, [item("a", 1000, byHand)])).toEqual(nothing);
-    expect(planGenerate(short, [item("a", 300, ticked), item("b", 100, byHand)])).toEqual(nothing);
+    expect(planGenerate(short, [item("a", 1000, byHand)], defaultUnits)).toEqual(nothing);
+    expect(planGenerate(notShort, [item("a", 1000, byHand)], defaultUnits)).toEqual(nothing);
+    expect(planGenerate(short, [item("a", 300, ticked), item("b", 100, byHand)], defaultUnits)).toEqual(nothing);
   });
 
   it("never changes a ticked item, and adds what it leaves short", () => {
-    expect(planGenerate(short, [item("a", 100, ticked)])).toEqual({
+    expect(planGenerate(short, [item("a", 100, ticked)], defaultUnits)).toEqual({
       ...nothing,
       add: [{ productId: "spinach", quantity: 150 }],
     });
-    expect(planGenerate(notShort, [item("a", 100, ticked), item("b", 50, { ...ticked, ...byHand })])).toEqual(nothing);
-    expect(planGenerate(short, [item("a", 300, ticked)])).toEqual(nothing);
+    expect(planGenerate(notShort, [item("a", 100, ticked), item("b", 50, { ...ticked, ...byHand })], defaultUnits)).toEqual(nothing);
+    expect(planGenerate(short, [item("a", 300, ticked)], defaultUnits)).toEqual(nothing);
   });
 
   it("changes nothing when run again on what it made", () => {
     const shortfalls = { short: new Map([["spinach", 250], ["rice", 80]]), unknown: new Set<string>() };
     const before = [item("a", 400), item("o", 60, { productId: "oats" })];
-    expect(planGenerate(shortfalls, before)).toEqual({
+    expect(planGenerate(shortfalls, before, defaultUnits)).toEqual({
       add: [{ productId: "rice", quantity: 80 }],
       set: [{ id: "a", quantity: 250 }],
       remove: ["o"],
     });
     const after = [item("a", 250), item("r", 80, { productId: "rice" })];
-    expect(planGenerate(shortfalls, after)).toEqual(nothing);
+    expect(planGenerate(shortfalls, after, defaultUnits)).toEqual(nothing);
+  });
+
+  it("rounds a need in pieces up to whole pieces, after ticked items", () => {
+    const shortfalls = { short: new Map([["eggs", 3.33]]), unknown: new Set<string>() };
+
+    expect(planGenerate(shortfalls, [], defaultUnits)).toEqual({ ...nothing, add: [{ productId: "eggs", quantity: 4 }] });
+    // 3.33 less 1.5 ticked leaves 1.83, so 2 more.
+    expect(planGenerate(shortfalls, [item("a", 1.5, { productId: "eggs", ticked: true })], defaultUnits)).toEqual({
+      ...nothing,
+      add: [{ productId: "eggs", quantity: 2 }],
+    });
+  });
+
+  it("raises an unticked item in pieces to whole pieces, then leaves it on a second run", () => {
+    const shortfalls = { short: new Map([["eggs", 1.33]]), unknown: new Set<string>() };
+
+    expect(planGenerate(shortfalls, [item("a", 1.33, { productId: "eggs" })], defaultUnits)).toEqual({
+      ...nothing,
+      set: [{ id: "a", quantity: 2 }],
+    });
+    expect(planGenerate(shortfalls, [item("a", 2, { productId: "eggs" })], defaultUnits)).toEqual(nothing);
+  });
+
+  it("leaves a need in g or ml as it is", () => {
+    const shortfalls = { short: new Map([["spinach", 1.33], ["milk", 2.5]]), unknown: new Set<string>() };
+
+    expect(planGenerate(shortfalls, [], defaultUnits)).toEqual({
+      ...nothing,
+      add: [
+        { productId: "spinach", quantity: 1.33 },
+        { productId: "milk", quantity: 2.5 },
+      ],
+    });
   });
 });
 
@@ -757,12 +801,12 @@ describe("past the most an item holds", () => {
       unknown: new Set<string>(),
     };
     const items = [item("a", 10, { productId: "oats" })];
-    expect(generateTooLarge(planGenerate(needs, items), items)).toEqual(["rice", "oats"]);
+    expect(generateTooLarge(planGenerate(needs, items, defaultUnits), items)).toEqual(["rice", "oats"]);
   });
 
   it("Generate names none when every item fits", () => {
     const needs = { short: new Map([["rice", 99_999_999.99]]), unknown: new Set<string>() };
-    expect(generateTooLarge(planGenerate(needs, []), [])).toEqual([]);
+    expect(generateTooLarge(planGenerate(needs, [], defaultUnits), [])).toEqual([]);
   });
 
   it("adding a pack by hand refuses to go past it", () => {

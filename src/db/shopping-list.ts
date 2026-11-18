@@ -88,7 +88,7 @@ export async function generateShoppingList(
     const items = await tx
       .select(listedItem)
       .from(shoppingListItems);
-    const plan = planGenerate(shortfallsBetween(meals, products, from, to), items);
+    const plan = planGenerate(shortfallsBetween(meals, products, from, to), items, products);
     const tooLarge = generateTooLarge(plan, items);
     if (tooLarge.length > 0) return { ok: false, tooLarge: tooLarge.map((id) => products.get(id)!.name) } as const;
     if (plan.add.length > 0) {
