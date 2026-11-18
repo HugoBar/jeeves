@@ -4,6 +4,7 @@ import { sortMealTemplates } from "@/core/meal-templates";
 import { sortMealTypes } from "@/core/meal-types";
 import { getDb } from "@/db";
 import { listMealTemplates, listPickableMealTypes, listPickableSlotCategories } from "@/db/meal-templates";
+import { listMealTypeUsualMinutes } from "@/db/meal-types";
 import { foodCategoryLabel, mealTypeLabel, t } from "@/strings";
 import {
   CreateMealTemplateForm,
@@ -21,11 +22,12 @@ export default async function MealTemplatesPage() {
   // Archived Meal Types and Slot Categories still in use are listed too, so
   // their templates show them; each picker offers an Archived one only if it
   // already holds it.
-  const [mealTypes, slotCategories] = await Promise.all([
+  const [mealTypes, slotCategories, usualMinutes] = await Promise.all([
     listPickableMealTypes(db, templateIds),
     listPickableSlotCategories(db, templateIds),
+    listMealTypeUsualMinutes(db),
   ]);
-  const mealTypeOptions: MealTypeOption[] = sortMealTypes(mealTypes, mealTypeLabel).map((mealType) => ({
+  const mealTypeOptions: MealTypeOption[] = sortMealTypes(mealTypes, usualMinutes, mealTypeLabel).map((mealType) => ({
     id: mealType.id,
     label: mealTypeLabel(mealType),
     archived: mealType.archived,
