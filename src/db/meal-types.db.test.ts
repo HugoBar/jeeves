@@ -6,10 +6,11 @@ import {
   createMealType,
   getMealType,
   listActiveMealTypes,
+  listMealTypeUsualMinutes,
   removeMealType,
   updateMealType,
 } from "./meal-types";
-import { mealTypes } from "./schema";
+import { meals, mealTypes } from "./schema";
 import { createTestDb } from "./test-database";
 
 let db: Awaited<ReturnType<typeof createTestDb>>;
@@ -129,5 +130,34 @@ describe("removeMealType", () => {
 
     expect(await removeMealType(db, snack.id)).toBe("deleted");
     expect(await getMealType(db, snack.id)).toBeUndefined();
+  });
+});
+
+describe("listMealTypeUsualMinutes", () => {
+  it("gives each Meal Type the median hour of its Meals, in minutes, whatever their status", async () => {
+    const brunch = await createMealType(db, { name: "Late Brunch", priority: 2, allowsLeftovers: false });
+    await db.insert(meals).values([
+      { date: "2026-03-01", hour: "10:00", mealTypeId: brunch.id, status: "confirmed" },
+      { date: "2026-03-02", hour: "11:30", mealTypeId: brunch.id, status: "skipped" },
+      { date: "2026-03-03", hour: "10:30", mealTypeId: brunch.id },
+    ]);
+    const tea = await createMealType(db, { name: "High Tea", priority: 3, allowsLeftovers: false });
+    await db.insert(meals).values([
+      { date: "2026-03-01", hour: "16:00", mealTypeId: tea.id },
+      { date: "2026-03-02", hour: "17:00", mealTypeId: tea.id },
+    ]);
+
+    const usual = await listMealTypeUsualMinutes(db);
+
+    expect(usual.get(brunch.id)).toBe(10 * 60 + 30);
+    // An even count takes the middle of the two middle hours.
+    expect(usual.get(tea.id)).toBe(16 * 60 + 30);
+  });
+
+  it("leaves out a Meal Type with no Meals, even one a Meal Template uses", async () => {
+    const supper = await createMealType(db, { name: "Midnight Supper", priority: 3, allowsLeftovers: false });
+    await createMealTemplate(db, { name: "Late Supper", hour: "23:00", mealTypeId: supper.id, slotCategoryIds: [] });
+
+    expect((await listMealTypeUsualMinutes(db)).has(supper.id)).toBe(false);
   });
 });

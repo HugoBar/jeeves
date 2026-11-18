@@ -1,9 +1,9 @@
 import "server-only";
-import { eq, isNull } from "drizzle-orm";
+import { eq, isNull, sql } from "drizzle-orm";
 import type { MealTypeFields } from "@/core/meal-types";
 import { deleteOrArchive, type RemoveOutcome } from "./archive";
 import type { Db } from "./index";
-import { mealTypes } from "./schema";
+import { meals, mealTypes } from "./schema";
 
 export type MealType = typeof mealTypes.$inferSelect;
 
@@ -16,6 +16,22 @@ export function listActiveMealTypes(db: Db): Promise<MealType[]> {
 export async function listMealTypePriorities(db: Db): Promise<Map<string, number>> {
   const rows = await db.select({ id: mealTypes.id, priority: mealTypes.priority }).from(mealTypes);
   return new Map(rows.map(({ id, priority }) => [id, priority]));
+}
+
+// Each Meal Type's usual hour, by id: the median hour of all its Meals,
+// whatever their status, in minutes after midnight. A Meal Type with no Meals
+// is left out; Meal Templates don't count.
+export async function listMealTypeUsualMinutes(db: Db): Promise<Map<string, number>> {
+  const rows = await db
+    .select({
+      id: meals.mealTypeId,
+      minutes: sql<number>`percentile_cont(0.5) within group (order by extract(epoch from ${meals.hour}) / 60)`.mapWith(
+        Number,
+      ),
+    })
+    .from(meals)
+    .groupBy(meals.mealTypeId);
+  return new Map(rows.map(({ id, minutes }) => [id, minutes]));
 }
 
 export async function getMealType(db: Db, id: string): Promise<MealType | undefined> {
