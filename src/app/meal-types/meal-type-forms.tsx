@@ -3,7 +3,9 @@
 import { useActionState, useState } from "react";
 import { t } from "@/strings";
 import { MEAL_TYPE_ERROR_FIELDS } from "../field-errors";
-import { useFieldErrors, type InvalidProps } from "../form-error";
+import { NAME_MAX_LENGTH } from "@/core/names";
+import { parseMealTypeFields } from "@/core/meal-types";
+import { formFields, useFieldErrors, type InvalidProps } from "../form-error";
 import { EditableRow } from "../list-row";
 import { RemoveButton } from "../remove-button";
 import {
@@ -20,15 +22,27 @@ function useMealTypeErrors(state: MealTypeFormState) {
     state.errors,
     (error) => MEAL_TYPE_ERROR_FIELDS[error],
     (error) => t(`mealTypes.error.${error}`),
+    {
+      from: state,
+      check: (form) => {
+        const field = formFields(form);
+        const parsed = parseMealTypeFields({
+          name: field("name"),
+          priority: field("priority"),
+          allowsLeftovers: false,
+        });
+        return parsed.ok ? [] : parsed.errors;
+      },
+    },
   );
 }
 
 export function CreateMealTypeForm() {
   const [state, action, pending] = useActionState(createMealTypeAction, initialState);
-  const { invalid, allMessages } = useMealTypeErrors(state);
+  const { invalid, allMessages, watch } = useMealTypeErrors(state);
   return (
-    <form action={action} className="item-form">
-      <input name="name" aria-label={t("mealTypes.name")} placeholder={t("mealTypes.name")} {...invalid("name")} />
+    <form action={action} className="item-form" {...watch}>
+      <input name="name" maxLength={NAME_MAX_LENGTH} aria-label={t("mealTypes.name")} placeholder={t("mealTypes.name")} {...invalid("name")} />
       <MealTypeFields priority="" allowsLeftovers={false} priorityInvalidProps={invalid("priority")} />
       <button type="submit" className="button-primary" disabled={pending}>
         {t("mealTypes.add")}
@@ -59,13 +73,13 @@ export function MealTypeRow({
     },
     initialState,
   );
-  const { invalid, allMessages } = useMealTypeErrors(state);
+  const { invalid, allMessages, watch } = useMealTypeErrors(state);
 
   if (editing) {
     return (
       <div className="list-row-open open-row">
-        <form action={action} className="item-form">
-          <input name="name" aria-label={t("mealTypes.name")} defaultValue={label} autoFocus {...invalid("name")} />
+        <form action={action} className="item-form" {...watch}>
+          <input name="name" maxLength={NAME_MAX_LENGTH} aria-label={t("mealTypes.name")} defaultValue={label} autoFocus {...invalid("name")} />
           <MealTypeFields
             priority={String(priority)}
             allowsLeftovers={allowsLeftovers}

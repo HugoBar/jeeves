@@ -1,9 +1,15 @@
 "use client";
 
 import { useEffect, useId, useRef, useState, useTransition, type FormEvent, type RefObject } from "react";
-import { previewStockAction, STOCK_ACTIONS, type QuantityError, type StockAction } from "@/core/stock";
+import {
+  previewStockAction,
+  STOCK_ACTIONS,
+  stockActionError,
+  type QuantityError,
+  type StockAction,
+} from "@/core/stock";
 import type { Product } from "@/db/products";
-import { formatPackSizeNote, formatQuantity, t } from "@/strings";
+import { formatPackSizeNote, formatQuantity, formatQuantityError, t } from "@/strings";
 import { FormWarning, useFieldErrors } from "../form-error";
 import { Sheet } from "../sheet";
 
@@ -99,6 +105,10 @@ export function StockActionSheet({
           setAmount(typed);
           setError(null);
         }}
+        // Leaving an amount typed checks it again, as the action would.
+        onAmountBlur={() => {
+          if (amount.trim()) setError(stockActionError(action, product, amount));
+        }}
         onCancel={onClose}
         onSubmit={submit}
       />
@@ -116,6 +126,7 @@ export function StockActionForm({
   pending,
   fieldRef,
   onAmountChange,
+  onAmountBlur,
   onCancel,
   onSubmit,
 }: {
@@ -126,6 +137,7 @@ export function StockActionForm({
   pending: boolean;
   fieldRef: RefObject<HTMLInputElement | null>;
   onAmountChange: (amount: string) => void;
+  onAmountBlur?: () => void;
   onCancel: () => void;
   onSubmit: (event: FormEvent) => void;
 }) {
@@ -135,7 +147,7 @@ export function StockActionForm({
   const { invalid, messages } = useFieldErrors(
     error ? [error] : [],
     () => "amount",
-    (quantityError) => t(`quantity.error.${quantityError}`),
+    (quantityError) => formatQuantityError(quantityError, defaultUnit),
   );
   const noteId = useId();
   const hint = stockActionHint(action, product);
@@ -154,6 +166,7 @@ export function StockActionForm({
               value={amount}
               aria-describedby={noteId}
               onChange={(event) => onAmountChange(event.target.value)}
+              onBlur={onAmountBlur}
               {...invalid("amount")}
             />
             <span className="field-unit">{t(`unit.${defaultUnit}`)}</span>

@@ -1,14 +1,15 @@
 "use client";
 
 import { useActionState, useState } from "react";
-import type { MealTemplateContent } from "@/core/meal-templates";
+import { parseMealTemplateFields, type MealTemplateContent } from "@/core/meal-templates";
+import { NAME_MAX_LENGTH } from "@/core/names";
 import { moveSlot, type SlotMove } from "@/core/slot-order";
 import { t } from "@/strings";
 import { groupCategoriesByKind } from "../categories/category-groups";
 import type { CategoryOption } from "../categories/category-options";
 import { MEAL_TEMPLATE_ERROR_FIELDS, templateSlotErrorField } from "../field-errors";
 import { FoodCategoryPill } from "../food-category-pill";
-import { useFieldErrors, type InvalidProps } from "../form-error";
+import { formFields, useFieldErrors, type InvalidProps } from "../form-error";
 import { EditableRow } from "../list-row";
 import { RemoveButton } from "../remove-button";
 import {
@@ -45,10 +46,10 @@ export function CreateMealTemplateForm({
     slotErrors: [],
     slotCategoryIds: [],
   });
-  const { invalid, allMessages } = useTemplateErrors(state);
+  const { invalid, allMessages, watch } = useTemplateErrors(state, mealTypes);
   return (
-    <form action={action} className="item-form">
-      <input name="name" aria-label={t("mealTemplates.name")} placeholder={t("mealTemplates.name")} {...invalid("name")} />
+    <form action={action} className="item-form" {...watch}>
+      <input name="name" maxLength={NAME_MAX_LENGTH} aria-label={t("mealTemplates.name")} placeholder={t("mealTemplates.name")} {...invalid("name")} />
       <input type="time" name="hour" aria-label={t("mealTemplates.hour")} {...invalid("hour")} />
       <MealTypeSelect mealTypes={mealTypes} defaultValue="" invalidProps={invalid("mealType")} />
       <SlotRows state={state} slotCategories={slotCategories} />
@@ -60,11 +61,24 @@ export function CreateMealTemplateForm({
   );
 }
 
-function useTemplateErrors(state: MealTemplateFormState) {
+// `mealTypes` are the ones its picker offers, which the field is checked
+// against on leaving it.
+function useTemplateErrors(state: MealTemplateFormState, mealTypes: MealTypeOption[]) {
   return useFieldErrors(
     state.errors,
     (error) => MEAL_TEMPLATE_ERROR_FIELDS[error],
     (error) => t(`mealTemplates.error.${error}`),
+    {
+      from: state,
+      check: (form) => {
+        const field = formFields(form);
+        const parsed = parseMealTemplateFields(
+          { name: field("name"), hour: field("hour"), mealTypeId: field("mealTypeId") },
+          new Set(mealTypes.map((mealType) => mealType.id)),
+        );
+        return parsed.ok ? [] : parsed.errors;
+      },
+    },
   );
 }
 
@@ -87,13 +101,13 @@ export function MealTemplateRow({
     },
     { errors: [], slotErrors: [], slotCategoryIds },
   );
-  const { invalid, allMessages } = useTemplateErrors(state);
+  const { invalid, allMessages, watch } = useTemplateErrors(state, mealTypes);
 
   if (editing) {
     return (
       <div className="list-row-open open-row">
-        <form action={action} className="item-form">
-          <input name="name" aria-label={t("mealTemplates.name")} defaultValue={name} autoFocus {...invalid("name")} />
+        <form action={action} className="item-form" {...watch}>
+          <input name="name" maxLength={NAME_MAX_LENGTH} aria-label={t("mealTemplates.name")} defaultValue={name} autoFocus {...invalid("name")} />
           <input type="time" name="hour" aria-label={t("mealTemplates.hour")} defaultValue={hour} {...invalid("hour")} />
           <MealTypeSelect mealTypes={mealTypes} defaultValue={mealTypeId} invalidProps={invalid("mealType")} />
           <SlotRows state={state} slotCategories={slotCategories} />
@@ -195,12 +209,16 @@ function SlotRows({ state, slotCategories }: { state: MealTemplateFormState; slo
     setSlots((current) => [...current, ...toSlots([""]).map((slot) => ({ ...slot, submittedRow: null }))]);
   const remove = (key: string) => setSlots((current) => current.filter((slot) => slot.key !== key));
   const move = (index: number, by: SlotMove) => setSlots((current) => moveSlot(current, index, by));
-  const { invalid, messages } = useFieldErrors(state.slotErrors, templateSlotErrorField, (error) =>
-    t(`mealTemplates.error.${error.code}`, { row: error.row }),
+  // A slot's picker only offers what it can hold, so picking one fixes it.
+  const { invalid, messages, watch } = useFieldErrors(
+    state.slotErrors,
+    templateSlotErrorField,
+    (error) => t(`mealTemplates.error.${error.code}`, { row: error.row }),
+    { from: state },
   );
 
   return (
-    <fieldset className="slot-rows">
+    <fieldset className="slot-rows" {...watch}>
       <legend>{t("mealTemplates.slots")}</legend>
       {slots.map((slot, index) => {
         const picked = slotCategories.find((category) => category.id === slot.categoryId);
