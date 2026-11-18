@@ -167,6 +167,17 @@ describe("parseMealSlotFill", () => {
     });
   });
 
+  it("says Portions or a quantity past what the column holds are too large", () => {
+    expect(parseMealSlotFill({ food: "recipe:risotto-id", amount: "2147483648" }, pickable)).toEqual({
+      ok: false,
+      error: "portionsTooLarge",
+    });
+    expect(parseMealSlotFill({ food: "product:bread-id", amount: "100000000" }, pickable)).toEqual({
+      ok: false,
+      error: "quantityTooLarge",
+    });
+  });
+
   // Archived, not carrying the Slot Category, or a crafted value.
   it.each([["recipe:bread-id"], ["product:risotto-id"], ["recipe:archived-id"], ["recipe:"], ["dessert:cake-id"]])(
     "rejects food the slot does not offer (%j)",
@@ -805,5 +816,18 @@ describe("mealCardStatus", () => {
   it("shows Unconfirmed once a Planned Meal's day has passed, or Unconfirmed · Untracked", () => {
     expect(status({ status: "planned", untracked: false, date: "2026-10-27" })).toBe("unconfirmed");
     expect(status({ status: "planned", untracked: true, date: "2026-10-27" })).toBe("unconfirmedUntracked");
+  });
+});
+
+describe("a Meal's name length", () => {
+  it("takes a name of 100 characters", () => {
+    expect(parseMealChanges({ hour: "19:30", name: "a".repeat(100), untracked: false })).toMatchObject({ ok: true });
+  });
+
+  it("refuses a longer one, with any other problem", () => {
+    expect(parseMealChanges({ hour: "", name: "a".repeat(101), untracked: false })).toEqual({
+      ok: false,
+      errors: ["invalidHour", "nameTooLong"],
+    });
   });
 });

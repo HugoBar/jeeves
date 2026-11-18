@@ -1,19 +1,34 @@
+import { AMOUNT_COLUMN, DENSITY_COLUMN, INTEGER_MAX, maxForColumn } from "@/core/amounts";
 import type { CategorySeedKey } from "@/core/food-categories";
+import { NAME_MAX_LENGTH } from "@/core/names";
 import type { Weekday } from "@/core/meal-series";
 import type { MealTypeSeedKey } from "@/core/meal-types";
 import type { Week } from "@/core/planner";
 import type { PackSize } from "@/core/products";
+import { SOURCE_URL_MAX_LENGTH, STEPS_MAX_LENGTH } from "@/core/recipes";
 import type { DefaultUnit, Unit } from "@/core/units";
 import { en } from "./en";
 
 export type StringKey = keyof typeof en;
 
+const limitFormat = new Intl.NumberFormat("en", { maximumFractionDigits: 4 });
+
+// The largest values the database holds and the longest text a field takes,
+// which any string can name without its caller passing them: "{amountMax}"
+// reads "99,999,999.99".
+const LIMITS: Record<string, string> = {
+  amountMax: limitFormat.format(maxForColumn(AMOUNT_COLUMN)),
+  densityMax: limitFormat.format(maxForColumn(DENSITY_COLUMN)),
+  wholeMax: limitFormat.format(INTEGER_MAX),
+  nameMax: limitFormat.format(NAME_MAX_LENGTH),
+  sourceMax: limitFormat.format(SOURCE_URL_MAX_LENGTH),
+  stepsMax: limitFormat.format(STEPS_MAX_LENGTH),
+};
+
 export function t(key: StringKey, params?: Record<string, string | number>): string {
   const text: string = en[key];
-  if (!params) return text;
-  return text.replace(/\{(\w+)\}/g, (match, name: string) =>
-    name in params ? String(params[name]) : match,
-  );
+  const all: Record<string, string | number> = { ...LIMITS, ...params };
+  return text.replace(/\{(\w+)\}/g, (match, name: string) => (name in all ? String(all[name]) : match));
 }
 
 // Seeded categories are stored by key (data-model Q7); a rename stores a name,

@@ -1,9 +1,14 @@
-export type CategoryNameResult = { ok: true; name: string } | { ok: false; error: "blank" };
+import { isTooLong, NAME_MAX_LENGTH } from "@/core/names";
+
+export type CategoryNameError = "blank" | "tooLong";
+
+export type CategoryNameResult = { ok: true; name: string } | { ok: false; error: CategoryNameError };
 
 // A name the user types for a new or edited Food Category.
 export function parseCategoryName(input: string): CategoryNameResult {
   const name = input.trim();
-  return name ? { ok: true, name } : { ok: false, error: "blank" };
+  if (!name) return { ok: false, error: "blank" };
+  return isTooLong(name, NAME_MAX_LENGTH) ? { ok: false, error: "tooLong" } : { ok: true, name };
 }
 
 // A Role describes the part food plays in a meal; a Kind, what the food is.

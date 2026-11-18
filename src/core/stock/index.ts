@@ -1,4 +1,12 @@
-import { AMOUNT_COLUMN, parseAboveZero, parseNonNegative, parsePositive, roundForColumn } from "@/core/amounts";
+import {
+  AMOUNT_COLUMN,
+  isTooLarge,
+  maxForColumn,
+  parseAboveZero,
+  parseNonNegative,
+  parsePositive,
+  roundForColumn,
+} from "@/core/amounts";
 
 // What caused a Stock Movement (glossary: Stock Movement).
 export const STOCK_MOVEMENT_TYPES = ["restock", "discard", "correction", "confirmation", "reopen"] as const;
@@ -61,30 +69,39 @@ function towards(current: StockState, resultingQuantity: number, stockSuspect: b
   };
 }
 
+// Stock is stored in an amount column, so it holds at most its largest
+// value. A movement that would leave more is refused, writing nothing.
+export function exceedsStockLimit(change: StockChange): boolean {
+  return change.resultingQuantity > maxForColumn(AMOUNT_COLUMN);
+}
+
 // A quantity typed into the Stock action sheet, in the Product's Default Unit. Each
-// error names the rule the text broke.
-export type QuantityError = "notAboveZero" | "notZeroOrMore";
+// error names the rule the text broke: "tooLarge" is an amount the column
+// can't hold, "stockTooLarge" one that would leave more Stock than it holds.
+export type QuantityError = "notAboveZero" | "notZeroOrMore" | "tooLarge" | "stockTooLarge";
 
 export type ParsedQuantity = { ok: true; quantity: number } | { ok: false; error: QuantityError };
 
-function toParsed(quantity: number | null, error: QuantityError): ParsedQuantity {
-  return quantity === null ? { ok: false, error } : { ok: true, quantity };
+function toParsed(text: string, quantity: number | null, error: QuantityError): ParsedQuantity {
+  if (quantity !== null) return { ok: true, quantity };
+  return { ok: false, error: isTooLarge(text, AMOUNT_COLUMN) ? "tooLarge" : error };
 }
 
 // The quantity bought: above 0.
 export function parsePositiveQuantity(text: string): ParsedQuantity {
-  return toParsed(parsePositive(text.trim(), AMOUNT_COLUMN), "notAboveZero");
+  return toParsed(text, parsePositive(text.trim(), AMOUNT_COLUMN), "notAboveZero");
 }
 
 // The quantity discarded: above 0, with no upper limit. It is never stored,
 // as Stock stops at 0 and the movement records what actually left.
 export function parseDiscardQuantity(text: string): ParsedQuantity {
-  return toParsed(parseAboveZero(text.trim(), AMOUNT_COLUMN), "notAboveZero");
+  const quantity = parseAboveZero(text.trim(), AMOUNT_COLUMN);
+  return quantity === null ? { ok: false, error: "notAboveZero" } : { ok: true, quantity };
 }
 
 // The quantity counted for a Correction: 0 or more.
 export function parseQuantityOnHand(text: string): ParsedQuantity {
-  return toParsed(parseNonNegative(text.trim(), AMOUNT_COLUMN), "notZeroOrMore");
+  return toParsed(text, parseNonNegative(text.trim(), AMOUNT_COLUMN), "notZeroOrMore");
 }
 
 // How many rows Stock history starts with, and adds on each "Show older".
@@ -121,4 +138,13 @@ export function parseStockAmount(action: StockAction, text: string): ParsedQuant
 export function previewStockAction(action: StockAction, current: StockState, text: string): StockChange | null {
   const parsed = parseStockAmount(action, text);
   return parsed.ok ? STOCK_ACTION_RULES[action].change(current, parsed.quantity) : null;
+}
+
+// Why a Stock action would refuse the amount typed so far, with Stock at
+// `current`; null if it would take it. The server checks the Stock it
+// leaves again when it writes, as Stock may have changed meanwhile.
+export function stockActionError(action: StockAction, current: StockState, text: string): QuantityError | null {
+  const parsed = parseStockAmount(action, text);
+  if (!parsed.ok) return parsed.error;
+  return exceedsStockLimit(STOCK_ACTION_RULES[action].change(current, parsed.quantity)) ? "stockTooLarge" : null;
 }

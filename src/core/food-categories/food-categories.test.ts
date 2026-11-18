@@ -37,3 +37,14 @@ describe("sortCategories", () => {
     ]);
   });
 });
+
+// Names are kept to 100 characters.
+describe("parseCategoryName length", () => {
+  it("takes a name of 100 characters, not counting spaces at the ends", () => {
+    expect(parseCategoryName(` ${"a".repeat(100)} `)).toEqual({ ok: true, name: "a".repeat(100) });
+  });
+
+  it("refuses a longer one", () => {
+    expect(parseCategoryName("a".repeat(101))).toEqual({ ok: false, error: "tooLong" });
+  });
+});

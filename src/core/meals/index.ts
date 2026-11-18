@@ -1,5 +1,6 @@
-import { AMOUNT_COLUMN, parsePositive, parseWholeAboveZero } from "@/core/amounts";
+import { AMOUNT_COLUMN, isTooLarge, isWholeTooLarge, parsePositive, parseWholeAboveZero } from "@/core/amounts";
 import type { CategoryKind } from "@/core/food-categories";
+import { isTooLong, NAME_MAX_LENGTH } from "@/core/names";
 import type { RepeatOnError, Weekday } from "@/core/meal-series";
 import { addDays, isDate, mondayOf } from "@/core/planner";
 
@@ -44,7 +45,13 @@ export function isHour(text: string): boolean {
   return HOUR.test(text);
 }
 
-export type MealFieldError = "invalidDate" | "invalidHour" | "noMealType" | "unavailableMealType" | RepeatOnError;
+export type MealFieldError =
+  | "invalidDate"
+  | "invalidHour"
+  | "nameTooLong"
+  | "noMealType"
+  | "unavailableMealType"
+  | RepeatOnError;
 
 export type NewMealResult = { ok: true; fields: NewMealFields } | { ok: false; errors: MealFieldError[] };
 
@@ -112,7 +119,13 @@ export function slotFoodValue(content: "recipe" | "product", id: string): string
   return `${content}:${id}`;
 }
 
-export type MealSlotFillError = "noFood" | "unavailableFood" | "invalidPortions" | "invalidQuantity";
+export type MealSlotFillError =
+  | "noFood"
+  | "unavailableFood"
+  | "invalidPortions"
+  | "portionsTooLarge"
+  | "invalidQuantity"
+  | "quantityTooLarge";
 
 export type MealSlotFillResult = { ok: true; fill: MealSlotFill } | { ok: false; error: MealSlotFillError };
 
@@ -127,12 +140,14 @@ export function parseMealSlotFill(input: MealSlotFillInput, pickable: MealSlotPi
   const [kind, id = ""] = food.split(/:(.*)/);
   if (kind === "recipe" && pickable.recipeIds.has(id)) {
     const portions = parseWholeAboveZero(amount);
-    if (portions === null) return { ok: false, error: "invalidPortions" };
+    if (portions === null) return { ok: false, error: isWholeTooLarge(amount) ? "portionsTooLarge" : "invalidPortions" };
     return { ok: true, fill: { content: "recipe", recipeId: id, portions } };
   }
   if (kind === "product" && pickable.productIds.has(id)) {
     const quantity = parsePositive(amount, AMOUNT_COLUMN);
-    if (quantity === null) return { ok: false, error: "invalidQuantity" };
+    if (quantity === null) {
+      return { ok: false, error: isTooLarge(amount, AMOUNT_COLUMN) ? "quantityTooLarge" : "invalidQuantity" };
+    }
     return { ok: true, fill: { content: "product", productId: id, quantity } };
   }
   return { ok: false, error: "unavailableFood" };
@@ -258,12 +273,18 @@ export function slotCategoryChoices<T extends { id: string; kind: CategoryKind }
   return roles.length > 0 ? roles : carried;
 }
 
-export type MealChangesResult = { ok: true; changes: MealChanges } | { ok: false; errors: "invalidHour"[] };
+export type MealChangesError = "invalidHour" | "nameTooLong";
+
+export type MealChangesResult = { ok: true; changes: MealChanges } | { ok: false; errors: MealChangesError[] };
 
 export function parseMealChanges(input: { hour: string; name: string; untracked: boolean }): MealChangesResult {
   const hour = input.hour.trim();
-  if (!isHour(hour)) return { ok: false, errors: ["invalidHour"] };
-  return { ok: true, changes: { hour, name: input.name.trim() || null, untracked: input.untracked } };
+  const name = input.name.trim();
+  const errors: MealChangesError[] = [];
+  if (!isHour(hour)) errors.push("invalidHour");
+  if (isTooLong(name, NAME_MAX_LENGTH)) errors.push("nameTooLong");
+  if (errors.length) return { ok: false, errors };
+  return { ok: true, changes: { hour, name: name || null, untracked: input.untracked } };
 }
 
 // A Meal's slots as asksWhichMeals compares them: in order, each with its

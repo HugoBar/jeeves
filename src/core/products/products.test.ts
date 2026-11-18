@@ -35,7 +35,7 @@ describe("parseProductFields", () => {
   });
 
   // Density is stored with 4 decimals (data-model T2): 0.00004 would be saved as 0.
-  it.each([["abc"], ["0"], ["-1"], ["Infinity"], ["0.00004"], ["100000000"]])(
+  it.each([["abc"], ["0"], ["-1"], ["0.00004"]])(
     "rejects a Density that is not a positive amount (%j)",
     (density) => {
       expect(parseProductFields({ ...filled, density })).toEqual({
@@ -44,6 +44,18 @@ describe("parseProductFields", () => {
       });
     },
   );
+
+  // numeric(10,4) holds at most 999,999.9999.
+  it.each([["1000000"], ["Infinity"], ["1e400"]])("says a Density that does not fit is too large (%j)", (density) => {
+    expect(parseProductFields({ ...filled, density })).toEqual({ ok: false, errors: ["densityTooLarge"] });
+  });
+
+  it("says a Pack Size amount that does not fit is too large", () => {
+    expect(parseProductFields({ ...filled, packSizeAmount: "100000000" })).toEqual({
+      ok: false,
+      errors: ["packSizeAmountTooLarge"],
+    });
+  });
 
   it("rejects a Pack Size with a name but no amount", () => {
     expect(parseProductFields({ ...filled, packSizeName: "bag", packSizeAmount: "" })).toEqual({
@@ -130,5 +142,14 @@ describe("densityBlockers", () => {
   // Pieces never convert, so a pc Product's Density is never used.
   it("finds none for a pc Product", () => {
     expect(densityBlockers("pc", [{ recipeName: "Omelette", amount: 3, unit: "pc" }])).toEqual([]);
+  });
+});
+
+describe("parseProductFields text length", () => {
+  it("refuses a name or Pack Size name over 100 characters", () => {
+    expect(parseProductFields({ ...filled, name: "a".repeat(101), packSizeName: "b".repeat(101) })).toEqual({
+      ok: false,
+      errors: ["nameTooLong", "packSizeNameTooLong"],
+    });
   });
 });

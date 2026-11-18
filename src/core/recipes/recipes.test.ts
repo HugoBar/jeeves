@@ -43,12 +43,20 @@ describe("parseRecipeFields", () => {
   });
 
   // Portions are whole numbers everywhere (data-model T4).
-  it.each([[""], ["0"], ["-2"], ["2.5"], ["four"], ["0x10"], ["Infinity"], ["2147483648"]])(
+  it.each([[""], ["0"], ["-2"], ["2.5"], ["four"], ["0x10"], ["Infinity"]])(
     "rejects Portions that are not a whole number above 0 (%j)",
     (portions) => {
       expect(parseRecipeFields({ ...filled, portions })).toEqual({ ok: false, errors: ["invalidPortions"] });
     },
   );
+
+  it("says Portions or a prep time past what the column holds are too large", () => {
+    expect(parseRecipeFields({ ...filled, portions: "2147483648" })).toEqual({ ok: false, errors: ["portionsTooLarge"] });
+    expect(parseRecipeFields({ ...filled, prepTimeMinutes: "99999999999" })).toEqual({
+      ok: false,
+      errors: ["prepTimeTooLarge"],
+    });
+  });
 
   it("accepts the most Portions the column holds", () => {
     expect(parseRecipeFields({ ...filled, portions: " 2147483647 " })).toMatchObject({
@@ -237,5 +245,28 @@ describe("withCategoryOverride", () => {
 
   it("clears it, so the category follows the Ingredients again", () => {
     expect(withCategoryOverride(overrides, "grains", null)).toEqual([{ categoryId: "fruit", mode: "add" }]);
+  });
+});
+
+// Names 100 characters, Source 2,000, Steps 20,000.
+describe("parseRecipeFields text length", () => {
+  const longLink = `https://example.com/${"a".repeat(1981)}`;
+
+  it("takes each at its limit", () => {
+    expect(longLink).toHaveLength(2001);
+    expect(
+      parseRecipeFields({
+        ...filled,
+        name: "a".repeat(100),
+        sourceUrl: longLink.slice(0, 2000),
+        steps: "s".repeat(20_000),
+      }),
+    ).toMatchObject({ ok: true });
+  });
+
+  it("refuses each past it", () => {
+    expect(
+      parseRecipeFields({ ...filled, name: "a".repeat(101), sourceUrl: longLink, steps: "s".repeat(20_001) }),
+    ).toEqual({ ok: false, errors: ["nameTooLong", "sourceUrlTooLong", "stepsTooLong"] });
   });
 });

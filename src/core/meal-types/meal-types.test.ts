@@ -18,12 +18,19 @@ describe("parseMealTypeFields rejects", () => {
   });
 
   // 1 is the highest Meal Priority, so 0 and below mean nothing.
-  it.each([[""], ["0"], ["-1"], ["1.5"], ["first"], ["2147483648"]])(
+  it.each([[""], ["0"], ["-1"], ["1.5"], ["first"]])(
     "a Meal Priority that is not a whole number of at least 1 (%j)",
     (priority) => {
       expect(parseMealTypeFields({ ...filled, priority })).toEqual({ ok: false, errors: ["invalidPriority"] });
     },
   );
+
+  it("a Meal Priority past what the column holds, as too large", () => {
+    expect(parseMealTypeFields({ ...filled, priority: "2147483648" })).toEqual({
+      ok: false,
+      errors: ["priorityTooLarge"],
+    });
+  });
 
   it("every invalid field at once", () => {
     expect(parseMealTypeFields({ name: "", priority: "0", allowsLeftovers: true })).toEqual({
@@ -48,5 +55,14 @@ describe("sortMealTypes", () => {
       "Breakfast",
       "Snack",
     ]);
+  });
+});
+
+describe("parseMealTypeFields name length", () => {
+  it("refuses a name over 100 characters", () => {
+    expect(parseMealTypeFields({ name: "a".repeat(101), priority: "1", allowsLeftovers: false })).toEqual({
+      ok: false,
+      errors: ["nameTooLong"],
+    });
   });
 });

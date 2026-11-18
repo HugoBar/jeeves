@@ -1,4 +1,4 @@
-import { AMOUNT_COLUMN, parsePositive } from "@/core/amounts";
+import { AMOUNT_COLUMN, isTooLarge, parsePositive } from "@/core/amounts";
 import {
   convertToDefaultUnit,
   parseRecipeUnit,
@@ -34,7 +34,7 @@ export interface PickableProduct extends ConvertibleProduct {
 // Ingredient's Product name, which names the Ingredient in the error.
 export type IngredientError = { row: number } & (
   | { code: "noProduct" | "unavailableProduct" }
-  | { code: "invalidAmount"; product: string }
+  | { code: "invalidAmount" | "amountTooLarge"; product: string }
   | { code: "noDensity" | "countMismatch"; product: string; unit: Unit; defaultUnit: DefaultUnit }
 );
 
@@ -70,7 +70,8 @@ export function parseIngredients(
     if (!unit) throw new RangeError(`Not a Recipe unit: ${input.unit}`);
     const amount = parsePositive(amountText, AMOUNT_COLUMN);
     if (amount === null) {
-      errors.push({ row, code: "invalidAmount", product: product.name });
+      const code = isTooLarge(amountText, AMOUNT_COLUMN) ? "amountTooLarge" : "invalidAmount";
+      errors.push({ row, code, product: product.name });
       return;
     }
     const conversion = convertToDefaultUnit(amount, unit, product);

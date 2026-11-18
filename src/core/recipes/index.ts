@@ -1,5 +1,11 @@
-import { parseWholeAboveZero } from "@/core/amounts";
+import { isWholeTooLarge, parseWholeAboveZero } from "@/core/amounts";
 import type { Ingredient } from "@/core/ingredients";
+import { isTooLong, NAME_MAX_LENGTH } from "@/core/names";
+
+// The most characters a Recipe's Source link and its Steps can have. Their
+// fields stop there, and saving refuses more.
+export const SOURCE_URL_MAX_LENGTH = 2_000;
+export const STEPS_MAX_LENGTH = 20_000;
 
 // What the user can set on a Recipe itself. Its Ingredients and Food Category
 // overrides are saved with it, as RecipeContent.
@@ -22,7 +28,16 @@ export interface RecipeFieldsInput {
   sourceUrl: string;
 }
 
-export type RecipeFieldError = "blankName" | "invalidPortions" | "invalidPrepTime" | "invalidSourceUrl";
+export type RecipeFieldError =
+  | "blankName"
+  | "nameTooLong"
+  | "invalidPortions"
+  | "portionsTooLarge"
+  | "invalidPrepTime"
+  | "prepTimeTooLarge"
+  | "invalidSourceUrl"
+  | "sourceUrlTooLong"
+  | "stepsTooLong";
 
 export type RecipeFieldsResult =
   | { ok: true; fields: RecipeFields }
@@ -36,9 +51,14 @@ export function parseRecipeFields(input: RecipeFieldsInput): RecipeFieldsResult 
 
   const errors: RecipeFieldError[] = [];
   if (!name) errors.push("blankName");
-  if (portions === null) errors.push("invalidPortions");
-  if (prepTimeMinutes === null) errors.push("invalidPrepTime");
-  if (sourceUrl && !isWebAddress(sourceUrl)) errors.push("invalidSourceUrl");
+  else if (isTooLong(name, NAME_MAX_LENGTH)) errors.push("nameTooLong");
+  if (portions === null) errors.push(isWholeTooLarge(input.portions) ? "portionsTooLarge" : "invalidPortions");
+  if (prepTimeMinutes === null) {
+    errors.push(isWholeTooLarge(input.prepTimeMinutes) ? "prepTimeTooLarge" : "invalidPrepTime");
+  }
+  if (isTooLong(sourceUrl, SOURCE_URL_MAX_LENGTH)) errors.push("sourceUrlTooLong");
+  else if (sourceUrl && !isWebAddress(sourceUrl)) errors.push("invalidSourceUrl");
+  if (isTooLong(input.steps, STEPS_MAX_LENGTH)) errors.push("stepsTooLong");
   if (errors.length) return { ok: false, errors };
 
   return {

@@ -16,11 +16,14 @@ export const FORM_LEVEL = "form";
 
 export const MEAL_TYPE_ERROR_FIELDS = {
   blankName: "name",
+  nameTooLong: "name",
   invalidPriority: "priority",
+  priorityTooLarge: "priority",
 } as const satisfies Record<MealTypeFieldError, string>;
 
 export const MEAL_TEMPLATE_ERROR_FIELDS = {
   blankName: "name",
+  nameTooLong: "name",
   invalidHour: "hour",
   noMealType: "mealType",
   unavailableMealType: "mealType",
@@ -29,6 +32,7 @@ export const MEAL_TEMPLATE_ERROR_FIELDS = {
 export const MEAL_ERROR_FIELDS = {
   invalidDate: FORM_LEVEL,
   invalidHour: "hour",
+  nameTooLong: "name",
   noMealType: "mealType",
   unavailableMealType: "mealType",
   pastMealRepeat: "repeatOn",
@@ -42,31 +46,43 @@ export const MEAL_SLOT_ERROR_FIELDS = {
   unavailableFood: "food",
   uncategorisedFood: "food",
   invalidPortions: "amount",
+  portionsTooLarge: "amount",
   invalidQuantity: "amount",
+  quantityTooLarge: "amount",
   notChangeable: FORM_LEVEL,
 } as const satisfies Record<MealSlotCategoryError | MealSlotFillError | NewMealSlotError | "notChangeable", string>;
 
 export const PRODUCT_ERROR_FIELDS = {
   blankName: "name",
+  nameTooLong: "name",
   duplicateName: "name",
   invalidDensity: "density",
+  densityTooLarge: "density",
   densityInUse: FORM_LEVEL,
   noPackSizeName: "packSizeName",
+  packSizeNameTooLong: "packSizeName",
   noPackSizeAmount: "packSizeAmount",
   invalidPackSizeAmount: "packSizeAmount",
+  packSizeAmountTooLarge: "packSizeAmount",
 } as const satisfies Record<ProductFormError, string>;
 
 export const RECIPE_ERROR_FIELDS = {
   blankName: "name",
+  nameTooLong: "name",
   invalidPortions: "portions",
+  portionsTooLarge: "portions",
   invalidPrepTime: "prepTime",
+  prepTimeTooLarge: "prepTime",
   invalidSourceUrl: "sourceUrl",
+  sourceUrlTooLong: "sourceUrl",
+  stepsTooLong: "steps",
 } as const satisfies Record<RecipeFormState["errors"][number], string>;
 
 const INGREDIENT_ERROR_FIELDS = {
   noProduct: "product",
   unavailableProduct: "product",
   invalidAmount: "amount",
+  amountTooLarge: "amount",
   noDensity: "unit",
   countMismatch: "unit",
 } as const satisfies Record<IngredientError["code"], string>;

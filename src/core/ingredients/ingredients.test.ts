@@ -34,7 +34,7 @@ describe("parseIngredients", () => {
     });
   });
 
-  it.each([[""], ["0"], ["-1"], ["0.001"], ["lots"], ["100000000"]])(
+  it.each([[""], ["0"], ["-1"], ["0.001"], ["lots"]])(
     "refuses an amount that is not a decimal above 0 (%j), naming the Ingredient",
     (amount) => {
       expect(parseIngredients([{ ...row, amount }], products)).toEqual({
@@ -43,6 +43,13 @@ describe("parseIngredients", () => {
       });
     },
   );
+
+  it("says an amount that does not fit is too large, naming the Ingredient", () => {
+    expect(parseIngredients([{ ...row, amount: "100000000" }], products)).toEqual({
+      ok: false,
+      errors: [{ row: 1, code: "amountTooLarge", product: "Flour" }],
+    });
+  });
 
   it("accepts a volume for a Product counted by mass when it has a Density", () => {
     expect(parseIngredients([{ ...row, amount: "2", unit: "cup" }], products)).toMatchObject({ ok: true });

@@ -123,3 +123,11 @@ describe("parseTemplateSlots rejects", () => {
   });
 });
 
+
+describe("parseMealTemplateFields name length", () => {
+  it("refuses a name over 100 characters", () => {
+    expect(
+      parseMealTemplateFields({ name: "a".repeat(101), hour: "08:00", mealTypeId: "breakfast" }, new Set(["breakfast"])),
+    ).toEqual({ ok: false, errors: ["nameTooLong"] });
+  });
+});
