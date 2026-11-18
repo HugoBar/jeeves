@@ -18,6 +18,7 @@ I want one place that knows what food is in my Pantry, what I can cook from it, 
 - Mass ↔ volume converts via the Product's Density. Count never converts to or from mass/volume.
 - A Recipe can't be saved with an Ingredient whose unit can't convert to its Product's Default Unit; the error names the missing Product field (Density).
 - Pack Size appears only on the Shopping List: round up to whole packs, always show the real amount ("2 bags (1,300 g needed)").
+- On the Shopping List, an amount in pc rounds up to whole pieces (1.33 becomes 2). Stock and Shortfalls stay exact.
 
 ### Recipes
 - Name, Portions (how many it is written for), Ingredients (Product + amount + unit + Minor flag), steps (markdown), prep time, optional source URL. "Remove" Archives.
