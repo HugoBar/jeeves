@@ -1,10 +1,11 @@
 "use client";
 
 import { useActionState, useState } from "react";
-import type { CategoryKind } from "@/core/food-categories";
+import { parseCategoryName, type CategoryKind } from "@/core/food-categories";
+import { NAME_MAX_LENGTH } from "@/core/names";
 import { t } from "@/strings";
 import { FoodCategoryPill } from "../food-category-pill";
-import { useFieldErrors } from "../form-error";
+import { formFields, useFieldErrors } from "../form-error";
 import { EditableRow } from "../list-row";
 import { RemoveButton } from "../remove-button";
 import {
@@ -22,15 +23,22 @@ function useNameError(state: CategoryFormState) {
     state.error ? [state.error] : [],
     () => "name",
     (error) => t(`categories.error.${error}`),
+    {
+      from: state,
+      check: (form) => {
+        const parsed = parseCategoryName(formFields(form)("name"));
+        return parsed.ok ? [] : [parsed.error];
+      },
+    },
   );
 }
 
 export function CreateCategoryForm() {
   const [state, action, pending] = useActionState(createCategoryAction, initialState);
-  const { invalid, allMessages } = useNameError(state);
+  const { invalid, allMessages, watch } = useNameError(state);
   return (
-    <form action={action} className="item-form">
-      <input name="name" aria-label={t("categories.name")} placeholder={t("categories.name")} {...invalid("name")} />
+    <form action={action} className="item-form" {...watch}>
+      <input name="name" maxLength={NAME_MAX_LENGTH} aria-label={t("categories.name")} placeholder={t("categories.name")} {...invalid("name")} />
       <KindSelect defaultValue="kind" />
       <button type="submit" className="button-primary" disabled={pending}>
         {t("categories.add")}
@@ -50,13 +58,13 @@ export function CategoryRow({ id, label, kind }: { id: string; label: string; ki
     },
     initialState,
   );
-  const { invalid, allMessages } = useNameError(state);
+  const { invalid, allMessages, watch } = useNameError(state);
 
   if (editing) {
     return (
       <div className="list-row-open open-row">
-        <form action={action} className="item-form">
-          <input name="name" aria-label={t("categories.name")} defaultValue={label} autoFocus {...invalid("name")} />
+        <form action={action} className="item-form" {...watch}>
+          <input name="name" maxLength={NAME_MAX_LENGTH} aria-label={t("categories.name")} defaultValue={label} autoFocus {...invalid("name")} />
           <KindSelect defaultValue={kind} />
           <button type="submit" className="button-primary" disabled={pending}>
             {t("categories.save")}

@@ -45,9 +45,15 @@ export function parseNonNegative(text: string, column: DecimalColumn): number | 
   return value <= maxForColumn(column) ? value : null;
 }
 
+// Whether `text` is a number too large for the column once rounded as it
+// stores it, so a refusal can name the largest instead of saying "above 0".
+export function isTooLarge(text: string, column: DecimalColumn): boolean {
+  return roundForColumn(Number(text.trim()), column) > maxForColumn(column);
+}
+
 // Largest value of a Postgres `integer`, the column whole numbers such as
 // Portions (data-model T4) are stored in.
-const INTEGER_MAX = 2_147_483_647;
+export const INTEGER_MAX = 2_147_483_647;
 
 // A whole number above 0 that fits an `integer` column; null otherwise. Only
 // plain digits count, since Number() also reads "2.0", "1e3" and "0x10".
@@ -55,4 +61,10 @@ export function parseWholeAboveZero(text: string): number | null {
   if (!/^\d+$/.test(text)) return null;
   const value = Number(text);
   return value > 0 && value <= INTEGER_MAX ? value : null;
+}
+
+// Whether `text` is a whole number too large for an `integer` column.
+export function isWholeTooLarge(text: string): boolean {
+  const trimmed = text.trim();
+  return /^\d+$/.test(trimmed) && Number(trimmed) > INTEGER_MAX;
 }

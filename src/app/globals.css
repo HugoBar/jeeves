@@ -1549,6 +1549,11 @@ a.back-link {
   text-decoration: none;
 }
 
+/* Only listens for its fields' changes, so it adds no box of its own. */
+.field-watch {
+  display: contents;
+}
+
 /* A form in cards, as on New Product and New Recipe. New Product and Edit
    Product: Basics, Food Categories and Optional, one under the other on phone.
    From 768px Food Categories moves to the right. */

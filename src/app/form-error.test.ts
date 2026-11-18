@@ -34,12 +34,12 @@ describe("a field with an error", () => {
   });
 
   it("shows nothing when the form has no errors", () => {
-    expect(render([], () => "name", nameField)).toBe('<input name="name"/>');
+    expect(render([], () => "name", nameField)).toBe('<input data-field="name" name="name"/>');
   });
 
   it("leaves a field alone when the error is another field's", () => {
     const html = render(["Density must be a number."], () => "density", nameField);
-    expect(html).toBe('<input name="name"/>');
+    expect(html).toBe('<input data-field="name" name="name"/>');
   });
 
   it("keeps every message of a form that shows them together", () => {

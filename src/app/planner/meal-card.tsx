@@ -11,6 +11,7 @@ import {
   confirmOrSkipAsksFirst,
   isUnconfirmed,
   mealCardStatus,
+  parseMealChanges,
   reopensAs,
   slotFoodValue,
   type MealCardStatus,
@@ -24,6 +25,7 @@ import {
 } from "@/core/meals";
 import type { CategoryKind } from "@/core/food-categories";
 import { WEEKDAYS, type Weekday } from "@/core/meal-series";
+import { NAME_MAX_LENGTH } from "@/core/names";
 import { moveSlot, type SlotMove } from "@/core/slot-order";
 import type { AddedBack, ConfirmTakes } from "@/db/confirmation";
 import type { MealSeriesState } from "@/db/meals";
@@ -45,7 +47,7 @@ import {
 import { FORM_LEVEL, MEAL_ERROR_FIELDS } from "../field-errors";
 import { FoodCategoryPill } from "../food-category-pill";
 import { FormCard } from "../form-card";
-import { AlertIcon, FormBanner, FormError, LockIcon, useFieldErrors } from "../form-error";
+import { AlertIcon, FormBanner, FormError, formFields, LockIcon, useFieldErrors } from "../form-error";
 import { ConfirmSheet, Sheet } from "../sheet";
 import { SidePanel } from "../side-panel";
 import { useViewerNow, viewerMoment, viewerToday } from "../viewer-clock";
@@ -422,7 +424,10 @@ export function ReopenSheet({ meal, today, onClose }: { meal: PlannerMeal; today
       eyebrow={mealSheetEyebrow(meal, today)}
       title={t("planner.reopenSheet.title", { name: meal.name ?? meal.mealTypeLabel })}
       confirmLabel={t("planner.reopen")}
-      onConfirm={() => reopenMealAction(meal.id)}
+      onConfirm={async () => {
+        const refused = await reopenMealAction(meal.id);
+        return refused && t("planner.error.reopenStockTooLarge", { product: refused.stockTooLarge });
+      }}
       onClose={onClose}
     >
       {status && <MealCardStatusLine status={status} />}
@@ -1618,12 +1623,16 @@ export function MealFormFields({
   onMoveSlot?: (index: number, offset: SlotMove) => void;
 }) {
   const [picked, setPicked] = useState(values.mealTypeId ?? "");
-  const { invalid, messages } = useMealErrors(errors);
+  const { invalid, messages, shownCount, watch } = useMealErrors(errors);
   const mealType = editing?.mealTypeLabel ?? mealTypes.find((option) => option.id === picked)?.label;
 
   return (
-    <>
-      <MealFormBanner count={errors.length + slotErrors.length + editSlotErrors.length} editing={editing !== undefined} />
+    <div className="field-watch" {...watch}>
+      <MealFormBanner
+        rejected={errors.length + slotErrors.length + editSlotErrors.length > 0}
+        count={shownCount + slotErrors.length + editSlotErrors.length}
+        editing={editing !== undefined}
+      />
       {messages(FORM_LEVEL)}
       <FormCard title={t("planner.basics")}>
         {editing ? (
@@ -1677,14 +1686,17 @@ export function MealFormFields({
               </span>
               <input
                 name="name"
+                maxLength={NAME_MAX_LENGTH}
                 defaultValue={values.name}
                 placeholder={
                   mealType ? t("planner.namePlaceholder", { mealType }) : t("planner.namePlaceholderNoMealType")
                 }
+                {...invalid("name")}
               />
             </label>
           </div>
           {messages("hour")}
+          {messages("name")}
         </div>
       </FormCard>
       {editing ? (
@@ -1710,7 +1722,7 @@ export function MealFormFields({
         <UntrackedSwitch untracked={values.untracked} />
         <RepeatOn ticked={values.repeatOn} {...repeat} invalid={invalid("repeatOn")} message={messages("repeatOn")} />
       </FormCard>
-    </>
+    </div>
   );
 }
 
@@ -1788,14 +1800,16 @@ function RepeatOn({
 
 // Over a Meal form once a submit is rejected: "Fix 2 things to add this
 // Meal. They're marked in red below." `count` is every error, the refused
-// slots' too; none shows nothing. The buttons are below the fields, so it
+// slots' too; none shows nothing. `rejected` is whether a submit was: a field
+// left wrong before one shows only its own error, so the form doesn't move
+// while it is being filled in. The buttons are below the fields, so it
 // scrolls back up to it. Mounted again on every submit, as the form is.
-function MealFormBanner({ count, editing = false }: { count: number; editing?: boolean }) {
+function MealFormBanner({ rejected, count, editing = false }: { rejected: boolean; count: number; editing?: boolean }) {
   const banner = useRef<HTMLDivElement>(null);
   useEffect(() => {
     banner.current?.scrollIntoView({ block: "nearest" });
   }, []);
-  if (count === 0) return null;
+  if (!rejected || count === 0) return null;
   return (
     <FormBanner ref={banner}>
       <FixMessage count={count} editing={editing} />
@@ -1942,10 +1956,20 @@ function DeleteMealCard({ meal, label, onDeleted }: { meal: PlannerMeal; label: 
   );
 }
 
+// The form is mounted again on every submit, so its errors are new with it.
+// Leaving the hour or name checks it again.
 export function useMealErrors(errors: MealFieldError[]) {
   return useFieldErrors(
     errors,
     (error) => MEAL_ERROR_FIELDS[error],
     (error) => t(`planner.error.${error}`),
+    {
+      from: errors,
+      check: (form) => {
+        const field = formFields(form);
+        const parsed = parseMealChanges({ hour: field("hour"), name: field("name"), untracked: false });
+        return parsed.ok ? [] : parsed.errors;
+      },
+    },
   );
 }

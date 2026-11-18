@@ -1,4 +1,5 @@
-import { parseWholeAboveZero } from "@/core/amounts";
+import { isWholeTooLarge, parseWholeAboveZero } from "@/core/amounts";
+import { isTooLong, NAME_MAX_LENGTH } from "@/core/names";
 
 // What the user can set on a Meal Type. Meal Priority ranks Meals on the same
 // day that compete for the same Stock: 1 is served first.
@@ -15,7 +16,7 @@ export interface MealTypeFieldsInput {
   allowsLeftovers: boolean;
 }
 
-export type MealTypeFieldError = "blankName" | "invalidPriority";
+export type MealTypeFieldError = "blankName" | "nameTooLong" | "invalidPriority" | "priorityTooLarge";
 
 export type MealTypeFieldsResult =
   | { ok: true; fields: MealTypeFields }
@@ -27,7 +28,8 @@ export function parseMealTypeFields(input: MealTypeFieldsInput): MealTypeFieldsR
 
   const errors: MealTypeFieldError[] = [];
   if (!name) errors.push("blankName");
-  if (priority === null) errors.push("invalidPriority");
+  else if (isTooLong(name, NAME_MAX_LENGTH)) errors.push("nameTooLong");
+  if (priority === null) errors.push(isWholeTooLarge(input.priority) ? "priorityTooLarge" : "invalidPriority");
   if (errors.length) return { ok: false, errors };
 
   return { ok: true, fields: { name, priority: priority!, allowsLeftovers: input.allowsLeftovers } };

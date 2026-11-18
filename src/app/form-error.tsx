@@ -1,4 +1,4 @@
-import { Fragment, useId, type ReactNode, type Ref } from "react";
+import { Fragment, useId, useState, type ReactNode, type Ref, type SyntheticEvent } from "react";
 
 // The alert icon beside an error or warning.
 export function AlertIcon() {
@@ -60,21 +60,82 @@ export function FormBanner({ ref, children }: { ref?: Ref<HTMLDivElement>; child
   );
 }
 
-// What marks a field as having an error.
-export type InvalidProps = { "aria-invalid"?: true; "aria-describedby"?: string };
+// A form's text fields as its submit sends them, for a LiveErrors check.
+export function formFields(form: HTMLFormElement): (name: string) => string {
+  const data = new FormData(form);
+  return (name) => {
+    const value = data.get(name);
+    return typeof value === "string" ? value : "";
+  };
+}
+
+// What marks a field as having an error, and names the field it belongs to.
+export type InvalidProps = { "aria-invalid"?: true; "aria-describedby"?: string; "data-field"?: string };
+
+// How a form's errors follow what is typed after they were shown: `from` is
+// what they came with, such as the form's action state, so they show again
+// in full once it changes. `check` reads the form as the server would and
+// says what is wrong now, so a field left still wrong shows its error again.
+export interface LiveErrors<E> {
+  from: unknown;
+  check?: (form: HTMLFormElement) => readonly E[];
+}
 
 // A form's errors, each on its field. Spread `invalid(field)` on the field for
 // its red border, and show `messages(field)` under it. A form whose fields sit
-// in a row shows `allMessages()` under the row instead.
+// in a row shows `allMessages()` under the row instead. With `live`, spread
+// `watch` on the form or on an element holding the fields: a field's error
+// goes as soon as it changes, and on leaving it, it is checked again.
+// `changed(field)` marks a change made by a button rather than by typing.
 export function useFieldErrors<E, F extends string>(
   errors: readonly E[],
   fieldOf: (error: E) => F,
   message: (error: E) => string,
+  live?: LiveErrors<E>,
 ) {
   const id = useId();
+  const [shownFrom, setShownFrom] = useState(live?.from);
+  // Fields changed since the errors came, and what checking them again found.
+  const [changedFields, setChangedFields] = useState<ReadonlySet<F>>(new Set());
+  const [rechecked, setRechecked] = useState<ReadonlyMap<F, readonly E[]>>(new Map());
+  if (shownFrom !== live?.from) {
+    setShownFrom(live?.from);
+    setChangedFields(new Set());
+    setRechecked(new Map());
+  }
+
+  const shown = [
+    ...errors.filter((error) => !changedFields.has(fieldOf(error))),
+    ...[...rechecked.values()].flat(),
+  ];
   const byField = new Map<F, E[]>();
-  for (const error of errors) byField.set(fieldOf(error), [...(byField.get(fieldOf(error)) ?? []), error]);
+  for (const error of shown) byField.set(fieldOf(error), [...(byField.get(fieldOf(error)) ?? []), error]);
   const errorId = (field: F) => `${id}-${field}`;
+
+  function changed(field: F) {
+    setChangedFields((current) => (current.has(field) ? current : new Set(current).add(field)));
+    setRechecked((current) => {
+      if (!current.has(field)) return current;
+      const next = new Map(current);
+      next.delete(field);
+      return next;
+    });
+  }
+
+  const fieldOfEvent = (event: SyntheticEvent) =>
+    (event.target as Element).closest("[data-field]")?.getAttribute("data-field") as F | undefined;
+  const watch = {
+    onChange: (event: SyntheticEvent) => {
+      const field = fieldOfEvent(event);      if (field !== undefined) changed(field);
+    },
+    onBlur: (event: SyntheticEvent) => {
+      const field = fieldOfEvent(event);
+      const form = (event.target as Element).closest("form");
+      if (field === undefined || !changedFields.has(field) || !live?.check || !form) return;
+      const found = live.check(form).filter((error) => fieldOf(error) === field);
+      setRechecked((current) => new Map(current).set(field, found));
+    },
+  };
 
   function messages(field: F) {
     const fieldErrors = byField.get(field);
@@ -90,8 +151,14 @@ export function useFieldErrors<E, F extends string>(
 
   return {
     invalid: (field: F): InvalidProps =>
-      byField.has(field) ? { "aria-invalid": true, "aria-describedby": errorId(field) } : {},
+      byField.has(field)
+        ? { "aria-invalid": true, "aria-describedby": errorId(field), "data-field": field }
+        : { "data-field": field },
     messages,
     allMessages: () => [...byField.keys()].map((field) => <Fragment key={field}>{messages(field)}</Fragment>),
+    // How many errors show now, for a banner counting them.
+    shownCount: shown.length,
+    watch,
+    changed,
   };
 }

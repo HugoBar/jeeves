@@ -3,6 +3,7 @@ import { and, desc, eq } from "drizzle-orm";
 import {
   correct,
   deduct,
+  exceedsStockLimit,
   restock,
   type StockChange,
   type StockMovementType,
@@ -32,9 +33,18 @@ interface StockMovementMeal {
   mealType: Pick<MealType, "seedKey" | "name">;
 }
 
+// Thrown by a movement that would leave more Stock than the column holds,
+// which undoes its transaction: so a caller's whole transaction too.
+export class StockLimitError extends Error {
+  constructor(readonly productId: string) {
+    super("Stock would go past the most it holds");
+  }
+}
+
 // Writes a Stock Movement and the Stock column it leaves in one transaction,
 // never one without the other (ADR 0003). Inside a caller's transaction it
-// is part of that one.
+// is part of that one. One that would leave more Stock than the column holds
+// throws StockLimitError, writing nothing.
 export async function applyMovement(
   db: Db,
   productId: string,
@@ -51,6 +61,7 @@ export async function applyMovement(
       .for("update");
     if (!current) throw new Error("Product not found");
     const applied = change(current);
+    if (exceedsStockLimit(applied)) throw new StockLimitError(productId);
     await tx.insert(stockMovements).values({
       productId,
       type,
@@ -66,9 +77,16 @@ export async function applyMovement(
   });
 }
 
-// Adds food bought to the Product's Stock.
-export async function restockProduct(db: Db, productId: string, quantity: number): Promise<void> {
-  await applyMovement(db, productId, "restock", (current) => restock(current, quantity));
+// Adds food bought to the Product's Stock. "stockTooLarge", writing nothing,
+// when that would leave more than Stock holds.
+export async function restockProduct(db: Db, productId: string, quantity: number): Promise<"stockTooLarge" | null> {
+  try {
+    await applyMovement(db, productId, "restock", (current) => restock(current, quantity));
+    return null;
+  } catch (error) {
+    if (error instanceof StockLimitError) return "stockTooLarge";
+    throw error;
+  }
 }
 
 // Removes food thrown away from the Product's Stock, clamping at 0.

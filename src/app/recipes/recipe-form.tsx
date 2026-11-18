@@ -2,14 +2,21 @@
 
 import Link from "next/link";
 import { Fragment, useActionState, useEffect, useId, useRef, useState } from "react";
-import type { IngredientError, IngredientInput } from "@/core/ingredients";
-import { deriveFoodCategoryIds } from "@/core/recipes";
+import { parseIngredients, type IngredientError, type IngredientInput } from "@/core/ingredients";
+import { NAME_MAX_LENGTH } from "@/core/names";
+import {
+  deriveFoodCategoryIds,
+  parseRecipeFields,
+  SOURCE_URL_MAX_LENGTH,
+  STEPS_MAX_LENGTH,
+  type RecipeFieldError,
+} from "@/core/recipes";
 import { RECIPE_UNITS, type DefaultUnit } from "@/core/units";
 import { t } from "@/strings";
 import type { CategoryOption } from "../categories/category-options";
 import { ingredientErrorField, ingredientField, RECIPE_ERROR_FIELDS } from "../field-errors";
 import { FormCard } from "../form-card";
-import { FormBanner, useFieldErrors, type InvalidProps } from "../form-error";
+import { FormBanner, formFields, useFieldErrors, type InvalidProps } from "../form-error";
 import { StepIcon, stepPortions } from "../stepper";
 import type { RecipeFormState, RecipeFormValues } from "./actions";
 import { CategoryChips } from "./category-chips";
@@ -66,12 +73,13 @@ export function RecipeFormFields({
 }: RecipeFormContent & { state: RecipeFormState; pending: boolean }) {
   const { values, errors } = state;
   const ingredients = useIngredientRows(state, products);
-  const { invalid, messages } = useFieldErrors(
+  const { invalid, messages, shownCount, watch, changed } = useFieldErrors(
     errors,
     (error) => RECIPE_ERROR_FIELDS[error],
     (error) => t(`recipes.error.${error}`),
+    { from: state, check: checkRecipeForm },
   );
-  const shownErrorCount = errors.length + ingredients.shownErrorCount;
+  const shownErrorCount = shownCount + ingredients.shownErrorCount;
   // The Food Categories follow the Ingredients as they are edited.
   const categoryIdsOf = new Map(products.map((product) => [product.id, product.categoryIds]));
   const derivedIds = deriveFoodCategoryIds(
@@ -79,6 +87,9 @@ export function RecipeFormFields({
   );
 
   // The save button is below the fields, so a rejected save scrolls back up.
+  // The banner shows only once a save is rejected, not for a field left wrong
+  // before it, so the form doesn't move while it is being filled in.
+  const rejected = state.errors.length + state.ingredientErrors.length > 0;
   const banner = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (state.errors.length + state.ingredientErrors.length > 0) banner.current?.scrollIntoView({ block: "center" });
@@ -86,12 +97,12 @@ export function RecipeFormFields({
 
   return (
     <>
-      {shownErrorCount > 0 && (
+      {rejected && shownErrorCount > 0 && (
         <FormBanner ref={banner}>
           <FixMessage count={shownErrorCount} editing={editing} />
         </FormBanner>
       )}
-      <div className="recipe-form-columns">
+      <div className="recipe-form-columns" {...watch}>
         <div className="recipe-form-column">
           <FormCard title={t("recipes.basics")}>
             <div className="form-field">
@@ -99,6 +110,7 @@ export function RecipeFormFields({
                 {t("recipes.name")}
                 <input
                   name="name"
+                  maxLength={NAME_MAX_LENGTH}
                   defaultValue={values.name}
                   placeholder={t("recipes.namePlaceholder")}
                   autoFocus={!editing}
@@ -109,7 +121,11 @@ export function RecipeFormFields({
             </div>
             <div className="recipe-form-numbers">
               <div className="form-field">
-                <PortionsStepper defaultValue={values.portions} invalid={invalid("portions")} />
+                <PortionsStepper
+                  defaultValue={values.portions}
+                  invalid={invalid("portions")}
+                  onStep={() => changed("portions")}
+                />
                 {messages("portions")}
               </div>
               <div className="form-field">
@@ -135,7 +151,11 @@ export function RecipeFormFields({
                   <span className="desktop-only">{t("recipes.sourceOptional")}</span>
                 </span>
                 <span className="field-hint phone-only">{t("recipes.sourceHint")}</span>
-                <input name="sourceUrl" type="url" defaultValue={values.sourceUrl} {...invalid("sourceUrl")} />
+                <input
+                  name="sourceUrl"
+                  type="url"
+                  maxLength={SOURCE_URL_MAX_LENGTH}
+                  defaultValue={values.sourceUrl} {...invalid("sourceUrl")} />
               </label>
               {messages("sourceUrl")}
             </div>
@@ -145,8 +165,15 @@ export function RecipeFormFields({
         <div className="recipe-form-column">
           <FormCard title={t("recipes.steps")}>
             <div className="form-field">
-              <textarea name="steps" rows={10} aria-label={t("recipes.steps")} defaultValue={values.steps} />
-              <p className="field-hint">{t("recipes.stepsHint")}</p>
+              <textarea
+                name="steps"
+                rows={10}
+                maxLength={STEPS_MAX_LENGTH}
+                aria-label={t("recipes.steps")}
+                defaultValue={values.steps}
+                {...invalid("steps")}
+              />
+              {messages("steps") ?? <p className="field-hint">{t("recipes.stepsHint")}</p>}
             </div>
           </FormCard>
           <CategoryChips state={state} derivedIds={derivedIds} categories={categories} />
@@ -166,12 +193,22 @@ export function RecipeFormFields({
 
 // Portions, with - and + beside it. The field stays uncontrolled, so React
 // puts it back to what was sent after a rejected save.
-function PortionsStepper({ defaultValue, invalid }: { defaultValue: string; invalid: InvalidProps }) {
+// `onStep` hears each step, which changes the field without typing.
+function PortionsStepper({
+  defaultValue,
+  invalid,
+  onStep,
+}: {
+  defaultValue: string;
+  invalid: InvalidProps;
+  onStep: () => void;
+}) {
   const id = useId();
   const input = useRef<HTMLInputElement>(null);
   const step = (by: number) => {
     if (!input.current) return;
     input.current.value = stepPortions(input.current.value, by);
+    onStep();
   };
   return (
     <>
@@ -187,6 +224,19 @@ function PortionsStepper({ defaultValue, invalid }: { defaultValue: string; inva
       </span>
     </>
   );
+}
+
+// What saving would refuse in the Recipe's own fields as they are now.
+function checkRecipeForm(form: HTMLFormElement): RecipeFieldError[] {
+  const field = formFields(form);
+  const parsed = parseRecipeFields({
+    name: field("name"),
+    portions: field("portions"),
+    steps: field("steps"),
+    prepTimeMinutes: field("prepTimeMinutes"),
+    sourceUrl: field("sourceUrl"),
+  });
+  return parsed.ok ? [] : parsed.errors;
 }
 
 // "Fix 7 things to add this Recipe. They're marked in red below."
@@ -265,11 +315,14 @@ function IngredientRows({
   products: ProductOption[];
   ingredients: ReturnType<typeof useIngredientRows>;
 }) {
-  const { invalid, messages } = useFieldErrors(state.ingredientErrors, ingredientErrorField, ingredientErrorMessage);
+  const { invalid, messages, watch } = useFieldErrors(state.ingredientErrors, ingredientErrorField, ingredientErrorMessage, {
+    from: state,
+    check: () => checkIngredientRows(rows, products),
+  });
 
   return (
     <FormCard title={t("recipes.ingredients")} hint={t("recipes.ingredientsHint")} className="recipe-ingredients">
-      <div className="ingredient-rows">
+      <div className="ingredient-rows" {...watch}>
         {rows.length > 0 && (
           <div className="ingredient-head desktop-only" aria-hidden="true">
             <span>{t("recipes.ingredientProduct")}</span>
@@ -359,13 +412,28 @@ function IngredientRows({
   );
 }
 
+// What saving would refuse in the rows as they are now, under each row's
+// number in the last submit, which its errors show by. A row added since has
+// none yet, so it is checked when saved. A Density is checked only on the
+// server, so a unit is taken as converting when it may.
+function checkIngredientRows(rows: readonly Row[], products: readonly ProductOption[]): IngredientError[] {
+  const pickable = new Map(products.map((product) => [product.id, { ...product, density: 1 }]));
+  const parsed = parseIngredients([...rows], pickable);
+  if (parsed.ok) return [];
+  return parsed.errors.flatMap((error) => {
+    const submittedRow = rows[error.row - 1]?.submittedRow;
+    return submittedRow ? [{ ...error, row: submittedRow }] : [];
+  });
+}
+
 function ingredientErrorMessage(error: IngredientError): string {
   switch (error.code) {
     case "noProduct":
     case "unavailableProduct":
       return t(`recipes.error.${error.code}`, { row: error.row });
     case "invalidAmount":
-      return t("recipes.error.invalidAmount", { row: error.row, product: error.product });
+    case "amountTooLarge":
+      return t(`recipes.error.${error.code}`, { row: error.row, product: error.product });
     case "noDensity":
     case "countMismatch":
       return t(`recipes.error.${error.code}`, {

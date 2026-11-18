@@ -2,9 +2,9 @@
 
 import { useState, useTransition, type FormEvent } from "react";
 import { packsCovering, restockStart } from "@/core/shopping-list";
-import type { QuantityError } from "@/core/stock";
+import { parseStockAmount, type QuantityError } from "@/core/stock";
 import type { ShoppingListItem } from "@/db/shopping-list";
-import { formatPacks, formatRestockSubmit, formatRestockTicked, t } from "@/strings";
+import { formatPacks, formatQuantityError, formatRestockSubmit, formatRestockTicked, t } from "@/strings";
 import { useFieldErrors } from "../form-error";
 import { Sheet } from "../sheet";
 import { restockTickedItemsAction } from "./actions";
@@ -36,7 +36,7 @@ function RestockTickedSheet({ items, onClose }: { items: ShoppingListItem[]; onC
   const { invalid, messages } = useFieldErrors(
     Object.entries(errors),
     ([id]) => id,
-    ([, error]) => t(`quantity.error.${error}`),
+    ([id, error]) => formatQuantityError(error, items.find((item) => item.id === id)!.product.defaultUnit),
   );
 
   function submit(event: FormEvent) {
@@ -77,6 +77,12 @@ function RestockTickedSheet({ items, onClose }: { items: ShoppingListItem[]; onC
                         delete rest[item.id];
                         return rest;
                       });
+                    }}
+                    // Leaving an amount typed checks it again, as Restock would.
+                    onBlur={() => {
+                      const typed = amounts[item.id]!;
+                      const parsed = parseStockAmount("restock", typed);
+                      if (typed.trim() && !parsed.ok) setErrors((current) => ({ ...current, [item.id]: parsed.error }));
                     }}
                     {...invalid(item.id)}
                   />

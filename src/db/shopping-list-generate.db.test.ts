@@ -211,3 +211,26 @@ describe("listUncertainCandidates", () => {
     ]);
   });
 });
+
+// An item holds at most 99,999,999.99, as Stock does.
+describe("generateShoppingList past the most an item holds", () => {
+  it("refuses, naming the Product, and changes nothing", async () => {
+    const rice = await aProduct("Rice");
+    const beans = await aProduct("Beans");
+    await aMeal("2026-11-10", eats(rice.id, 99_999_999), eats(beans.id, 200));
+    await aMeal("2026-11-11", eats(rice.id, 99_999_999));
+
+    expect(await generateShoppingList(db, WEEK.from, WEEK.to)).toEqual({ ok: false, tooLarge: ["Rice"] });
+
+    expect(await summary()).toEqual([]);
+  });
+
+  it("generates as before when every item fits", async () => {
+    const rice = await aProduct("Rice");
+    await aMeal("2026-11-10", eats(rice.id, 99_999_999.99));
+
+    expect(await generateShoppingList(db, WEEK.from, WEEK.to)).toEqual({ ok: true });
+
+    expect(await summary()).toEqual([{ name: "Rice", quantity: 99_999_999.99, source: "shortfall", ticked: false }]);
+  });
+});

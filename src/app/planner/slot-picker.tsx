@@ -2,12 +2,12 @@
 
 import Link from "next/link";
 import { useActionState, useId, useState, useTransition, type ReactNode } from "react";
-import { pickableForSlot, slotFoodValue } from "@/core/meals";
+import { parseMealSlotFill, pickableForSlot, slotFoodValue } from "@/core/meals";
 import type { DefaultUnit } from "@/core/units";
 import { formatMealDate, t } from "@/strings";
 import { FORM_LEVEL, MEAL_SLOT_ERROR_FIELDS } from "../field-errors";
 import { FoodCategoryPill } from "../food-category-pill";
-import { useFieldErrors } from "../form-error";
+import { useFieldErrors, type LiveErrors } from "../form-error";
 import { RemoveButton } from "../remove-button";
 import { Sheet } from "../sheet";
 import { StepIcon, stepPortions } from "../stepper";
@@ -409,7 +409,7 @@ function PickAmount({
       food={food}
       startAmount={startingAmount(slot, food)}
       place={place}
-      error={state.error}
+      state={state}
       action={action}
       pending={pending}
       onChangeFood={onBack}
@@ -423,8 +423,8 @@ function PickAmount({
 // How much of `food` goes in a slot of `categoryLabel`: Portions, stepped
 // with - and +, or a quantity in the Product's Default Unit, from
 // `startAmount`. `action` sends the food and amount, with `children`, hidden
-// fields of its own. `error` is why the last send was refused: an amount
-// shows under its field, keeping what was typed. Change goes to the food and
+// fields of its own. `state.error` is why the last send was refused: an
+// amount shows under its field, keeping what was typed, until it changes. Change goes to the food and
 // Back a step back. A Recipe's Portions warn of what they would leave short
 // at `place`, where it would go.
 export function AmountForm({
@@ -432,7 +432,7 @@ export function AmountForm({
   food,
   startAmount,
   place,
-  error,
+  state,
   action,
   pending,
   onChangeFood,
@@ -443,7 +443,7 @@ export function AmountForm({
   food: FoodOption;
   startAmount: string;
   place?: PortionsPlace;
-  error: SlotError | null;
+  state: { error: SlotError | null };
   action: (formData: FormData) => void;
   pending: boolean;
   onChangeFood: () => void;
@@ -451,7 +451,18 @@ export function AmountForm({
   children?: ReactNode;
 }) {
   const [amount, setAmount] = useState(startAmount);
-  const { invalid, messages } = useSlotErrors(error);
+  const { invalid, messages, watch, changed } = useSlotErrors(state.error, {
+    from: state,
+    check: () => {
+      const only = new Set([food.id]);
+      const parsed = parseMealSlotFill({ food: food.value, amount }, { recipeIds: only, productIds: only, allowsLeftovers: true });
+      return parsed.ok ? [] : [parsed.error];
+    },
+  });
+  const step = (by: number) => {
+    setAmount(stepPortions(amount, by));
+    changed("amount");
+  };
   const fieldId = useId();
   const field = (
     <input
@@ -469,7 +480,7 @@ export function AmountForm({
   );
 
   return (
-    <form action={action} className="slot-picker-amount">
+    <form action={action} className="slot-picker-amount" {...watch}>
       <p className="slot-picker-scope">
         <span className="slot-picker-scope-label">
           {t("planner.picker.slot")} <FoodCategoryPill label={categoryLabel} />
@@ -483,11 +494,11 @@ export function AmountForm({
           <>
             <label htmlFor={fieldId}>{t("planner.portions")}</label>
             <span className="slot-picker-stepper">
-              <button type="button" aria-label={t("planner.picker.portionsLess")} disabled={pending} onClick={() => setAmount(stepPortions(amount, -1))}>
+              <button type="button" aria-label={t("planner.picker.portionsLess")} disabled={pending} onClick={() => step(-1)}>
                 <StepIcon step="less" />
               </button>
               {field}
-              <button type="button" aria-label={t("planner.picker.portionsMore")} disabled={pending} onClick={() => setAmount(stepPortions(amount, 1))}>
+              <button type="button" aria-label={t("planner.picker.portionsMore")} disabled={pending} onClick={() => step(1)}>
                 <StepIcon step="more" />
               </button>
             </span>
@@ -655,10 +666,11 @@ export function ChevronIcon() {
 export type SlotError = keyof typeof MEAL_SLOT_ERROR_FIELDS;
 
 // The refused field's props and its message, for a slot form.
-export function useSlotErrors(error: SlotError | null) {
+export function useSlotErrors(error: SlotError | null, live?: LiveErrors<SlotError>) {
   return useFieldErrors(
     error ? [error] : [],
     (slotError) => MEAL_SLOT_ERROR_FIELDS[slotError],
     (slotError) => t(`planner.error.${slotError}`),
+    live,
   );
 }

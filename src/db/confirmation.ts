@@ -14,7 +14,7 @@ import type { ConversionError, DefaultUnit, Unit } from "@/core/units";
 import type { Db } from "./index";
 import { loadMealSlots, type ProjectedProductWithName } from "./projected-stock";
 import { mealSlots, meals, products, recipes, stockMovements } from "./schema";
-import { applyMovement } from "./stock-movements";
+import { applyMovement, StockLimitError } from "./stock-movements";
 
 // "notConfirmable": the Meal is gone, already Confirmed or Skipped, or after
 // `today`. "archivedFood": it is dated `today` and a slot holds an Archived
@@ -223,13 +223,29 @@ export async function listReopenAddsBack(db: Db, mealIds: readonly string[]): Pr
 // one removed (data-model Q12). A Skipped Meal has none left, so it writes
 // nothing. A Product's "stock was probably wrong" flag clears only if that
 // Confirmation was what set it. The Meal returns to Planned, so Unconfirmed
-// if its day has passed, and keeps its Untracked mark. False if it is gone or
-// neither Confirmed nor Skipped.
-export async function reopenMeal(db: Db, id: string): Promise<boolean> {
+// if its day has passed, and keeps its Untracked mark. Refused if it is gone
+// or neither Confirmed nor Skipped, or if adding back would leave a Product
+// more Stock than it holds, which names that Product; then nothing is written.
+export type ReopenMealResult =
+  | { ok: true }
+  | { ok: false; error: "notReopenable" }
+  | { ok: false; error: "stockTooLarge"; product: string };
+
+export async function reopenMeal(db: Db, id: string): Promise<ReopenMealResult> {
+  try {
+    return await reopenMealOrThrow(db, id);
+  } catch (error) {
+    if (!(error instanceof StockLimitError)) throw error;
+    const [product] = await db.select({ name: products.name }).from(products).where(eq(products.id, error.productId));
+    return { ok: false, error: "stockTooLarge", product: product!.name };
+  }
+}
+
+async function reopenMealOrThrow(db: Db, id: string): Promise<ReopenMealResult> {
   return db.transaction(async (tx) => {
     // Locked so it cannot be Reopened twice at once.
     const [meal] = await tx.select({ status: meals.status }).from(meals).where(eq(meals.id, id)).for("update");
-    if (!meal || !canReopen(meal)) return false;
+    if (!meal || !canReopen(meal)) return { ok: false, error: "notReopenable" } as const;
 
     const linked = await tx
       .select({ productId: stockMovements.productId, type: stockMovements.type, delta: stockMovements.delta })
@@ -245,6 +261,6 @@ export async function reopenMeal(db: Db, id: string): Promise<boolean> {
       await applyMovement(tx, productId, "reopen", (current) => reverse(current, delta, staysSuspect), id);
     }
     await tx.update(meals).set({ status: "planned" }).where(eq(meals.id, id));
-    return true;
+    return { ok: true } as const;
   });
 }

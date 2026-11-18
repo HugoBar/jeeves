@@ -1,4 +1,5 @@
-import { AMOUNT_COLUMN, DENSITY_COLUMN, parsePositive } from "@/core/amounts";
+import { AMOUNT_COLUMN, DENSITY_COLUMN, isTooLarge, parsePositive } from "@/core/amounts";
+import { isTooLong, NAME_MAX_LENGTH } from "@/core/names";
 import { convertToDefaultUnit, type DefaultUnit, type Unit } from "@/core/units";
 
 export interface PackSize {
@@ -30,10 +31,14 @@ export interface ProductFieldsInput {
 
 export type ProductFieldError =
   | "blankName"
+  | "nameTooLong"
   | "invalidDensity"
+  | "densityTooLarge"
   | "noPackSizeName"
+  | "packSizeNameTooLong"
   | "noPackSizeAmount"
-  | "invalidPackSizeAmount";
+  | "invalidPackSizeAmount"
+  | "packSizeAmountTooLarge";
 
 export type ProductFieldsResult =
   | { ok: true; fields: ProductFields }
@@ -49,11 +54,17 @@ export function parseProductFields(input: ProductFieldsInput): ProductFieldsResu
 
   const errors: ProductFieldError[] = [];
   if (!name) errors.push("blankName");
-  if (densityText && density === null) errors.push("invalidDensity");
+  else if (isTooLong(name, NAME_MAX_LENGTH)) errors.push("nameTooLong");
+  if (isTooLong(packSizeName, NAME_MAX_LENGTH)) errors.push("packSizeNameTooLong");
+  if (densityText && density === null) {
+    errors.push(isTooLarge(densityText, DENSITY_COLUMN) ? "densityTooLarge" : "invalidDensity");
+  }
   // A Pack Size is a name and an amount together, or nothing.
   if (packSizeName && !packSizeAmountText) errors.push("noPackSizeAmount");
   else if (!packSizeName && packSizeAmountText) errors.push("noPackSizeName");
-  else if (packSizeAmountText && packSizeAmount === null) errors.push("invalidPackSizeAmount");
+  else if (packSizeAmountText && packSizeAmount === null) {
+    errors.push(isTooLarge(packSizeAmountText, AMOUNT_COLUMN) ? "packSizeAmountTooLarge" : "invalidPackSizeAmount");
+  }
   if (errors.length) return { ok: false, errors };
 
   return {

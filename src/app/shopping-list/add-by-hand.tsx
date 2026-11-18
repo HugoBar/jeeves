@@ -117,6 +117,7 @@ export function AddByHand({
                     key={product.id}
                     product={product}
                     status={handAddStatus(product, items)}
+                    full={handAddPlan(product, items).kind === "tooLarge"}
                     onAdded={onAdded}
                   />
                 ))}
@@ -142,14 +143,17 @@ export function AddByHand({
 
 // One Product to add: its name, `status`, what adding does or why it is
 // running low, and a button saying what it adds, "+ 1 box", or "+ Add"
-// without a Pack Size.
+// without a Pack Size. `full`: its item can't hold another pack, so the
+// button is off.
 function HandAddOption({
   product,
   status,
+  full = false,
   onAdded,
 }: {
   product: HandAddProduct;
   status: string;
+  full?: boolean;
   onAdded: (itemId: string) => void;
 }) {
   const [adding, startAdding] = useTransition();
@@ -168,7 +172,7 @@ function HandAddOption({
         type="button"
         className="button-soft button-add hand-add-button"
         aria-label={pack ? t("shopping.addPackOf", { packs: pack, name }) : t("shopping.addName", { name })}
-        disabled={adding}
+        disabled={adding || full}
         onClick={add}
       >
         {pack ?? t("shopping.addPlain")}
@@ -180,10 +184,12 @@ function HandAddOption({
 // What adding the Product does, as planAddByHand works it out: adds to its
 // unticked item, leaves it as it is, or goes on a new line beside ticked
 // ones. Not on the list, its Pack Size.
-function handAddStatus({ id, defaultUnit, packSize }: HandAddProduct, items: ShoppingListItem[]): string {
+function handAddStatus(product: HandAddProduct, items: ShoppingListItem[]): string {
+  const { id, defaultUnit, packSize } = product;
   const own = items.filter((item) => item.product.id === id);
-  const plan = planAddByHand(packSize?.amount ?? null, own.map((item) => ({ ...item, productId: id })));
+  const plan = handAddPlan(product, items);
   if (plan.kind === "keep") return t("shopping.addStays");
+  if (plan.kind === "tooLarge") return t("shopping.addFull");
   if (plan.kind === "raise") {
     const { quantity } = own.find((item) => item.id === plan.id)!;
     if (quantity === null || !packSize) return t("shopping.addAddsToIt");
@@ -191,6 +197,12 @@ function handAddStatus({ id, defaultUnit, packSize }: HandAddProduct, items: Sho
   }
   if (own.length > 0) return t("shopping.addTicked");
   return packSize ? formatAddPackSize(packSize, defaultUnit) : t("shopping.addNoPackSize");
+}
+
+// What adding the Product by hand would change, as the server works it out.
+function handAddPlan({ id, packSize }: HandAddProduct, items: ShoppingListItem[]) {
+  const own = items.filter((item) => item.product.id === id);
+  return planAddByHand(packSize?.amount ?? null, own.map((item) => ({ ...item, productId: id })));
 }
 
 // Why a Product is running low: "0 g in Stock", or "Short 4 pc on Tue 3 Nov".

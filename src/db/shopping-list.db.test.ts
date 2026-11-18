@@ -228,7 +228,7 @@ describe("setShoppingListItemTicked", () => {
   });
 
   it("does nothing to an item gone meanwhile", async () => {
-    await expect(setShoppingListItemTicked(db, "00000000-0000-4000-8000-000000000000", true)).resolves.toBeUndefined();
+    expect(await setShoppingListItemTicked(db, "00000000-0000-4000-8000-000000000000", true)).toBe(true);
   });
 });
 
@@ -421,6 +421,104 @@ describe("setAllShoppingListItemsTicked", () => {
       { name: "Greek yoghurt", quantity: 750, source: "manual", ticked: false },
       { name: "Rye bread", quantity: null, source: "manual", ticked: false },
       { name: "Tofu", quantity: 300, source: "shortfall", ticked: false },
+    ]);
+  });
+});
+
+// An item holds at most 99,999,999.99, as Stock does.
+describe("Shopping List amounts past the most an item holds", () => {
+  beforeEach(async () => {
+    await db.delete(shoppingListItems);
+  });
+
+  const stockOf = async (productId: string) =>
+    (await db.select({ stock: products.stock }).from(products).where(eq(products.id, productId)))[0]!.stock;
+  const summary = async () =>
+    (await listShoppingList(db))
+      .map(({ product, quantity, ticked }) => ({ name: product.name, quantity, ticked }))
+      .sort((a, b) => a.name.localeCompare(b.name) || Number(b.ticked) - Number(a.ticked));
+
+  it("refuses Restock ticked items when one would take Stock past it, writing nothing", async () => {
+    const bread = await aProduct("Sourdough");
+    const jam = await aProduct("Jam");
+    const [breadItem, jamItem, moreJam] = await db
+      .insert(shoppingListItems)
+      .values([
+        { productId: bread.id, quantity: 2, source: "shortfall", ticked: true },
+        { productId: jam.id, quantity: 99_999_999, source: "shortfall", ticked: true },
+        { productId: jam.id, quantity: 5, source: "manual", ticked: true },
+      ])
+      .returning({ id: shoppingListItems.id });
+
+    const refused = await restockTickedItems(db, [
+      { id: breadItem!.id, quantity: 2 },
+      { id: jamItem!.id, quantity: 99_999_999 },
+      { id: moreJam!.id, quantity: 5 },
+    ]);
+
+    expect(refused).toBe(moreJam!.id);
+    expect(await stockOf(bread.id)).toBe(0);
+    expect(await stockOf(jam.id)).toBe(0);
+    expect(await listShoppingList(db)).toHaveLength(3);
+  });
+
+  it("restocks an item sent twice only once", async () => {
+    const tea = await aProduct("Black tea");
+    const [item] = await db
+      .insert(shoppingListItems)
+      .values({ productId: tea.id, quantity: 100, source: "shortfall", ticked: true })
+      .returning({ id: shoppingListItems.id });
+
+    await restockTickedItems(db, [
+      { id: item!.id, quantity: 100 },
+      { id: item!.id, quantity: 100 },
+    ]);
+
+    expect(await stockOf(tea.id)).toBe(100);
+  });
+
+  it("refuses adding a pack by hand onto an item that would go past it", async () => {
+    const flour = await aProduct("Rice flour", { name: "bag", amount: 1000 });
+    await db.insert(shoppingListItems).values({ productId: flour.id, quantity: 99_999_500, source: "shortfall" });
+
+    expect(await addProductByHand(db, flour.id)).toEqual({ ok: false, error: "tooLarge" });
+
+    expect(await summary()).toEqual([{ name: "Rice flour", quantity: 99_999_500, ticked: false }]);
+  });
+
+  it("refuses unticking an item whose amount would add up past it", async () => {
+    const salt = await aProduct("Sea salt");
+    const [ticked] = await db
+      .insert(shoppingListItems)
+      .values([
+        { productId: salt.id, quantity: 99_999_000, source: "shortfall", ticked: true },
+        { productId: salt.id, quantity: 5000, source: "manual" },
+      ])
+      .returning({ id: shoppingListItems.id });
+
+    expect(await setShoppingListItemTicked(db, ticked!.id, false)).toBe(false);
+
+    expect(await summary()).toEqual([
+      { name: "Sea salt", quantity: 99_999_000, ticked: true },
+      { name: "Sea salt", quantity: 5000, ticked: false },
+    ]);
+  });
+
+  it("refuses unticking all when two items would add up past it", async () => {
+    const pepper = await aProduct("Pepper");
+    const thyme = await aProduct("Thyme");
+    await db.insert(shoppingListItems).values([
+      { productId: pepper.id, quantity: 99_999_000, source: "shortfall", ticked: true },
+      { productId: pepper.id, quantity: 5000, source: "manual" },
+      { productId: thyme.id, quantity: 10, source: "manual", ticked: true },
+    ]);
+
+    expect(await setAllShoppingListItemsTicked(db, false)).toBe(false);
+
+    expect(await summary()).toEqual([
+      { name: "Pepper", quantity: 99_999_000, ticked: true },
+      { name: "Pepper", quantity: 5000, ticked: false },
+      { name: "Thyme", quantity: 10, ticked: true },
     ]);
   });
 });

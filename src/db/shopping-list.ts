@@ -5,6 +5,7 @@ import { productsInSlotOrder } from "@/core/confirmation";
 import { sortByName } from "@/core/names";
 import type { PackSize } from "@/core/products";
 import {
+  generateTooLarge,
   planAddByHand,
   planGenerate,
   planUntick,
@@ -13,12 +14,13 @@ import {
   type ShoppingListSource,
   type UncertainCandidate,
 } from "@/core/shopping-list";
+import { restock } from "@/core/stock";
 import type { DefaultUnit } from "@/core/units";
 import type { Db } from "./index";
 import { toPackSize } from "./products";
 import { loadMealSlots, loadStockProjection } from "./projected-stock";
 import { meals, products, shoppingListItems } from "./schema";
-import { restockProduct } from "./stock-movements";
+import { applyMovement, StockLimitError } from "./stock-movements";
 
 export interface ShoppingListItem {
   id: string;
@@ -73,15 +75,22 @@ export async function listShoppingList(db: Db): Promise<ShoppingListItem[]> {
 // `from` to `to` are short of (spec "Shopping List"), raising, lowering and
 // removing them, raises items added by hand, and never touches a ticked one.
 // The list is locked meanwhile, so two at once can't both add the same
-// Product.
-export async function generateShoppingList(db: Db, from: string, to: string): Promise<void> {
-  await db.transaction(async (tx) => {
+// Product. Refused, writing nothing, when an item would go past what it
+// holds, naming those Products.
+export async function generateShoppingList(
+  db: Db,
+  from: string,
+  to: string,
+): Promise<{ ok: true } | { ok: false; tooLarge: string[] }> {
+  return db.transaction(async (tx) => {
     await tx.execute(sql`lock table ${shoppingListItems} in exclusive mode`);
     const { meals, products } = await loadStockProjection(tx, to);
     const items = await tx
       .select(listedItem)
       .from(shoppingListItems);
     const plan = planGenerate(shortfallsBetween(meals, products, from, to), items);
+    const tooLarge = generateTooLarge(plan, items);
+    if (tooLarge.length > 0) return { ok: false, tooLarge: tooLarge.map((id) => products.get(id)!.name) } as const;
     if (plan.add.length > 0) {
       await tx.insert(shoppingListItems).values(plan.add.map((item) => ({ ...item, source: "shortfall" as const })));
     }
@@ -89,6 +98,7 @@ export async function generateShoppingList(db: Db, from: string, to: string): Pr
       await tx.update(shoppingListItems).set({ quantity }).where(eq(shoppingListItems.id, id));
     }
     if (plan.remove.length > 0) await tx.delete(shoppingListItems).where(inArray(shoppingListItems.id, plan.remove));
+    return { ok: true } as const;
   });
 }
 
@@ -96,11 +106,12 @@ export async function generateShoppingList(db: Db, from: string, to: string): Pr
 // item, or on a new one. `itemId` is the item added or changed, which counts
 // as added by hand. A Product Archived or gone meanwhile is unavailable. The
 // list is locked meanwhile, like Generate, so the Product never gets two
-// unticked items.
+// unticked items. A pack that would take its item past what it holds is
+// refused, changing nothing.
 export async function addProductByHand(
   db: Db,
   productId: string,
-): Promise<{ ok: true; itemId: string } | { ok: false; error: "unavailable" }> {
+): Promise<{ ok: true; itemId: string } | { ok: false; error: "unavailable" | "tooLarge" }> {
   return db.transaction(async (tx) => {
     await tx.execute(sql`lock table ${shoppingListItems} in exclusive mode`);
     const [product] = await tx
@@ -113,6 +124,7 @@ export async function addProductByHand(
       .from(shoppingListItems)
       .where(eq(shoppingListItems.productId, productId));
     const plan = planAddByHand(toPackSize(product)?.amount ?? null, items);
+    if (plan.kind === "tooLarge") return { ok: false, error: "tooLarge" } as const;
     if (plan.kind !== "add") {
       const quantity = plan.kind === "raise" ? { quantity: plan.quantity } : {};
       await tx
@@ -165,55 +177,61 @@ export async function removeShoppingListItem(db: Db, id: string): Promise<void> 
 // beside its Product's unticked item, it adds its amount to that one, which
 // counts as added by hand if either was, and goes, as a Product has one
 // unticked item at most. The list is locked meanwhile, like Generate. Gone
-// already is fine: there is nothing to tick.
-export async function setShoppingListItemTicked(db: Db, id: string, ticked: boolean): Promise<void> {
-  await db.transaction(async (tx) => {
+// already is fine: there is nothing to tick. False, changing nothing, when
+// the two would add up past what an item holds.
+export async function setShoppingListItemTicked(db: Db, id: string, ticked: boolean): Promise<boolean> {
+  return db.transaction(async (tx) => {
     await tx.execute(sql`lock table ${shoppingListItems} in exclusive mode`);
     const [item] = await tx
       .select({ productId: shoppingListItems.productId })
       .from(shoppingListItems)
       .where(eq(shoppingListItems.id, id));
-    if (!item) return;
+    if (!item) return true;
     if (ticked) {
       await tx.update(shoppingListItems).set({ ticked }).where(eq(shoppingListItems.id, id));
-      return;
+      return true;
     }
     const items = await tx
       .select(listedItem)
       .from(shoppingListItems)
       .where(eq(shoppingListItems.productId, item.productId));
     const plan = planUntick(id, items);
+    if (plan.kind === "tooLarge") return false;
     if (plan.kind === "untick") {
       await tx.update(shoppingListItems).set({ ticked }).where(eq(shoppingListItems.id, id));
-      return;
+      return true;
     }
     await tx.delete(shoppingListItems).where(eq(shoppingListItems.id, id));
     await tx
       .update(shoppingListItems)
       .set({ quantity: plan.quantity, source: plan.source })
       .where(eq(shoppingListItems.id, plan.into));
+    return true;
   });
 }
 
 // Ticks every item, or unticks every item. Neither changes Stock. Unticked,
 // a Product's items are added into one, as unticking one does, added by hand
-// if any was. The list is locked meanwhile, like Generate.
-export async function setAllShoppingListItemsTicked(db: Db, ticked: boolean): Promise<void> {
-  await db.transaction(async (tx) => {
+// if any was. The list is locked meanwhile, like Generate. False, changing
+// nothing, when a Product's items would add up past what an item holds.
+export async function setAllShoppingListItemsTicked(db: Db, ticked: boolean): Promise<boolean> {
+  return db.transaction(async (tx) => {
     await tx.execute(sql`lock table ${shoppingListItems} in exclusive mode`);
     if (ticked) {
       await tx.update(shoppingListItems).set({ ticked });
-      return;
+      return true;
     }
     const items = await tx
       .select(listedItem)
       .from(shoppingListItems);
     const plan = planUntickAll(items);
+    if (!plan) return false;
     // The items that go first, so no Product has two unticked items meanwhile.
     if (plan.remove.length > 0) await tx.delete(shoppingListItems).where(inArray(shoppingListItems.id, plan.remove));
     for (const { id, quantity, source } of plan.keep) {
       await tx.update(shoppingListItems).set({ ticked, quantity, source }).where(eq(shoppingListItems.id, id));
     }
+    return true;
   });
 }
 
@@ -221,17 +239,44 @@ export async function setAllShoppingListItemsTicked(db: Db, ticked: boolean): Pr
 // amount bought, in its Product's Default Unit, and the item leaves the list;
 // all or none. Two items of one Product are two Restocks. An item gone or
 // unticked meanwhile is left as it is, so pressing twice restocks once. The
-// list is locked meanwhile, like Generate.
-export async function restockTickedItems(db: Db, bought: readonly { id: string; quantity: number }[]): Promise<void> {
-  if (bought.length === 0) return;
+// list is locked meanwhile, like Generate. Returns the item whose Restock
+// would leave more Stock than its Product holds, with nothing written; null
+// once restocked.
+export async function restockTickedItems(
+  db: Db,
+  bought: readonly { id: string; quantity: number }[],
+): Promise<string | null> {
+  if (bought.length === 0) return null;
+  let restocking: string | null = null;
+  try {
+    await restockTickedItemsOrThrow(db, bought, (id) => (restocking = id));
+    return null;
+  } catch (error) {
+    if (error instanceof StockLimitError) return restocking;
+    throw error;
+  }
+}
+
+async function restockTickedItemsOrThrow(
+  db: Db,
+  bought: readonly { id: string; quantity: number }[],
+  onItem: (id: string) => void,
+): Promise<void> {
   await db.transaction(async (tx) => {
     await tx.execute(sql`lock table ${shoppingListItems} in exclusive mode`);
     const items = await tx
       .select({ id: shoppingListItems.id, productId: shoppingListItems.productId })
       .from(shoppingListItems)
       .where(and(inArray(shoppingListItems.id, bought.map(({ id }) => id)), eq(shoppingListItems.ticked, true)));
-    for (const { id, productId } of items) {
-      await restockProduct(tx, productId, bought.find((item) => item.id === id)!.quantity);
+    // In the order sent, so a refusal names the item that went past. An item
+    // sent twice is restocked once.
+    const done = new Set<string>();
+    for (const { id, quantity } of bought) {
+      const item = items.find((ticked) => ticked.id === id);
+      if (!item || done.has(id)) continue;
+      done.add(id);
+      onItem(id);
+      await applyMovement(tx, item.productId, "restock", (current) => restock(current, quantity));
     }
     if (items.length > 0) await tx.delete(shoppingListItems).where(inArray(shoppingListItems.id, items.map(({ id }) => id)));
   });

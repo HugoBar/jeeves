@@ -1018,8 +1018,8 @@ describe("Add a Meal", () => {
 
     it("picks the template's Meal Type, saying it can still be changed now", () => {
       const html = fromFamilyLunch();
-      expect(/<input type="radio" name="mealTypeId"[^>]*value="lunch"[^>]*>/.exec(html)![0]).toContain('checked=""');
-      expect(/<input type="radio" name="mealTypeId"[^>]*value="dinner"[^>]*>/.exec(html)![0]).not.toContain("checked");
+      expect(/<input type="radio"[^>]*name="mealTypeId"[^>]*value="lunch"[^>]*>/.exec(html)![0]).toContain('checked=""');
+      expect(/<input type="radio"[^>]*name="mealTypeId"[^>]*value="dinner"[^>]*>/.exec(html)![0]).not.toContain("checked");
       expect(text(html)).toContain("Copied from Family Lunch. You can change it now, not after the Meal is added.");
     });
 
@@ -1042,7 +1042,7 @@ describe("Add a Meal", () => {
     it("offers the template's Meal Type even when it is Archived", () => {
       const brunch = { ...familyLunch, mealType: { id: "brunch", label: "Brunch", archived: true } };
       const html = renderView({ template: brunch });
-      expect(/<input type="radio" name="mealTypeId"[^>]*value="brunch"[^>]*>/.exec(html)![0]).toContain('checked=""');
+      expect(/<input type="radio"[^>]*name="mealTypeId"[^>]*value="brunch"[^>]*>/.exec(html)![0]).toContain('checked=""');
     });
 
     it("shows a slot with an Archived Slot Category by its name", () => {
@@ -1099,7 +1099,7 @@ describe("the Meal form", () => {
     const html = renderForm();
     const chips = [...html.matchAll(/<label class="chip meal-type-chip">(.*?)<\/label>/g)].map((m) => text(m[1]!));
     expect(chips).toEqual(["Dinner", "Lunch"]);
-    expect(html).toMatch(/<input type="radio" name="mealTypeId" value="dinner"/);
+    expect(html).toMatch(/<input type="radio"[^>]*name="mealTypeId" value="dinner"/);
     expect(text(html)).toContain("It can't be changed after the Meal is added.");
   });
 

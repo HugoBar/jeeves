@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useId, useRef, useTransition, type ReactNode } from "react";
+import { useEffect, useId, useRef, useState, useTransition, type ReactNode } from "react";
 import { t } from "@/strings";
+import { FormError } from "./form-error";
 
 // A bottom sheet on phone and a centered dialog on desktop. Mount it to open
 // it and unmount it to close it. A native modal dialog, so Escape closes it
@@ -101,15 +102,18 @@ export function ConfirmSheet({
   body?: string;
   confirmLabel: string;
   destructive?: boolean;
-  onConfirm: () => void | Promise<void>;
+  // A message returned says why it was refused; the sheet stays open to show it.
+  onConfirm: () => void | string | null | Promise<void | string | null>;
   onClose: () => void;
   children?: ReactNode;
 }) {
   const [pending, startTransition] = useTransition();
+  const [refusal, setRefusal] = useState<string | null>(null);
   return (
     <Sheet eyebrow={eyebrow} title={title} busy={pending} onClose={onClose}>
       {body && <p className="sheet-body">{body}</p>}
       {children}
+      {refusal && <FormError>{refusal}</FormError>}
       <div className="sheet-actions">
         <button type="button" onClick={onClose} disabled={pending}>
           {t("sheet.cancel")}
@@ -120,8 +124,9 @@ export function ConfirmSheet({
           disabled={pending}
           onClick={() =>
             startTransition(async () => {
-              await onConfirm();
-              onClose();
+              const refused = await onConfirm();
+              if (typeof refused === "string") setRefusal(refused);
+              else onClose();
             })
           }
         >

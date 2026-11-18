@@ -262,7 +262,7 @@ function AddSlotAmount({
       food={food}
       startAmount={food.content === "recipe" ? String(food.portions) : ""}
       place={place}
-      error={state.error}
+      state={state}
       action={action}
       pending={pending}
       onChangeFood={onChangeFood}

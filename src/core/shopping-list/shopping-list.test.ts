@@ -10,6 +10,8 @@ import {
   isGenerateRange,
   packsAmount,
   packsCovering,
+  generateTooLarge,
+  maxPacks,
   parseItemAmount,
   planAddByHand,
   planGenerate,
@@ -221,6 +223,13 @@ describe("stepItemAmount", () => {
     expect(stepItemAmount(100, 500, "g", -1)).toBeNull();
   });
 
+  // The list holds at most 99,999,999.99.
+  it("never goes past what the list holds", () => {
+    expect(stepItemAmount(99_999_500, 500, "g", 1)).toBeNull();
+    expect(stepItemAmount(99_999_950, null, "g", 1)).toBeNull();
+    expect(stepItemAmount(99_999_899.99, null, "g", 1)).toBe(99_999_999.99);
+  });
+
   it("starts at 1 pack for an item with no amount", () => {
     expect(stepItemAmount(null, 500, "g", 1)).toBe(500);
     expect(stepItemAmount(null, 500, "g", -1)).toBeNull();
@@ -255,8 +264,16 @@ describe("parseItemAmount", () => {
     }
   });
 
-  it("refuses more packs than the list can hold", () => {
-    expect(parseItemAmount("1000000", 500)).toEqual({ ok: false, error: "notWholePacks" });
+  // 199,999 packs of 500 g is 99,999,500 g; one more is past 99,999,999.99.
+  it("says when there are more packs than the list can hold", () => {
+    expect(maxPacks(500)).toBe(199_999);
+    expect(parseItemAmount("199999", 500)).toEqual({ ok: true, quantity: 99_999_500 });
+    expect(parseItemAmount("200000", 500)).toEqual({ ok: false, error: "tooManyPacks" });
+    expect(parseItemAmount("99999999999", 500)).toEqual({ ok: false, error: "tooManyPacks" });
+  });
+
+  it("says when an amount without a Pack Size is too large", () => {
+    expect(parseItemAmount("100000000", null)).toEqual({ ok: false, error: "tooLarge" });
   });
 
   it("reads an amount as Restock does without a Pack Size", () => {
@@ -716,5 +733,46 @@ describe("runningLow", () => {
 
   it("lists nothing when nothing is running low", () => {
     expect(runningLow([{ id: "rice", stock: 500 }], [], new Set(), weeks)).toEqual([]);
+  });
+});
+
+// An item holds at most 99,999,999.99, as Stock does.
+describe("past the most an item holds", () => {
+  const item = (id: string, quantity: number | null, fields: Partial<ListedItem> = {}): ListedItem => ({
+    id,
+    productId: "rice",
+    quantity,
+    ticked: false,
+    source: "shortfall",
+    ...fields,
+  });
+
+  it("Generate names the Products it would add or set past it", () => {
+    const needs = {
+      short: new Map([
+        ["rice", 199_999_998],
+        ["beans", 200],
+        ["oats", 100_000_000],
+      ]),
+      unknown: new Set<string>(),
+    };
+    const items = [item("a", 10, { productId: "oats" })];
+    expect(generateTooLarge(planGenerate(needs, items), items)).toEqual(["rice", "oats"]);
+  });
+
+  it("Generate names none when every item fits", () => {
+    const needs = { short: new Map([["rice", 99_999_999.99]]), unknown: new Set<string>() };
+    expect(generateTooLarge(planGenerate(needs, []), [])).toEqual([]);
+  });
+
+  it("adding a pack by hand refuses to go past it", () => {
+    expect(planAddByHand(1000, [item("a", 99_999_500)])).toEqual({ kind: "tooLarge" });
+    expect(planAddByHand(1000, [item("a", 99_998_999.99)])).toEqual({ kind: "raise", id: "a", quantity: 99_999_999.99 });
+  });
+
+  it("unticking refuses a sum past it", () => {
+    const items = [item("a", 99_999_000, { ticked: true }), item("b", 5000)];
+    expect(planUntick("a", items)).toEqual({ kind: "tooLarge" });
+    expect(planUntickAll(items)).toBeNull();
   });
 });

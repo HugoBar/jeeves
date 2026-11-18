@@ -3,14 +3,15 @@
 import Link from "next/link";
 import { useActionState, useEffect, useRef, useState } from "react";
 import { DEFAULT_UNITS, parseDefaultUnit, type DefaultUnit } from "@/core/units";
-import type { IngredientUse } from "@/core/products";
+import { NAME_MAX_LENGTH } from "@/core/names";
+import { parseProductFields, type IngredientUse } from "@/core/products";
 import type { Product } from "@/db/products";
 import { formatList, formatQuantity, t } from "@/strings";
 import { groupCategoriesByKind } from "../categories/category-groups";
 import type { CategoryOption } from "../categories/category-options";
 import { PRODUCT_ERROR_FIELDS } from "../field-errors";
 import { FormCard } from "../form-card";
-import { FormBanner, LockIcon, useFieldErrors } from "../form-error";
+import { FormBanner, formFields, LockIcon, useFieldErrors } from "../form-error";
 import type { ProductFormError, ProductFormState, ProductFormValues } from "./actions";
 
 type ProductFormContent = {
@@ -52,13 +53,17 @@ export function ProductFormFields({
   const { values, errors } = state;
   const [pickedUnit, setPickedUnit] = useState(parseDefaultUnit(values.defaultUnit) ?? DEFAULT_UNITS[0]);
   const unit = editing?.defaultUnit ?? pickedUnit;
-  const { invalid, messages } = useFieldErrors(
+  const { invalid, messages, shownCount, watch } = useFieldErrors(
     errors,
     (error) => PRODUCT_ERROR_FIELDS[error],
-    (error) => errorMessage(error, values),
+    (error) => errorMessage(error, values, unit),
+    { from: state, check: checkProductForm },
   );
 
   // The save button is below the fields, so a rejected save scrolls back up.
+  // The banner shows only once a save is rejected, not for a field left wrong
+  // before it, so the form doesn't move while it is being filled in.
+  const rejected = state.errors.length > 0;
   const banner = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (state.errors.length > 0) banner.current?.scrollIntoView({ block: "center" });
@@ -66,22 +71,23 @@ export function ProductFormFields({
 
   return (
     <>
-      {errors.length > 0 && (
+      {rejected && shownCount > 0 && (
         <FormBanner ref={banner}>
           {editing && errors.includes("densityInUse") ? (
             densityInUseMessage(editing, state.densityUses ?? [])
           ) : (
-            <FixMessage count={errors.length} editing={editing !== undefined} />
+            <FixMessage count={shownCount} editing={editing !== undefined} />
           )}
         </FormBanner>
       )}
-      <div className="product-form-columns">
+      <div className="product-form-columns" {...watch}>
         <FormCard title={t("products.basics")}>
           <div className="form-field">
             <label>
               {t("products.name")}
               <input
                 name="name"
+                maxLength={NAME_MAX_LENGTH}
                 defaultValue={values.name}
                 placeholder={t("products.namePlaceholder")}
                 autoFocus={!editing}
@@ -131,6 +137,7 @@ export function ProductFormFields({
             <div className="product-pack-size">
               <input
                 name="packSizeName"
+                maxLength={NAME_MAX_LENGTH}
                 aria-label={t("products.packSizeName")}
                 defaultValue={values.packSizeName}
                 placeholder={t("products.packSizeNamePlaceholder")}
@@ -180,6 +187,19 @@ export function ProductFormFields({
       </div>
     </>
   );
+}
+
+// What saving would refuse in the fields as they are now.
+function checkProductForm(form: HTMLFormElement): ProductFormError[] {
+  const field = formFields(form);
+  const parsed = parseProductFields({
+    name: field("name"),
+    density: field("density"),
+    packSizeName: field("packSizeName"),
+    packSizeAmount: field("packSizeAmount"),
+    categoryIds: [],
+  });
+  return parsed.ok ? [] : parsed.errors;
 }
 
 function UnitPicker({ picked, onPick }: { picked: DefaultUnit; onPick: (unit: DefaultUnit) => void }) {
@@ -232,10 +252,10 @@ function FixMessage({ count, editing }: { count: number; editing: boolean }) {
   );
 }
 
-function errorMessage(error: ProductFormError, values: ProductFormValues): string {
+function errorMessage(error: ProductFormError, values: ProductFormValues, unit: DefaultUnit): string {
   return error === "duplicateName"
     ? t("products.error.duplicateName", { name: values.name.trim() })
-    : t(`products.error.${error}`);
+    : t(`products.error.${error}`, { unit: t(`unit.${unit}`) });
 }
 
 // "Flour's Density is used by Pancakes (1 cup) and Bread (2 cup). ..." Only

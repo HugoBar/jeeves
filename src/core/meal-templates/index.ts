@@ -1,4 +1,5 @@
 import { isHour } from "@/core/meals";
+import { isTooLong, NAME_MAX_LENGTH } from "@/core/names";
 
 // What the user sets on a Meal Template. It is only a shortcut: a Meal created
 // from it copies these and keeps no link to it (data-model Q5).
@@ -15,7 +16,7 @@ export interface MealTemplateContent extends MealTemplateFields {
   slotCategoryIds: string[];
 }
 
-export type MealTemplateFieldError = "blankName" | "invalidHour" | "noMealType" | "unavailableMealType";
+export type MealTemplateFieldError = "blankName" | "nameTooLong" | "invalidHour" | "noMealType" | "unavailableMealType";
 
 export type MealTemplateFieldsResult =
   | { ok: true; fields: MealTemplateFields }
@@ -34,6 +35,7 @@ export function parseMealTemplateFields(
 
   const errors: MealTemplateFieldError[] = [];
   if (!name) errors.push("blankName");
+  else if (isTooLong(name, NAME_MAX_LENGTH)) errors.push("nameTooLong");
   if (!isHour(hour)) errors.push("invalidHour");
   if (!mealTypeId) errors.push("noMealType");
   else if (!pickable.has(mealTypeId)) errors.push("unavailableMealType");

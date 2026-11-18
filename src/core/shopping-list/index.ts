@@ -1,4 +1,4 @@
-import { AMOUNT_COLUMN, maxForColumn, parseWholeAboveZero, roundForColumn } from "@/core/amounts";
+import { AMOUNT_COLUMN, isWholeTooLarge, maxForColumn, parseWholeAboveZero, roundForColumn } from "@/core/amounts";
 import { isUnconfirmed, type MealStatus } from "@/core/meals";
 import { isDate, plannerWeeks } from "@/core/planner";
 import { projectStock, type ProjectedMeal, type ProjectedProduct } from "@/core/projected-stock";
@@ -205,6 +205,23 @@ export function planGenerate({ short, unknown }: RangeShortfalls, items: readonl
   return plan;
 }
 
+// An item's amount is stored in an amount column, so it holds at most its
+// largest value.
+function pastItemLimit(quantity: number | null): boolean {
+  return quantity !== null && quantity > maxForColumn(AMOUNT_COLUMN);
+}
+
+// The Products Generate's plan would add or set past what an item holds, in
+// the order planned; Generate then writes nothing. `items` are the items the
+// plan was made from.
+export function generateTooLarge(plan: GeneratePlan, items: readonly ListedItem[]): string[] {
+  const productOf = new Map(items.map((item) => [item.id, item.productId]));
+  return [
+    ...plan.add.filter((add) => pastItemLimit(add.quantity)).map((add) => add.productId),
+    ...plan.set.filter((set) => pastItemLimit(set.quantity)).map((set) => productOf.get(set.id)!),
+  ];
+}
+
 // The whole packs that cover `quantity`, both in the Product's Default Unit
 // (spec: the Shopping List rounds up to whole packs). Worked out to 6 places
 // first, so 1.1 over 0.1 is 11 packs, not 12.
@@ -231,7 +248,8 @@ export function packsAmount(packs: number, packAmount: number): number {
 const AMOUNT_STEPS: Record<DefaultUnit, number> = { g: 100, ml: 100, pc: 1 };
 
 // The amount an item's stepper sets on one press, `by` 1 for + and -1 for
-// −, in the Product's Default Unit; null when it can't go lower. With a Pack
+// −, in the Product's Default Unit; null when it can't go lower, or higher
+// than the list holds. With a Pack
 // Size it moves a whole pack from the packs shown, and never below 1 pack;
 // without one it moves a step of its unit, and never below one step. An item
 // with no amount starts at 1 pack or one step.
@@ -243,17 +261,26 @@ export function stepItemAmount(
 ): number | null {
   if (packAmount !== null) {
     const packs = (quantity === null ? 0 : packsCovering(quantity, packAmount)) + by;
-    return packs < 1 ? null : packsAmount(packs, packAmount);
+    return packs < 1 || packs > maxPacks(packAmount) ? null : packsAmount(packs, packAmount);
   }
   const step = AMOUNT_STEPS[unit];
-  if (by === 1) return roundForColumn((quantity ?? 0) + step, AMOUNT_COLUMN);
+  if (by === 1) {
+    const raised = roundForColumn((quantity ?? 0) + step, AMOUNT_COLUMN);
+    return raised > maxForColumn(AMOUNT_COLUMN) ? null : raised;
+  }
   if (quantity === null || quantity <= step) return null;
   return Math.max(step, roundForColumn(quantity - step, AMOUNT_COLUMN));
 }
 
 // Why an amount typed on the list was refused: as Restock refuses one, or,
-// with a Pack Size, not a whole number of packs above 0 that the list holds.
-export type ItemAmountError = QuantityError | "notWholePacks";
+// with a Pack Size, not a whole number of packs above 0, or more packs than
+// the list holds.
+export type ItemAmountError = QuantityError | "notWholePacks" | "tooManyPacks";
+
+// The most packs of `packAmount` an item on the list can hold.
+export function maxPacks(packAmount: number): number {
+  return Math.floor(maxForColumn(AMOUNT_COLUMN) / packAmount);
+}
 
 export type ParsedItemAmount = { ok: true; quantity: number } | { ok: false; error: ItemAmountError };
 
@@ -262,21 +289,24 @@ export type ParsedItemAmount = { ok: true; quantity: number } | { ok: false; err
 // without one, an amount read as Restock reads it.
 export function parseItemAmount(text: string, packAmount: number | null): ParsedItemAmount {
   if (packAmount === null) return parseStockAmount("restock", text);
-  const packs = parseWholeAboveZero(text.trim());
-  const quantity = packs === null ? null : packsAmount(packs, packAmount);
-  return quantity === null || quantity > maxForColumn(AMOUNT_COLUMN)
-    ? { ok: false, error: "notWholePacks" }
-    : { ok: true, quantity };
+  const typed = text.trim();
+  const packs = parseWholeAboveZero(typed);
+  if (packs === null) return { ok: false, error: isWholeTooLarge(typed) ? "tooManyPacks" : "notWholePacks" };
+  return packs > maxPacks(packAmount)
+    ? { ok: false, error: "tooManyPacks" }
+    : { ok: true, quantity: packsAmount(packs, packAmount) };
 }
 
 // What adding a Product by hand changes: a new item, its unticked item
 // raised, or, with no pack to add, its unticked item's amount kept as it is.
 // An unticked item it lands on, raised or kept, then counts as added by hand,
-// as part of it was chosen (spec "Shopping List").
+// as part of it was chosen (spec "Shopping List"). "tooLarge": raising it
+// would go past what an item holds, so nothing changes.
 export type HandAddPlan =
   | { kind: "add"; quantity: number | null }
   | { kind: "raise"; id: string; quantity: number }
-  | { kind: "keep"; id: string };
+  | { kind: "keep"; id: string }
+  | { kind: "tooLarge" };
 
 // Adding a Product by hand puts one pack on the list (spec "Shopping List"):
 // on its unticked item if it has one, counting no amount as 0, or on a new
@@ -288,15 +318,17 @@ export function planAddByHand(packAmount: number | null, items: readonly ListedI
   if (!unticked) return { kind: "add", quantity: packAmount };
   if (packAmount === null) return { kind: "keep", id: unticked.id };
   const quantity = roundForColumn((unticked.quantity ?? 0) + packAmount, AMOUNT_COLUMN);
-  return { kind: "raise", id: unticked.id, quantity };
+  return pastItemLimit(quantity) ? { kind: "tooLarge" } : { kind: "raise", id: unticked.id, quantity };
 }
 
 // What unticking an item changes: just its tick, or, when its Product
 // already has an unticked item, that item takes its amount and source, and it
-// goes.
+// goes. "tooLarge": the sum would go past what an item holds, so nothing
+// changes.
 export type UntickPlan =
   | { kind: "untick" }
-  | { kind: "merge"; into: string; quantity: number | null; source: ShoppingListSource };
+  | { kind: "merge"; into: string; quantity: number | null; source: ShoppingListSource }
+  | { kind: "tooLarge" };
 
 // A Product has at most one unticked item (data-model T7), so unticking one
 // beside it adds the two together, counting no amount as 0; with neither
@@ -308,7 +340,9 @@ export function planUntick(id: string, items: readonly ListedItem[]): UntickPlan
   if (!unticked) return { kind: "untick" };
   const own = items.filter((item) => item.id === id);
   const merged = [...own, unticked];
-  return { kind: "merge", into: unticked.id, quantity: sumAmounts(merged), source: mergedSource(merged) };
+  const quantity = sumAmounts(merged);
+  if (pastItemLimit(quantity)) return { kind: "tooLarge" };
+  return { kind: "merge", into: unticked.id, quantity, source: mergedSource(merged) };
 }
 
 // What unticking every item changes: the items left, each its Product's one
@@ -321,14 +355,17 @@ export interface UntickAllPlan {
 
 // Unticking the whole list leaves each Product one unticked item (data-model
 // T7), so a Product's items are added together, as one untick adds into its
-// unticked item: into that one if there is one, else into its first.
-export function planUntickAll(items: readonly ListedItem[]): UntickAllPlan {
+// unticked item: into that one if there is one, else into its first. Null
+// when a Product's sum would go past what an item holds, so nothing changes.
+export function planUntickAll(items: readonly ListedItem[]): UntickAllPlan | null {
   const byProduct = new Map<string, ListedItem[]>();
   for (const item of items) byProduct.set(item.productId, [...(byProduct.get(item.productId) ?? []), item]);
   const plan: UntickAllPlan = { keep: [], remove: [] };
   for (const own of byProduct.values()) {
     const kept = own.find((item) => !item.ticked) ?? own[0]!;
-    plan.keep.push({ id: kept.id, quantity: sumAmounts(own), source: mergedSource(own) });
+    const quantity = sumAmounts(own);
+    if (pastItemLimit(quantity)) return null;
+    plan.keep.push({ id: kept.id, quantity, source: mergedSource(own) });
     plan.remove.push(...own.filter((item) => item !== kept).map((item) => item.id));
   }
   return plan;

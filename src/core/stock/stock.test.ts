@@ -8,6 +8,8 @@ import {
   parseStockAmount,
   previewStockAction,
   restock,
+  exceedsStockLimit,
+  stockActionError,
   reverse,
 } from "./index";
 
@@ -55,13 +57,25 @@ describe("parsePositiveQuantity", () => {
     expect(parsePositiveQuantity("1.256")).toEqual({ ok: true, quantity: 1.26 });
   });
 
-  // 0.004 would be stored as 0, and 100000000 does not fit numeric(10,2).
-  it.each([[""], ["abc"], ["0"], ["-1"], ["0.004"], ["100000000"]])(
+  // 0.004 would be stored as 0.
+  it.each([[""], ["abc"], ["0"], ["-1"], ["0.004"]])(
     "rejects a quantity that is not a positive amount (%j)",
     (text) => {
       expect(parsePositiveQuantity(text)).toEqual({ ok: false, error: "notAboveZero" });
     },
   );
+
+  // numeric(10,2) holds at most 99,999,999.99.
+  it.each([["100000000"], ["99999999.996"], ["1e400"], ["Infinity"]])(
+    "says a quantity that does not fit is too large (%j)",
+    (text) => {
+      expect(parsePositiveQuantity(text)).toEqual({ ok: false, error: "tooLarge" });
+    },
+  );
+
+  it("takes the largest amount that fits", () => {
+    expect(parsePositiveQuantity("99999999.99")).toEqual({ ok: true, quantity: 99999999.99 });
+  });
 });
 
 describe("deduct", () => {
@@ -132,12 +146,16 @@ describe("parseQuantityOnHand", () => {
     expect(parseQuantityOnHand("1.256")).toEqual({ ok: true, quantity: 1.26 });
   });
 
-  it.each([[""], ["abc"], ["-1"], ["-0.001"], ["100000000"]])(
+  it.each([[""], ["abc"], ["-1"], ["-0.001"]])(
     "rejects a quantity that is not an amount of 0 or more (%j)",
     (text) => {
       expect(parseQuantityOnHand(text)).toEqual({ ok: false, error: "notZeroOrMore" });
     },
   );
+
+  it("says a quantity that does not fit is too large", () => {
+    expect(parseQuantityOnHand("100000000")).toEqual({ ok: false, error: "tooLarge" });
+  });
 });
 
 describe("parseStockAmount", () => {
@@ -153,8 +171,8 @@ describe("parseStockAmount for a Discard", () => {
   });
 
   it("keeps the limit on amounts that end up stored", () => {
-    expect(parseStockAmount("restock", "123123123")).toEqual({ ok: false, error: "notAboveZero" });
-    expect(parseStockAmount("correction", "123123123")).toEqual({ ok: false, error: "notZeroOrMore" });
+    expect(parseStockAmount("restock", "123123123")).toEqual({ ok: false, error: "tooLarge" });
+    expect(parseStockAmount("correction", "123123123")).toEqual({ ok: false, error: "tooLarge" });
   });
 
   it.each([[""], ["abc"], ["0"], ["-1"], ["0.001"], ["Infinity"], ["1e400"], ["1e308"]])(
@@ -235,5 +253,41 @@ describe("reverse", () => {
 
   it("reverses a movement that removed nothing with a zero delta", () => {
     expect(reverse({ stock: 0, stockSuspect: true }, 0, true).delta).toBe(0);
+  });
+});
+
+// Stock is numeric(10,2), so it holds at most 99,999,999.99.
+describe("exceedsStockLimit", () => {
+  it("is false for Stock left at the largest amount that fits", () => {
+    expect(exceedsStockLimit(restock({ stock: 99_999_999, stockSuspect: false }, 0.99))).toBe(false);
+  });
+
+  it("is true for a Restock that leaves more", () => {
+    expect(exceedsStockLimit(restock({ stock: 99_999_999, stockSuspect: false }, 5))).toBe(true);
+  });
+
+  it("is true for a Reopen that adds back past it", () => {
+    expect(exceedsStockLimit(reverse({ stock: 99_999_999, stockSuspect: false }, -5, false))).toBe(true);
+  });
+});
+
+describe("stockActionError", () => {
+  const nearlyFull = { stock: 99_999_999, stockSuspect: false };
+
+  it("is null for an amount the action takes", () => {
+    expect(stockActionError("restock", nearlyFull, "0.99")).toBeNull();
+  });
+
+  it("says why the amount itself was refused", () => {
+    expect(stockActionError("restock", nearlyFull, "0")).toBe("notAboveZero");
+    expect(stockActionError("correction", nearlyFull, "100000000")).toBe("tooLarge");
+  });
+
+  it("refuses a Restock that would take Stock past the limit", () => {
+    expect(stockActionError("restock", nearlyFull, "5")).toBe("stockTooLarge");
+  });
+
+  it("never refuses a Discard for the Stock it leaves", () => {
+    expect(stockActionError("discard", nearlyFull, "5")).toBeNull();
   });
 });
