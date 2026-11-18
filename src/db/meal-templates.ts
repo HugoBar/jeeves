@@ -106,7 +106,7 @@ export async function listPickableSlotCategories(db: Db, templateIds: string[]):
     .where(or(isNull(foodCategories.archivedAt), usedByTemplates));
 }
 
-export interface PickableMealType extends Pick<MealType, "id" | "seedKey" | "name" | "priority"> {
+export interface PickableMealType extends Pick<MealType, "id" | "seedKey" | "name"> {
   archived: boolean;
 }
 
@@ -129,7 +129,6 @@ export async function listPickableMealTypes(db: Db, templateIds: string[]): Prom
       id: mealTypes.id,
       seedKey: mealTypes.seedKey,
       name: mealTypes.name,
-      priority: mealTypes.priority,
       archived: sql<boolean>`${mealTypes.archivedAt} is not null`,
     })
     .from(mealTypes)
