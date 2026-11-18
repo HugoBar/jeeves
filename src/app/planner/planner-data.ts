@@ -7,7 +7,7 @@ import type { Db } from "@/db";
 import { listConfirmTakes, listReopenAddsBack } from "@/db/confirmation";
 import { listActiveCategories } from "@/db/food-categories";
 import { listMealTemplates, listPickableMealTypes, listPickableSlotCategories, type MealTemplate } from "@/db/meal-templates";
-import { listActiveMealTypes } from "@/db/meal-types";
+import { listActiveMealTypes, listMealTypeUsualMinutes } from "@/db/meal-types";
 import { listFoodsForSlots, type Meal, type MealSlotFood } from "@/db/meals";
 import { loadStockProjection, type ProjectedProductWithName } from "@/db/projected-stock";
 import { foodCategoryLabel, mealTypeLabel } from "@/strings";
@@ -57,19 +57,20 @@ export async function toPlannerMeals(db: Db, meals: Meal[], to: string): Promise
 }
 
 export async function loadPickers(db: Db): Promise<Pickers> {
-  const [mealTypes, templates, categories, foods] = await Promise.all([
+  const [mealTypes, usualMinutes, templates, categories, foods] = await Promise.all([
     listActiveMealTypes(db),
+    listMealTypeUsualMinutes(db),
     listMealTemplates(db),
     listActiveCategories(db),
     listFoodsForSlots(db),
   ]);
   // The picker offers only Meal Types that are not Archived.
-  const mealTypeOptions = sortMealTypes(mealTypes, mealTypeLabel).map((mealType) => ({
+  const mealTypeOptions = sortMealTypes(mealTypes, usualMinutes, mealTypeLabel).map((mealType) => ({
     id: mealType.id,
     label: mealTypeLabel(mealType),
   }));
 
-  const templateOptions = await toTemplateOptions(db, templates);
+  const templateOptions = await toTemplateOptions(db, templates, usualMinutes);
   // By id, so each shows once however many template slots use it.
   const archivedSlotCategories = new Map(
     templateOptions
@@ -103,13 +104,17 @@ export async function loadPickers(db: Db): Promise<Pickers> {
 // The Meal Templates as Add a Meal lists them: by Meal Type, in the order the
 // Meal Type picker lists them, then by hour. A template's Meal Type and Slot
 // Categories may be Archived; those Meal Types come last.
-async function toTemplateOptions(db: Db, templates: MealTemplate[]): Promise<TemplateOption[]> {
+async function toTemplateOptions(
+  db: Db,
+  templates: MealTemplate[],
+  usualMinutes: ReadonlyMap<string, number>,
+): Promise<TemplateOption[]> {
   const ids = templates.map((template) => template.id);
   const [mealTypes, categories] = await Promise.all([
     listPickableMealTypes(db, ids),
     listPickableSlotCategories(db, ids),
   ]);
-  const order = sortMealTypes(mealTypes, mealTypeLabel).sort((a, b) => Number(a.archived) - Number(b.archived));
+  const order = sortMealTypes(mealTypes, usualMinutes, mealTypeLabel).sort((a, b) => Number(a.archived) - Number(b.archived));
   const byId = <T extends { id: string }>(items: T[]) => new Map(items.map((item) => [item.id, item]));
   const [mealTypeById, categoryById] = [byId(mealTypes), byId(categories)];
   const rank = new Map(order.map((mealType, index) => [mealType.id, index]));

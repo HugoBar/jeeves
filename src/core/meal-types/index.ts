@@ -35,13 +35,20 @@ export function parseMealTypeFields(input: MealTypeFieldsInput): MealTypeFieldsR
   return { ok: true, fields: { name, priority: priority!, allowsLeftovers: input.allowsLeftovers } };
 }
 
-// Meal Priority first (1 first), then alphabetical by the label the user sees.
-export function sortMealTypes<T extends { priority: number }>(
+// Lists read in the order of a day: by each Meal Type's usual hour, in
+// minutes after midnight, then by the label the user sees. Meal Priority
+// orders Meals for Projected Stock, never lists.
+export function sortMealTypes<T extends { id: string; seedKey: MealTypeSeedKey | null }>(
   mealTypes: readonly T[],
+  usualMinutes: ReadonlyMap<string, number>,
   labelOf: (mealType: T) => string,
 ): T[] {
+  // An added Meal Type with no Meals has no usual hour and goes last.
+  const minutesOf = (mealType: T) =>
+    usualMinutes.get(mealType.id) ?? (mealType.seedKey ? SEED_USUAL_MINUTES[mealType.seedKey] : Infinity);
+  const byHour = (a: T, b: T) => (minutesOf(a) === minutesOf(b) ? 0 : minutesOf(a) - minutesOf(b));
   return [...mealTypes].sort(
-    (a, b) => a.priority - b.priority || labelOf(a).localeCompare(labelOf(b), undefined, { sensitivity: "base" }),
+    (a, b) => byHour(a, b) || labelOf(a).localeCompare(labelOf(b), undefined, { sensitivity: "base" }),
   );
 }
 
@@ -55,3 +62,12 @@ export const SEED_MEAL_TYPES = [
 ] as const satisfies readonly ({ seedKey: string } & Omit<MealTypeFields, "name">)[];
 
 export type MealTypeSeedKey = (typeof SEED_MEAL_TYPES)[number]["seedKey"];
+
+// A seeded Meal Type's usual hour, in minutes after midnight, until it has
+// Meals of its own.
+const SEED_USUAL_MINUTES: Record<MealTypeSeedKey, number> = {
+  breakfast: 8 * 60,
+  lunch: 13 * 60,
+  snack: 16 * 60,
+  dinner: 20 * 60,
+};

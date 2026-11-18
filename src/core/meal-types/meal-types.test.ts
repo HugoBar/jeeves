@@ -41,19 +41,61 @@ describe("parseMealTypeFields rejects", () => {
 });
 
 describe("sortMealTypes", () => {
-  it("lists by Meal Priority, 1 first, then alphabetically by the label shown, ignoring case", () => {
-    const mealTypes = [
-      { label: "Breakfast", priority: 2 },
-      { label: "lunch", priority: 1 },
-      { label: "Snack", priority: 3 },
-      { label: "Dinner", priority: 1 },
+  const label = (mealType: { label: string }) => mealType.label;
+  const seeds = [
+    { id: "d", seedKey: "dinner", label: "Dinner" },
+    { id: "s", seedKey: "snack", label: "Snack" },
+    { id: "l", seedKey: "lunch", label: "Lunch" },
+    { id: "b", seedKey: "breakfast", label: "Breakfast" },
+  ] as const;
+  const labels = (sorted: readonly { label: string }[]) => sorted.map(label);
+
+  it("lists the seeds with no Meals in the order of a day", () => {
+    expect(labels(sortMealTypes(seeds, new Map(), label))).toEqual(["Breakfast", "Lunch", "Snack", "Dinner"]);
+  });
+
+  it("places a Meal Type with Meals by their usual hour, over a seed's default", () => {
+    const brunch = { id: "br", seedKey: null, label: "Brunch" };
+    // Dinner's Meals are at 12:00, so it moves before Lunch's default 13:00.
+    const usual = new Map([
+      ["br", 10 * 60 + 30],
+      ["d", 12 * 60],
+    ]);
+
+    expect(labels(sortMealTypes([...seeds, brunch], usual, label))).toEqual([
+      "Breakfast",
+      "Brunch",
+      "Dinner",
+      "Lunch",
+      "Snack",
+    ]);
+  });
+
+  it("lists added Meal Types with no Meals last, by name ignoring case", () => {
+    const added = [
+      { id: "x", seedKey: null, label: "supper" },
+      { id: "y", seedKey: null, label: "Elevenses" },
     ];
 
-    expect(sortMealTypes(mealTypes, (mealType) => mealType.label).map((mealType) => mealType.label)).toEqual([
-      "Dinner",
-      "lunch",
+    expect(labels(sortMealTypes([...added, ...seeds], new Map(), label))).toEqual([
       "Breakfast",
+      "Lunch",
       "Snack",
+      "Dinner",
+      "Elevenses",
+      "supper",
+    ]);
+  });
+
+  it("breaks a tie on the usual hour by name", () => {
+    const tea = { id: "t", seedKey: null, label: "Afternoon Tea" };
+
+    expect(labels(sortMealTypes([...seeds, tea], new Map([["t", 16 * 60]]), label))).toEqual([
+      "Breakfast",
+      "Lunch",
+      "Afternoon Tea",
+      "Snack",
+      "Dinner",
     ]);
   });
 });
