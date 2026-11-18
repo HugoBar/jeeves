@@ -182,8 +182,14 @@ export interface GeneratePlan {
 // its Shortfall less its ticked items. Its unticked item from Shortfalls is
 // set to that, and goes when nothing is needed; one added by hand is raised to
 // it, never lowered. An item with no quantity counts as 0. A Product whose
-// need can't be worked out is left as it is.
-export function planGenerate({ short, unknown }: RangeShortfalls, items: readonly ListedItem[]): GeneratePlan {
+// need can't be worked out is left as it is. A need in pieces rounds up to
+// whole pieces, as nobody buys a third of an egg; `products` gives each
+// Product's Default Unit, and one not in it is left exact.
+export function planGenerate(
+  { short, unknown }: RangeShortfalls,
+  items: readonly ListedItem[],
+  products: ReadonlyMap<string, { defaultUnit: DefaultUnit }>,
+): GeneratePlan {
   const plan: GeneratePlan = { add: [], set: [], remove: [] };
   const productIds = new Set([...short.keys(), ...items.map((item) => item.productId)]);
   for (const productId of productIds) {
@@ -191,7 +197,8 @@ export function planGenerate({ short, unknown }: RangeShortfalls, items: readonl
     const own = items.filter((item) => item.productId === productId);
     const ticked = own.filter((item) => item.ticked).reduce((sum, item) => sum + (item.quantity ?? 0), 0);
     const unticked = own.find((item) => !item.ticked);
-    const needed = roundForColumn((short.get(productId) ?? 0) - ticked, AMOUNT_COLUMN);
+    const exact = roundForColumn((short.get(productId) ?? 0) - ticked, AMOUNT_COLUMN);
+    const needed = products.get(productId)?.defaultUnit === "pc" ? Math.ceil(exact) : exact;
     if (!unticked) {
       if (needed > 0) plan.add.push({ productId, quantity: needed });
     } else if (unticked.source === "manual") {
