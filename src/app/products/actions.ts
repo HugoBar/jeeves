@@ -9,6 +9,7 @@ import {
   type ProductFieldError,
   type ProductFieldsInput,
 } from "@/core/products";
+import { requireList, requireOneOf, requireText, requireUuid } from "@/core/request";
 import { parseDefaultUnit } from "@/core/units";
 import { getDb } from "@/db";
 import type { RemoveOutcome } from "@/db/archive";
@@ -40,20 +41,24 @@ export async function createProductAction(
 }
 
 // `from` is the page the Product page was opened from, kept on the way back.
+// A Product deleted meanwhile has nothing to save, so it goes back to where
+// the Product page was opened from.
 export async function editProductAction(
   id: string,
   from: ProductOrigin,
   _state: ProductFormState,
   formData: FormData,
 ): Promise<ProductFormState> {
+  requireUuid(id);
   const values = valuesFrom(formData);
   const parsed = parseProductFields(values);
   if (!parsed.ok) return { errors: await withTakenName(parsed.errors, values.name, id), values };
   const db = getDb();
+  const product = await getProduct(db, id);
+  if (!product) redirect(originLink(parseProductOrigin(from)).href);
   // Clearing a Density Recipes still convert with would leave them unable to.
   if (parsed.fields.density === null) {
-    const product = await getProduct(db, id);
-    const densityUses = product ? densityBlockers(product.defaultUnit, await listIngredientUses(db, id)) : [];
+    const densityUses = densityBlockers(product.defaultUnit, await listIngredientUses(db, id));
     if (densityUses.length > 0) return { errors: ["densityInUse"], values, densityUses };
   }
   const result = await updateProduct(db, id, parsed.fields);
@@ -65,6 +70,8 @@ export async function editProductAction(
 // nothing is removed and the page refreshes to say what it would do now. Once
 // removed, it goes back to the page the Product page was opened from.
 export async function removeProductAction(id: string, expected: RemoveOutcome, from: ProductOrigin): Promise<void> {
+  requireUuid(id);
+  requireOneOf(expected, ["deleted", "archived"] as const);
   if (await removeProductIfStill(getDb(), id, expected)) redirect(originLink(parseProductOrigin(from)).href);
   refresh();
 }
@@ -80,13 +87,13 @@ async function withTakenName(
 }
 
 function valuesFrom(formData: FormData): ProductFormValues {
-  const text = (key: string) => String(formData.get(key) ?? "");
+  const text = (key: string) => requireText(formData.get(key));
   return {
     name: text("name"),
     density: text("density"),
     packSizeName: text("packSizeName"),
     packSizeAmount: text("packSizeAmount"),
     defaultUnit: text("defaultUnit"),
-    categoryIds: formData.getAll("categoryIds").map(String),
+    categoryIds: requireList(formData.getAll("categoryIds"), requireUuid),
   };
 }
