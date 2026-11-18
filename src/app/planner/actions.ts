@@ -26,7 +26,19 @@ import {
   type NewMealSlotsResult,
 } from "@/core/meals";
 import { parseRepeatOn, type RepeatOnResult, type SeriesScope } from "@/core/meal-series";
-import { isDate, plannerRange } from "@/core/planner";
+import { plannerRange } from "@/core/planner";
+import { AMOUNT_COLUMN, INTEGER_MAX, maxForColumn } from "@/core/amounts";
+import {
+  requireBoolean,
+  requireDate,
+  requireList,
+  requireNumber,
+  requireOneOf,
+  requireRecord,
+  requireText,
+  requireUuid,
+  requireUuidOrBlank,
+} from "@/core/request";
 import { fillEmptySlots, type SlotFill } from "@/core/suggestions";
 import { getDb, type Db } from "@/db";
 import {
@@ -82,8 +94,8 @@ export type SkipMealError = { error: "notSkippable" };
 // The slots added on a Meal form before the Meal exists, in the order shown.
 // Each sends its food, amount and Slot Category under the same three names.
 function newSlotInputs(formData: FormData): NewMealSlotInput[] {
-  const all = (name: string) => formData.getAll(name).map(String);
-  const [amounts, categories] = [all("slotAmount"), all("slotCategoryId")];
+  const all = (name: string) => requireList(formData.getAll(name), requireText);
+  const [amounts, categories] = [all("slotAmount"), requireList(formData.getAll("slotCategoryId"), requireUuidOrBlank)];
   return all("slotFood").map((food, index) => ({
     food,
     amount: amounts[index] ?? "",
@@ -145,9 +157,12 @@ async function writeWithSlots<T>(
 // A Meal form also sends the viewer's date as they submitted, which "Repeat
 // on" is checked against: only a Meal dated today or later can repeat.
 function submittedToday(formData: FormData): string {
-  const today = String(formData.get("today") ?? "");
-  if (!isDate(today)) throw new Error("Not a date");
-  return today;
+  return requireDate(formData.get("today"));
+}
+
+// A Meal form's text field; blank when not sent.
+function formText(formData: FormData, name: string): string {
+  return requireText(formData.get(name));
 }
 
 // `date` is the planner day the form was opened on. The form is New Meal from
@@ -159,17 +174,17 @@ export async function createMealAction(
   _state: NewMealFormState,
   formData: FormData,
 ): Promise<NewMealFormState> {
-  const db = getDb();
-  const pickable = await newMealPickable(db);
   const values = {
-    mealTypeId: String(formData.get("mealTypeId") ?? ""),
-    hour: String(formData.get("hour") ?? ""),
-    name: String(formData.get("name") ?? ""),
+    mealTypeId: requireUuidOrBlank(formText(formData, "mealTypeId")),
+    hour: formText(formData, "hour"),
+    name: formText(formData, "name"),
     untracked: formData.get("untracked") === "on",
     slots: newSlotInputs(formData),
-    repeatOn: formData.getAll("repeatOn").map(String),
+    repeatOn: requireList(formData.getAll("repeatOn"), requireText),
   };
   const today = submittedToday(formData);
+  const db = getDb();
+  const pickable = await newMealPickable(db);
   const parsed = parseNewMeal({ date, ...values }, pickable.mealTypes);
   const repeatOn = parseRepeatOn(values.repeatOn, date, today);
   const slots = await parseFormSlots(db, values.slots, pickable.emptySlotCategories);
@@ -204,13 +219,18 @@ async function activeCategoryIds(db: Db): Promise<Set<string>> {
 // Slot Category under the same index as its key.
 function slotChangesInput(formData: FormData): MealSlotChangesInput | null {
   if (!formData.has("slotOrder") && !formData.has("removedSlotId")) return null;
-  const all = (name: string) => formData.getAll(name).map(String);
-  const categories = all("changedSlotCategoryId");
-  const added = { food: all("addedSlotFood"), amount: all("addedSlotAmount"), slotCategoryId: all("addedSlotCategoryId") };
+  const all = (name: string) => requireList(formData.getAll(name), requireText);
+  const ids = (name: string) => requireList(formData.getAll(name), requireUuid);
+  const categories = requireList(formData.getAll("changedSlotCategoryId"), requireUuidOrBlank);
+  const added = {
+    food: all("addedSlotFood"),
+    amount: all("addedSlotAmount"),
+    slotCategoryId: requireList(formData.getAll("addedSlotCategoryId"), requireUuidOrBlank),
+  };
   return {
     order: all("slotOrder"),
-    removed: all("removedSlotId"),
-    slotCategories: all("changedSlotId").map((slotId, index) => ({ slotId, slotCategoryId: categories[index] ?? "" })),
+    removed: ids("removedSlotId"),
+    slotCategories: ids("changedSlotId").map((slotId, index) => ({ slotId, slotCategoryId: categories[index] ?? "" })),
     added: all("addedSlotKey").map((key, index) => ({
       key,
       food: added.food[index] ?? "",
@@ -227,15 +247,28 @@ function slotChangesInput(formData: FormData): MealSlotChangesInput | null {
 // before the viewer's date or the series ended, when they stay as they are;
 // its hour, name, Untracked and slots change on it alone, or on it and all
 // following when "seriesScope" says so. Nothing changes if the Meal was
-// Confirmed or Skipped; the refresh shows the planner it was.
+// Confirmed or Skipped, or deleted; the refresh shows the planner it was.
 export async function editMealAction(
   id: string,
   _state: MealChangesFormState,
   formData: FormData,
 ): Promise<MealChangesFormState> {
+  requireUuid(id);
+  const today = submittedToday(formData);
+  const input = slotChangesInput(formData);
+  const sent = {
+    hour: formText(formData, "hour"),
+    name: formText(formData, "name"),
+    untracked: formData.get("untracked") === "on",
+    repeatOn: requireList(formData.getAll("repeatOn"), requireText),
+  };
+  const scope = seriesScope(formData);
   const db = getDb();
   const meal = await getMeal(db, id);
-  if (!meal) throw new Error("Meal not found");
+  if (!meal) {
+    refresh();
+    return { errors: [], slotErrors: [], values: sent };
+  }
   if (!canChangeMeal(meal)) {
     refresh();
     const repeatOn = (meal.repeats ?? []).map(String);
@@ -245,18 +278,11 @@ export async function editMealAction(
       values: { hour: meal.hour, name: meal.name ?? "", untracked: meal.untracked, repeatOn },
     };
   }
-  const today = submittedToday(formData);
   // Its days show disabled then, so the form sends none.
   const keepsDays = meal.repeats !== null && (meal.date < today || meal.series?.ended === true);
-  const values = {
-    hour: String(formData.get("hour") ?? ""),
-    name: String(formData.get("name") ?? ""),
-    untracked: formData.get("untracked") === "on",
-    repeatOn: keepsDays ? meal.repeats!.map(String) : formData.getAll("repeatOn").map(String),
-  };
+  const values = { ...sent, repeatOn: keepsDays ? meal.repeats!.map(String) : sent.repeatOn };
   const parsed = parseMealChanges(values);
   const repeatOn = keepsDays ? NO_REPEAT : parseRepeatOn(values.repeatOn, meal.date, today);
-  const input = slotChangesInput(formData);
   const slots = input
     ? parseMealSlotChanges(
         input,
@@ -271,7 +297,7 @@ export async function editMealAction(
   }
   const saved = await updateMeal(db, id, parsed.changes, slots?.changes, {
     repeatOn: keepsDays ? undefined : { weekdays: repeatOn.weekdays, today },
-    scope: seriesScope(formData),
+    scope,
   });
   if (saved && repeatOn.weekdays.length > 0) await createDueRepeats(db, today);
   refresh();
@@ -281,7 +307,7 @@ export async function editMealAction(
 // Which Meals of its Meal Series a change on a Meal applies to, as the
 // question on the form answered it: only "following" changes the later ones.
 function seriesScope(formData: FormData): SeriesScope {
-  return formData.get("seriesScope") === "following" ? "following" : "this";
+  return requireText(formData.get("seriesScope")) === "following" ? "following" : "this";
 }
 
 // A slot can only be changed to a Food Category that is not Archived. Every
@@ -292,11 +318,13 @@ export async function setMealSlotCategoryAction(
   _state: MealSlotCategoryFormState,
   formData: FormData,
 ): Promise<MealSlotCategoryFormState> {
+  requireUuid(slotId);
+  const slotCategoryId = requireUuidOrBlank(requireText(formData.get("slotCategoryId")));
   const db = getDb();
   const slot = await getMealSlotContext(db, slotId);
-  if (!slot) throw new Error("Meal Slot not found");
+  if (!slot) return slotGone();
   if (!canChangeMeal(slot.meal)) return { error: "notChangeable" };
-  const parsed = parseMealSlotCategory(String(formData.get("slotCategoryId") ?? ""), await activeCategoryIds(db));
+  const parsed = parseMealSlotCategory(slotCategoryId, await activeCategoryIds(db));
   if (!parsed.ok) return { error: parsed.error };
   await setMealSlotCategory(db, slotId, parsed.slotCategoryId);
   refresh();
@@ -313,11 +341,15 @@ export async function fillMealSlotAction(
   _state: MealSlotFillFormState,
   formData: FormData,
 ): Promise<MealSlotFillFormState> {
+  requireUuid(slotId);
+  const formCategory = formData.has("slotCategoryId")
+    ? requireUuidOrBlank(requireText(formData.get("slotCategoryId")))
+    : null;
+  const fill = { food: requireText(formData.get("food")), amount: requireText(formData.get("amount")) };
   const db = getDb();
   const slot = await getMealSlotContext(db, slotId);
-  if (!slot) throw new Error("Meal Slot not found");
+  if (!slot) return slotGone();
   if (!canChangeMeal(slot.meal)) return { error: "notChangeable" };
-  const formCategory = formData.get("slotCategoryId");
   let slotCategoryId = slot.slotCategoryId;
   if (formCategory !== null && String(formCategory) !== slotCategoryId) {
     const parsed = parseMealSlotCategory(String(formCategory), await activeCategoryIds(db));
@@ -327,7 +359,7 @@ export async function fillMealSlotAction(
   const { recipes, products } = await listFoodsForSlots(db);
   const ids = (foods: { id: string }[]) => new Set(foods.map((food) => food.id));
   const parsed = parseMealSlotFill(
-    { food: String(formData.get("food") ?? ""), amount: String(formData.get("amount") ?? "") },
+    fill,
     {
       recipeIds: ids(pickableForSlot(recipes, slotCategoryId)),
       productIds: ids(pickableForSlot(products, slotCategoryId)),
@@ -350,7 +382,8 @@ export type FillOutcome = { filled: SlotFill[]; noQuantity: number };
 // counted by the slots after it (spec "Suggestions"). `today` is the viewer's
 // date when they asked. A slot filled meanwhile keeps what it holds.
 export async function fillEmptySlotsAction(slotIds: string[], today: string): Promise<FillOutcome> {
-  if (!isDate(today)) throw new Error("Not a date");
+  requireList(slotIds, requireUuid);
+  requireDate(today);
   const db = getDb();
   const { from, to } = plannerRange(today);
   const context = await loadSuggestionContext(db, from, to);
@@ -363,7 +396,7 @@ export async function fillEmptySlotsAction(slotIds: string[], today: string): Pr
 // Undo of "Fill empty slots": each slot it filled is emptied again, unless it
 // was changed since or its Meal was Confirmed or Skipped.
 export async function undoFillAction(filled: SlotFill[]): Promise<void> {
-  await undoFill(getDb(), filled);
+  await undoFill(getDb(), requireList(filled, requireSlotFill));
   refresh();
 }
 
@@ -375,18 +408,17 @@ export async function addMealSlotAction(
   _state: NewMealSlotFormState,
   formData: FormData,
 ): Promise<NewMealSlotFormState> {
+  requireUuid(mealId);
+  const input = {
+    food: requireText(formData.get("food")),
+    amount: requireText(formData.get("amount")),
+    slotCategoryId: requireUuidOrBlank(requireText(formData.get("slotCategoryId"))),
+  };
   const db = getDb();
   const meal = await getMeal(db, mealId);
-  if (!meal) throw new Error("Meal not found");
+  if (!meal) return slotGone();
   if (!canChangeMeal(meal)) return { error: "notChangeable" };
-  const parsed = parseNewMealSlot(
-    {
-      food: String(formData.get("food") ?? ""),
-      amount: String(formData.get("amount") ?? ""),
-      slotCategoryId: String(formData.get("slotCategoryId") ?? ""),
-    },
-    await newSlotPickable(db),
-  );
+  const parsed = parseNewMealSlot(input, await newSlotPickable(db));
   if (!parsed.ok) return { error: parsed.error };
   await addMealSlot(db, mealId, parsed.slot);
   refresh();
@@ -396,6 +428,7 @@ export async function addMealSlotAction(
 // The slots after it move up, keeping their order. Nothing changes if the
 // Meal was Confirmed or Skipped; the refresh shows the planner it was.
 export async function removeMealSlotAction(slotId: string): Promise<void> {
+  requireUuid(slotId);
   const db = getDb();
   const slot = await getMealSlotContext(db, slotId);
   if (slot && canChangeMeal(slot.meal)) await removeMealSlot(db, slotId);
@@ -405,6 +438,7 @@ export async function removeMealSlotAction(slotId: string): Promise<void> {
 // Nothing changes if the Meal was Confirmed or Skipped; the refresh shows the
 // planner it was.
 export async function emptyMealSlotAction(slotId: string): Promise<void> {
+  requireUuid(slotId);
   const db = getDb();
   const slot = await getMealSlotContext(db, slotId);
   if (slot && canChangeMeal(slot.meal)) await fillMealSlot(db, slotId, { content: "empty" });
@@ -415,7 +449,7 @@ export async function emptyMealSlotAction(slotId: string): Promise<void> {
 // "Meal Series"). Every screen that shows or uses Meals asks first. It
 // refreshes only when it created some, so asking again changes nothing.
 export async function createDueRepeatsAction(today: string): Promise<void> {
-  if (!isDate(today)) throw new Error("Not a date");
+  requireDate(today);
   if ((await createDueRepeats(getDb(), today)) > 0) refresh();
 }
 
@@ -426,7 +460,10 @@ export async function confirmMealAction(
   untracked: boolean,
   today: string,
 ): Promise<ConfirmMealError | null> {
-  const result = await confirmMeal(getDb(), id, { untracked, today });
+  const result = await confirmMeal(getDb(), requireUuid(id), {
+    untracked: requireBoolean(untracked),
+    today: requireDate(today),
+  });
   if (!result.ok) return result;
   refresh();
   return null;
@@ -439,7 +476,7 @@ export async function confirmMealsAsPlannedAction(
   ids: string[],
   today: string,
 ): Promise<RefusedMeal[]> {
-  const refused = await confirmMealsAsPlanned(getDb(), ids, today);
+  const refused = await confirmMealsAsPlanned(getDb(), requireList(ids, requireUuid), requireDate(today));
   refresh();
   return refused;
 }
@@ -447,21 +484,44 @@ export async function confirmMealsAsPlannedAction(
 // `today` is the viewer's date when they submitted. Null once Skipped;
 // otherwise why it was refused, with nothing written.
 export async function skipMealAction(id: string, today: string): Promise<SkipMealError | null> {
-  if (!(await skipMeal(getDb(), id, today))) return { error: "notSkippable" };
+  if (!(await skipMeal(getDb(), requireUuid(id), requireDate(today)))) return { error: "notSkippable" };
   refresh();
   return null;
 }
 
 // Nothing changes if the Meal is no longer Confirmed or Skipped; the refresh
-// shows the planner it is not.
-export async function reopenMealAction(id: string): Promise<void> {
-  await reopenMeal(getDb(), id);
+// shows the planner it is not. Returns the Product adding back would take
+// past what Stock holds, when nothing changed; else null.
+export async function reopenMealAction(id: string): Promise<{ stockTooLarge: string } | null> {
+  const result = await reopenMeal(getDb(), requireUuid(id));
+  if (!result.ok && result.error === "stockTooLarge") return { stockTooLarge: result.product };
+  refresh();
+  return null;
+}
+
+// `scope` only matters for a Meal of a Meal Series.
+export async function removeMealAction(id: string, scope: SeriesScope = "this"): Promise<void> {
+  await deleteMeal(getDb(), requireUuid(id), requireOneOf(scope, ["this", "following"] as const));
   refresh();
 }
 
-// `scope` only matters for a Meal of a Meal Series. It comes from the
-// browser, so anything but "following" deletes that Meal alone.
-export async function removeMealAction(id: string, scope: SeriesScope = "this"): Promise<void> {
-  await deleteMeal(getDb(), id, scope === "following" ? "following" : "this");
+// A slot or Meal deleted meanwhile changes nothing; the refresh shows it gone.
+function slotGone(): { error: null } {
   refresh();
+  return { error: null };
+}
+
+// A fill "Fill empty slots" made, sent back by Undo: a Recipe with whole
+// Portions or a Product with a quantity, each as their columns hold them.
+function requireSlotFill(value: unknown): SlotFill {
+  const { slotId, fill } = requireRecord(value);
+  const food = requireRecord(fill);
+  const content = requireOneOf(food.content, ["recipe", "product"] as const);
+  return {
+    slotId: requireUuid(slotId),
+    fill:
+      content === "recipe"
+        ? { content, recipeId: requireUuid(food.recipeId), portions: requireNumber(food.portions, { max: INTEGER_MAX, whole: true }) }
+        : { content, productId: requireUuid(food.productId), quantity: requireNumber(food.quantity, { max: maxForColumn(AMOUNT_COLUMN) }) },
+  };
 }
