@@ -1,18 +1,17 @@
 import type { Metadata, Viewport } from "next";
-import { Plus_Jakarta_Sans } from "next/font/google";
 import Link from "next/link";
 import { connection } from "next/server";
 import { unconfirmedBefore } from "@/core/planner";
 import { getDb } from "@/db";
 import { listPlannedMealsBefore } from "@/db/meals";
+import { isDatabaseUnreachable } from "@/db/postgres-errors";
 import { t } from "@/strings";
+import { appFont } from "./font";
 import { BottomMenu, TopMenu } from "./menus";
 import { ServiceWorkerRegistration } from "./service-worker-registration";
 import { theme } from "./theme";
 import { NeedsConfirmationBadge, ResolutionGate, type UnconfirmedCandidate } from "./unconfirmed-alerts";
 import "./globals.css";
-
-const plusJakartaSans = Plus_Jakarta_Sans({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
   title: t("app.name"),
@@ -36,11 +35,20 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
   // the browser. A layout is not rendered again on navigation, but every Meal
   // action refreshes it.
   const utcToday = new Date().toISOString().slice(0, 10);
-  const candidates: UnconfirmedCandidate[] = (await listPlannedMealsBefore(getDb(), unconfirmedBefore(utcToday))).map(
-    ({ status, date }) => ({ status, date }),
-  );
+  let candidates: UnconfirmedCandidate[] = [];
+  try {
+    candidates = (await listPlannedMealsBefore(getDb(), unconfirmedBefore(utcToday))).map(({ status, date }) => ({
+      status,
+      date,
+    }));
+  } catch (error) {
+    // Without the database the page fails too, and its error page says so.
+    // The layout carries on with no badge, so that page keeps the menu.
+    if (!isDatabaseUnreachable(error)) throw error;
+    console.error("Database unreachable while loading the menu badge:", error);
+  }
   return (
-    <html lang="en" className={plusJakartaSans.className}>
+    <html lang="en" className={appFont.className}>
       <body>
         <header className="app-header">
           <div className="app-header-bar">
