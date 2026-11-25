@@ -2,11 +2,40 @@
 
 Jeeves manages a household pantry: what food is in stock, which recipes can be made from it, and which meals are planned and eaten. It is a self-hosted, installable web app.
 
+## Running Jeeves
+
+### Requirements
+
+- Docker (with Compose)
+- Git
+
+### Install
+
+```sh
+git clone https://github.com/HugoBar/jeeves.git
+cd jeeves
+cp .env.example .env   # then set POSTGRES_PASSWORD
+docker compose up -d --build
+```
+
+Jeeves is now at <http://localhost:3000>. Set `PORT` in `.env` to use another port. Its data is kept in the `jeeves-db` Docker volume, and it starts again on its own after a reboot.
+
+Set `POSTGRES_PASSWORD` before the first start: the database is created with it, and changing it later in `.env` does not change it in the database.
+
+### Update
+
+```sh
+git pull
+docker compose up -d --build
+```
+
+New migrations are applied automatically before the app starts.
+
+## Development
+
 - Domain language: [`GLOSSARY.md`](GLOSSARY.md)
 - V1 spec and data model: [`docs/v1/`](docs/v1/)
 - Architecture decisions: [`docs/adr/`](docs/adr/)
-
-## Development
 
 ### Requirements
 
@@ -17,13 +46,13 @@ Jeeves manages a household pantry: what food is in stock, which recipes can be m
 
 ```sh
 pnpm install
-cp .env.example .env   # then set DATABASE_URL
+cp .env.example .env   # DATABASE_URL already points at the database pnpm db:up starts
 pnpm db:up
 pnpm db:migrate
 pnpm dev               # http://localhost:3000
 ```
 
-`pnpm dev` and `pnpm dev:empty` start the development database first when `DATABASE_URL` is local and nothing answers there, opening Docker Desktop if it isn't running yet. A database that already answers is left alone.
+`pnpm dev` and `pnpm dev:empty` start the development database first if nothing answers at a local `DATABASE_URL`, and open Docker Desktop on Windows and macOS if Docker isn't running yet. Otherwise, start Docker yourself.
 
 ### Run tests and checks
 
@@ -56,16 +85,4 @@ pnpm dev:empty    # dev server on a brand-new database, to see empty states
 
 It starts as a fresh install does, with only the seed Food Categories and Meal Types. Its data is thrown away on the next run, and the database at `DATABASE_URL` is never touched. Stop any other dev server first.
 
-## Container
-
-The image runs the production server and connects to an existing Postgres instance through `DATABASE_URL`.
-
-```sh
-cp .env.example .env              # set DATABASE_URL
-docker compose up -d --build      # applies migrations, then starts the app on PORT (default 3000)
-docker compose run --rm migrate   # apply migrations on their own
-```
-
 To build the image without Compose: `docker build --target app -t jeeves .`
-
-Inside a container, `localhost` is the container itself: point `DATABASE_URL` at the Postgres host's address.

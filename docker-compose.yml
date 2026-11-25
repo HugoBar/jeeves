@@ -1,21 +1,49 @@
-# Connects to an existing Postgres instance; set DATABASE_URL in .env (see .env.example).
+# Runs Jeeves with its own Postgres. Set POSTGRES_PASSWORD in .env, then:
+#   docker compose up -d --build
+# See "Running Jeeves" in README.md.
 services:
+  db:
+    image: postgres:18-alpine
+    environment:
+      POSTGRES_USER: jeeves
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+      POSTGRES_DB: jeeves
+    # No ports: only the other services here can reach the database.
+    volumes:
+      - jeeves-db:/var/lib/postgresql
+    healthcheck:
+      # Over TCP: on first start, a setup-only server answers on the socket before the real one is up.
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U jeeves -d jeeves"]
+      interval: 2s
+      timeout: 3s
+      retries: 15
+      start_period: 60s
+    restart: unless-stopped
+
   migrate:
     build:
       context: .
       target: migrate
     environment:
-      DATABASE_URL: ${DATABASE_URL:?DATABASE_URL must be set}
+      DATABASE_URL: &database-url postgres://jeeves:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}@db:5432/jeeves
+    depends_on:
+      db:
+        condition: service_healthy
 
   app:
     build:
       context: .
       target: app
     environment:
-      DATABASE_URL: ${DATABASE_URL:?DATABASE_URL must be set}
+      DATABASE_URL: *database-url
     ports:
       - "${PORT:-3000}:3000"
     depends_on:
+      db:
+        condition: service_healthy
       migrate:
         condition: service_completed_successfully
     restart: unless-stopped
+
+volumes:
+  jeeves-db:
