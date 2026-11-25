@@ -2948,6 +2948,57 @@ body:has(.needs-confirmation-locked) :is(.top-menu, .bottom-menu, a.app-badge) {
   margin-top: 4px;
 }
 
+/* Error and not-found pages: a card like "All caught up". */
+.page-notice {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  max-width: 480px;
+  margin: 24px auto 0;
+  padding: 32px var(--space);
+  border: 1px solid var(--color-border);
+  border-radius: 20px;
+  background: var(--color-surface);
+  text-align: center;
+}
+
+.page-notice-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 999px;
+  background: var(--color-accent-soft);
+  color: var(--color-accent-ink);
+}
+
+.page-notice-icon.page-notice-warning {
+  background: var(--color-warning-soft);
+  color: var(--color-warning-ink);
+}
+
+.page-notice h1 {
+  margin: 0;
+  font-size: var(--text-item);
+  font-weight: 700;
+}
+
+.page-notice p {
+  margin: 0;
+  color: var(--color-ink-muted);
+  font-size: var(--text-meta);
+}
+
+.page-notice-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 4px;
+}
+
 @media (min-width: 768px) {
   /* The page's cards keep their phone layout. */
   .needs-confirmation .meal-card {
