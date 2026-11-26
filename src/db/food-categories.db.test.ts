@@ -3,9 +3,9 @@ import { beforeAll, describe, expect, it } from "vitest";
 import { SEED_CATEGORIES } from "@/core/food-categories";
 import { createCategory, listActiveCategories, removeCategory } from "./food-categories";
 import { createProduct } from "./products";
-import { createTestDb } from "./test-database";
+import { createTestDb, type TestDb } from "./test-database";
 
-let db: Awaited<ReturnType<typeof createTestDb>>;
+let db: TestDb;
 
 beforeAll(async () => {
   db = await createTestDb();

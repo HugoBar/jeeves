@@ -13,9 +13,9 @@ import {
 } from "./meal-templates";
 import { createMealType, listActiveMealTypes, removeMealType } from "./meal-types";
 import { layoutSlots, mealTypes } from "./schema";
-import { createTestDb } from "./test-database";
+import { createTestDb, type TestDb } from "./test-database";
 
-let db: Awaited<ReturnType<typeof createTestDb>>;
+let db: TestDb;
 
 beforeAll(async () => {
   db = await createTestDb();

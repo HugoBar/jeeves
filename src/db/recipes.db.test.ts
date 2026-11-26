@@ -22,9 +22,9 @@ import {
   updateRecipe,
 } from "./recipes";
 import { foodCategories, ingredients, products, recipes } from "./schema";
-import { createTestDb } from "./test-database";
+import { createTestDb, type TestDb } from "./test-database";
 
-let db: Awaited<ReturnType<typeof createTestDb>>;
+let db: TestDb;
 
 beforeAll(async () => {
   db = await createTestDb();
@@ -38,7 +38,7 @@ const lasagne: RecipeFields = {
   sourceUrl: "https://example.com/lasagne",
 };
 
-// A plain Product under a name no other test uses.
+// A plain Product.
 async function aProduct(
   name: string,
   {

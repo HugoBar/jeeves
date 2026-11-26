@@ -11,15 +11,14 @@ import {
   updateMealType,
 } from "./meal-types";
 import { meals, mealTypes } from "./schema";
-import { createTestDb } from "./test-database";
+import { createTestDb, type TestDb } from "./test-database";
 
-let db: Awaited<ReturnType<typeof createTestDb>>;
+let db: TestDb;
 
 beforeAll(async () => {
   db = await createTestDb();
 });
 
-// First, before any test edits a seeded Meal Type.
 describe("meal_types table", () => {
   it("is seeded with exactly the Meal Types core knows, unnamed", async () => {
     const seeded = await db.execute<{

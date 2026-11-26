@@ -15,15 +15,15 @@ import {
 import { createRecipe } from "./recipes";
 import { products } from "./schema";
 import { listStockMovements, restockProduct } from "./stock-movements";
-import { createTestDb } from "./test-database";
+import { createTestDb, type TestDb } from "./test-database";
 
-let db: Awaited<ReturnType<typeof createTestDb>>;
+let db: TestDb;
 
 beforeAll(async () => {
   db = await createTestDb();
 });
 
-// A plain Product under a name no other test uses.
+// A plain Product.
 async function aProduct(name: string, defaultUnit: DefaultUnit = "g") {
   const result = await createProduct(db, { name, defaultUnit, density: null, packSize: null, categoryIds: [] });
   if (!result.ok) throw new Error(`Could not create ${name}: ${result.error}`);
