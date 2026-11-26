@@ -1,5 +1,5 @@
 import { eq } from "drizzle-orm";
-import { beforeAll, describe, expect, it } from "vitest";
+import { beforeAll, beforeEach, describe, expect, it } from "vitest";
 import type { MealTypeSeedKey } from "@/core/meal-types";
 import type { CategorySeedKey } from "@/core/food-categories";
 import type { CategoryOverride } from "@/core/recipes";
@@ -23,9 +23,9 @@ import {
 import { createProduct, getProduct, removeProduct } from "./products";
 import { createRecipe, getRecipe, removeRecipe } from "./recipes";
 import { mealSlots } from "./schema";
-import { createTestDb } from "./test-database";
+import { createTestDb, type TestDb } from "./test-database";
 
-let db: Awaited<ReturnType<typeof createTestDb>>;
+let db: TestDb;
 
 beforeAll(async () => {
   db = await createTestDb();
@@ -43,7 +43,7 @@ async function seededCategoryId(seedKey: CategorySeedKey): Promise<string> {
   return category.id;
 }
 
-// A Product under a name no other test uses, carrying the given categories.
+// A Product carrying the given categories.
 async function aProduct(name: string, categoryIds: string[] = []) {
   const result = await createProduct(db, { name, defaultUnit: "g", density: null, packSize: null, categoryIds });
   if (!result.ok) throw new Error(`Could not create ${name}: ${result.error}`);
@@ -289,7 +289,7 @@ describe("the meal_slots CHECKs", () => {
   let recipeId: string;
   let productId: string;
 
-  beforeAll(async () => {
+  beforeEach(async () => {
     recipeId = (await aRecipe("Check Recipe")).id;
     productId = (await aProduct("Check Product")).id;
   });

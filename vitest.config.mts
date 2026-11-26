@@ -15,5 +15,8 @@ export default defineConfig({
     // Each database test file starts Postgres and runs every migration, which
     // can pass the default 10 seconds on a busy machine.
     hookTimeout: 60_000,
+    // Runs tests in a random order, so a test that leans on another's leftovers
+    // fails at once. A failing run prints its seed; rerun it with --sequence.seed.
+    sequence: { shuffle: true },
   },
 });

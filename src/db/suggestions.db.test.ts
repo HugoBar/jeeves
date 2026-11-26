@@ -8,9 +8,9 @@ import { createRecipe } from "./recipes";
 import { meals } from "./schema";
 import { restockProduct } from "./stock-movements";
 import { fillEmptyMealSlots, loadSuggestionContext, undoFill } from "./suggestions";
-import { createTestDb } from "./test-database";
+import { createTestDb, type TestDb } from "./test-database";
 
-let db: Awaited<ReturnType<typeof createTestDb>>;
+let db: TestDb;
 
 beforeAll(async () => {
   db = await createTestDb();

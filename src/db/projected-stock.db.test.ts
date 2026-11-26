@@ -6,9 +6,9 @@ import { createProduct, removeProduct } from "./products";
 import { loadStockProjection } from "./projected-stock";
 import { createRecipe, removeRecipe } from "./recipes";
 import { restockProduct } from "./stock-movements";
-import { createTestDb } from "./test-database";
+import { createTestDb, type TestDb } from "./test-database";
 
-let db: Awaited<ReturnType<typeof createTestDb>>;
+let db: TestDb;
 
 beforeAll(async () => {
   db = await createTestDb();

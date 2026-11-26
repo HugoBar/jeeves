@@ -16,9 +16,9 @@ import { loadStockProjection } from "./projected-stock";
 import { createRecipe, removeRecipe } from "./recipes";
 import { mealSlots } from "./schema";
 import { correctProductStock, discardProductStock, listStockMovements, restockProduct } from "./stock-movements";
-import { createTestDb } from "./test-database";
+import { createTestDb, type TestDb } from "./test-database";
 
-let db: Awaited<ReturnType<typeof createTestDb>>;
+let db: TestDb;
 
 beforeAll(async () => {
   db = await createTestDb();
@@ -26,7 +26,7 @@ beforeAll(async () => {
 
 const TODAY = "2026-10-28";
 
-// A Product under a name no other test uses, with `stock` in its Default Unit.
+// A Product with `stock` in its Default Unit.
 async function aProduct(name: string, stock: number, fields: { defaultUnit: "g" | "ml" | "pc"; density: number | null }) {
   const result = await createProduct(db, { name, ...fields, packSize: null, categoryIds: [] });
   if (!result.ok) throw new Error(`Could not create ${name}: ${result.error}`);

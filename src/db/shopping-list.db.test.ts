@@ -1,5 +1,5 @@
 import { eq } from "drizzle-orm";
-import { beforeAll, beforeEach, describe, expect, it } from "vitest";
+import { beforeAll, describe, expect, it } from "vitest";
 import { restockStart } from "@/core/shopping-list";
 import { createProduct } from "./products";
 import { products, shoppingListItems } from "./schema";
@@ -14,9 +14,9 @@ import {
   shoppingListItemPackAmount,
 } from "./shopping-list";
 import { listStockMovements } from "./stock-movements";
-import { createTestDb } from "./test-database";
+import { createTestDb, type TestDb } from "./test-database";
 
-let db: Awaited<ReturnType<typeof createTestDb>>;
+let db: TestDb;
 
 beforeAll(async () => {
   db = await createTestDb();
@@ -377,11 +377,6 @@ describe("restockTickedItems", () => {
 });
 
 describe("setAllShoppingListItemsTicked", () => {
-  // Each test starts from an empty list, as ticking all reaches every item.
-  beforeEach(async () => {
-    await db.delete(shoppingListItems);
-  });
-
   const summary = async () =>
     (await listShoppingList(db))
       .map(({ product, quantity, source, ticked }) => ({ name: product.name, quantity, source, ticked }))
@@ -427,10 +422,6 @@ describe("setAllShoppingListItemsTicked", () => {
 
 // An item holds at most 99,999,999.99, as Stock does.
 describe("Shopping List amounts past the most an item holds", () => {
-  beforeEach(async () => {
-    await db.delete(shoppingListItems);
-  });
-
   const stockOf = async (productId: string) =>
     (await db.select({ stock: products.stock }).from(products).where(eq(products.id, productId)))[0]!.stock;
   const summary = async () =>

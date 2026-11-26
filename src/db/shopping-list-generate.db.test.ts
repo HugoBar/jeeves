@@ -1,5 +1,5 @@
 import { eq, inArray } from "drizzle-orm";
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeAll, describe, expect, it } from "vitest";
 import type { NewMealSlot } from "@/core/meals";
 import { listActiveCategories } from "./food-categories";
 import { listActiveMealTypes } from "./meal-types";
@@ -10,15 +10,14 @@ import { products, shoppingListItems } from "./schema";
 import { skipMeal } from "./confirmation";
 import { addProductByHand, generateShoppingList, listShoppingList, listUncertainCandidates } from "./shopping-list";
 import { restockProduct } from "./stock-movements";
-import { createTestDb } from "./test-database";
+import { createTestDb, type TestDb } from "./test-database";
 
 // What a slot of a test Meal holds.
 type SlotFill = NewMealSlot["fill"];
 
-// Generate works over the whole list, so each test starts from an empty one.
-let db: Awaited<ReturnType<typeof createTestDb>>;
+let db: TestDb;
 
-beforeEach(async () => {
+beforeAll(async () => {
   db = await createTestDb();
 });
 

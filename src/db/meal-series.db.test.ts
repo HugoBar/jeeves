@@ -18,9 +18,9 @@ import {
 } from "./meals";
 import { createProduct } from "./products";
 import { mealSeries } from "./schema";
-import { createTestDb } from "./test-database";
+import { createTestDb, type TestDb } from "./test-database";
 
-let db: Awaited<ReturnType<typeof createTestDb>>;
+let db: TestDb;
 
 beforeAll(async () => {
   db = await createTestDb();
