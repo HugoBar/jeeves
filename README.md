@@ -22,6 +22,8 @@ Jeeves is now at <http://localhost:3000>. Set `PORT` in `.env` to use another po
 
 Set `POSTGRES_PASSWORD` before the first start: the database is created with it, and changing it later in `.env` does not change it in the database.
 
+Jeeves has no login: anyone who can reach its port, for example from the same Wi-Fi, can see and change everything in it. Only run it on a network you trust.
+
 ### Update
 
 ```sh
