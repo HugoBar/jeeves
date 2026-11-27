@@ -1,0 +1,73 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+# A newer push to a pull request cancels its run still going. On main every
+# commit runs to the end, so each one gets a result.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    name: Typecheck, lint and tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      # No version given: it uses the one in package.json's "packageManager".
+      - uses: pnpm/action-setup@v6
+
+      # package.json only sets a minimum, so match the images' node:22-alpine.
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm typecheck
+      - run: pnpm lint
+      - run: pnpm test
+
+  docker:
+    name: Docker images and smoke test
+    runs-on: ubuntu-latest
+    env:
+      # Only for this run's throwaway database.
+      POSTGRES_PASSWORD: ci-only
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Build the app and migrate images
+        run: docker compose build
+
+      # The tests use PGlite, so this is the one place the real Postgres and the
+      # postgres-js driver run before merge.
+      - name: Start Jeeves
+        run: docker compose up -d
+
+      - name: Load the Planner
+        run: |
+          for i in $(seq 1 60); do
+            if curl -fsS -o /dev/null http://localhost:3000/planner; then
+              echo "Planner loaded"
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "The Planner did not load within 2 minutes"
+          exit 1
+
+      - name: Show the logs
+        if: failure()
+        run: docker compose logs
+
+      - name: Stop Jeeves
+        if: always()
+        run: docker compose down -v
