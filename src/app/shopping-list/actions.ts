@@ -2,6 +2,7 @@
 
 import { refresh } from "next/cache";
 import {
+  MalformedRequest,
   requireBoolean,
   requireDate,
   requireList,
@@ -33,7 +34,7 @@ export async function generateShoppingListAction(today: string, range: DateRange
   requireDate(today);
   const dates = requireRecord(range);
   range = { from: requireDate(dates.from), to: requireDate(dates.to) };
-  if (!isGenerateRange(today, range)) throw new Error("Not dates Generate can use");
+  if (!isGenerateRange(today, range)) throw new MalformedRequest("dates Generate can use");
   const db = getDb();
   await createDueRepeats(db, today);
   const result = await generateShoppingList(db, range.from, range.to);

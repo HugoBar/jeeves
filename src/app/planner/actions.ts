@@ -174,6 +174,8 @@ export async function createMealAction(
   _state: NewMealFormState,
   formData: FormData,
 ): Promise<NewMealFormState> {
+  // One that is not a day gets the form's error; anything but text is crafted.
+  requireText(date);
   const values = {
     mealTypeId: requireUuidOrBlank(formText(formData, "mealTypeId")),
     hour: formText(formData, "hour"),

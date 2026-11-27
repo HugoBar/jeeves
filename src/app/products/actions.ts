@@ -9,7 +9,7 @@ import {
   type ProductFieldError,
   type ProductFieldsInput,
 } from "@/core/products";
-import { requireList, requireOneOf, requireText, requireUuid } from "@/core/request";
+import { MalformedRequest, requireList, requireOneOf, requireText, requireUuid } from "@/core/request";
 import { parseDefaultUnit } from "@/core/units";
 import { getDb } from "@/db";
 import type { RemoveOutcome } from "@/db/archive";
@@ -34,7 +34,7 @@ export async function createProductAction(
   if (!parsed.ok) return { errors: await withTakenName(parsed.errors, values.name), values };
   // The form only offers the Default Units, so anything else is a crafted request.
   const defaultUnit = parseDefaultUnit(values.defaultUnit);
-  if (!defaultUnit) throw new Error("Invalid Default Unit");
+  if (!defaultUnit) throw new MalformedRequest("a Default Unit");
   const result = await createProduct(getDb(), { ...parsed.fields, defaultUnit });
   if (!result.ok) return { errors: [result.error], values };
   redirect("/products");
